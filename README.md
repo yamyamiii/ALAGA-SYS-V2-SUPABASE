@@ -2,11 +2,11 @@
 
 **Automated Local Appointment and General Assistance System** is a planned
 barangay healthcare management system. This repository currently contains the
-Phase 0 application foundation: a responsive interface, maintainable frontend
-architecture, public Supabase configuration boundary, and project guidance.
+Phase 0 application foundation plus the Phase 1 normalized PostgreSQL schema,
+database constraints, audit foundation, and deny-by-default Row Level Security.
 
-No database tables, real healthcare records, or authentication workflows exist
-in this phase.
+No real healthcare records, frontend authentication workflow, or frontend
+database queries exist in this phase.
 
 ## Technology stack
 
@@ -38,7 +38,7 @@ src/
   services/        Future data access boundary used by features/pages
   styles/          Global styles and design tokens
   utils/           Framework-independent helpers
-supabase/          Future migrations, seed guidance, and RLS policies
+supabase/          Ordered migrations, synthetic seed, and RLS foundation
 docs/              Architecture, requirements, database, and UI documentation
 ```
 
@@ -67,9 +67,10 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_PUBLISHABLE_KEY=
 ```
 
-When a later phase needs Supabase, copy the example to `.env.local` and add only
+For local project configuration, copy the example to `.env.local` and add only
 the project URL and **publishable** key. Vite exposes every `VITE_` value to the
-browser.
+browser. Phase 1 migrations are applied through the Supabase CLI or SQL Editor,
+not through this browser configuration.
 
 > Never add a Supabase secret key or service-role key to this React application,
 > any `VITE_` variable, source control, logs, screenshots, or support messages.
@@ -91,6 +92,7 @@ the shared Coming Soon page.
 
 ```bash
 npm run build
+npm run db:verify
 npm run lint
 npm run format
 npm run format:check
@@ -99,15 +101,17 @@ npm run preview
 
 ## Current phase
 
-Phase 0 establishes the frontend foundation and design system only. Dashboard
-values are visibly marked as previews or empty states. Authentication controls,
-including the account avatar and logout item, are non-functional placeholders.
+Phase 1 adds seven normalized foundation tables, ordered migrations, constraints,
+indexes, synthetic reference seed data, audit triggers, explicit grants, and
+restrictive RLS policies. Dashboard values remain previews or empty states.
+Authentication controls, including the account avatar and logout item, remain
+non-functional placeholders.
 
 ## Next phase
 
-Phase 1 will design the normalized PostgreSQL schema and Row Level Security
-policies. It should begin with a reviewed data model, foreign-key relationships,
-enumerated statuses, timestamps, indexes, audit requirements, and a migration
-strategy before connecting any frontend module.
+Phase 2 will implement Supabase Authentication, account invitation/activation,
+trusted role administration, protected routes for user experience, and live RLS
+verification with synthetic accounts. It must not weaken the database policies
+or place service-role credentials in the frontend.
 
-See [Foundation architecture](docs/architecture/FOUNDATION.md), [Design system](docs/ui/DESIGN_SYSTEM.md), and [Roadmap](docs/requirements/ROADMAP.md).
+See [Foundation architecture](docs/architecture/FOUNDATION.md), [Database schema](docs/database/SCHEMA.md), [RLS matrix](docs/database/RLS_MATRIX.md), [Design system](docs/ui/DESIGN_SYSTEM.md), and [Roadmap](docs/requirements/ROADMAP.md).

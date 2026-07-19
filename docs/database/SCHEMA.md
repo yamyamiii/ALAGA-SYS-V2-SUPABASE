@@ -1,0 +1,222 @@
+# Phase 1 database schema
+
+## Scope
+
+Phase 1 adds the normalized PostgreSQL foundation for ALAGA-SYS V2. It creates
+only `profiles`, `barangays`, `puroks`, `households`, `residents`,
+`appointments`, and `audit_logs`. It does not add encounters, clinical notes,
+diagnoses, prescriptions, medicines, immunizations, maternal records,
+notifications, reports, frontend authentication, or frontend database queries.
+
+The schema uses UUID primary keys, real foreign keys, validated database values,
+soft archival for resident/household/appointment records, explicit grants, and
+deny-by-default Row Level Security (RLS).
+
+## Ordered migrations
+
+Apply every file in lexical order:
+
+1. `20260720000100_extensions_and_enums.sql` — extension and enum types
+2. `20260720000200_profiles_and_auth_trigger.sql` — Auth-linked profiles
+3. `20260720000300_locations_and_households.sql` — locations and households
+4. `20260720000400_residents.sql` — residents and resident-number trigger
+5. `20260720000500_household_head_relationship.sql` — safe circular relationship
+6. `20260720000600_appointments.sql` — appointments and number trigger
+7. `20260720000700_audit_logs.sql` — append-only audit storage
+8. `20260720000800_helper_functions_and_triggers.sql` — RLS helpers, timestamps,
+   profile protection, and automatic auditing
+9. `20260720000900_indexes.sql` — foreign-key, lookup, and queue indexes
+10. `20260720001000_rls_policies.sql` — RLS enablement and policies
+11. `20260720001100_grants_and_privilege_hardening.sql` — API-role privileges
+
+Migrations are forward-only and intended to be applied once by Supabase
+migration tooling. They contain no database reset or destructive database-level
+operation.
+
+## Key design decisions
+
+### Profiles and registration
+
+`profiles.id` is a one-to-one foreign key to `auth.users.id`. Email stays in
+Supabase Auth. The `on_auth_user_created` trigger creates a minimal profile for a
+new Auth user and deliberately ignores any role or account-status value in user
+metadata. Every new profile starts with role `resident` and status `invited`.
+
+RLS permits self-updates, while `profiles_protect_privileged_fields` prevents a
+user—including an admin—from changing their own role, account status, or
+`last_login_at`. Active admins can update other profiles. An admin bootstrap and
+role-assignment workflow still requires a trusted Phase 2 server-side process.
+
+### Location consistency
+
+Barangay names are unique case-insensitively within province and municipality.
+Purok names and codes are unique case-insensitively within a barangay. Composite
+foreign keys ensure a household or resident cannot claim a purok from a
+different barangay. A resident assigned to a household must use that household's
+barangay and purok.
+
+### Household head relationship
+
+`households.head_resident_id` is created nullable before `residents`, then its
+foreign key is added in migration 5. The composite relationship
+`(head_resident_id, household.id) -> (resident.id, resident.household_id)`
+guarantees that a household head is actually a member. Clear or reassign the
+head before moving that resident to a different household.
+
+### Soft archival
+
+There are no normal-client `DELETE` grants or policies for important records.
+
+- Households use status `archived` together with a non-null `archived_at`.
+- Residents use `moved_out` or `deceased` together with `archived_at`.
+- Appointments retain `archived_at`; archival is access-controlled by policy.
+- Audit logs are append-only and reject every update or delete through a trigger.
+
+Admins can read archived rows. BHW update access starts only from non-archived
+rows, allowing a one-way archive action but preventing later BHW modification.
+
+### Number generation
+
+`resident_number_seq` and `appointment_number_seq` are PostgreSQL sequences.
+Security-definer triggers always overwrite a client-supplied number during
+insert and reject changes during update.
+
+Display formats are:
+
+- `RES-YYYY-000001`
+- `APT-YYYY-000001`
+
+The numeric portion is global and never resets each year. `nextval()` is atomic,
+so concurrent transactions cannot receive the same value. Rolled-back
+transactions may leave harmless gaps. The browser roles have no sequence or
+generator-function privileges.
+
+### Timestamps
+
+Mutable tables receive `created_at` and `updated_at`. The shared
+`set_updated_at` trigger assigns `statement_timestamp()` before every update.
+Audit logs have only `created_at` because they are immutable.
+
+Primary UUIDs and creation timestamps are immutable after insert. For resident
+and appointment browser writes, attribution triggers set `created_by` and
+`updated_by` from `auth.uid()` and prevent a client from spoofing those columns.
+Direct BHW updates cannot create/change resident-to-profile links, because that
+link controls resident self-read access. Appointment assignment accepts only an
+active staff profile, and direct authenticated updates cannot replace an
+appointment's resident owner.
+
+### Pregnancy status
+
+Age is never stored; it is calculated from `date_of_birth` when queried or
+displayed. Pregnancy is a nullable validated status, not a universal checkbox.
+When populated, the schema requires `sex = female`; null means not captured or
+not applicable. Detailed maternal records remain outside Phase 1.
+
+## Applying with the Supabase CLI
+
+The CLI was not available during local implementation, so these commands were
+not executed. Install and authenticate the official Supabase CLI outside this
+task, then run from the repository root:
+
+```bash
+supabase login
+supabase init # only when supabase/config.toml does not exist
+supabase link --project-ref YOUR_PROJECT_REF
+supabase db push --dry-run --include-seed
+supabase db push --include-seed
+```
+
+Review a newly generated `supabase/config.toml` before linking, and review the
+dry-run output before applying. Do not paste a database password,
+access token, connection string, service-role key, or secret into chat, source
+control, screenshots, or frontend environment variables.
+
+The CLI recognizes `supabase/seed.sql` after migrations. The seed is optional;
+omit `--include-seed` when targeting a project that should not receive the
+fictional development locality. Supabase's current seeding guidance is at
+<https://supabase.com/docs/guides/local-development/seeding-your-database>.
+
+## Applying through the Supabase SQL Editor
+
+If the CLI is unavailable:
+
+1. Open the target project's SQL Editor while signed in to the Supabase dashboard.
+2. Open each migration locally and paste one complete file at a time, in the
+   exact order listed above.
+3. Execute and confirm success before moving to the next migration.
+4. Stop on the first error; do not skip ahead or rerun later files out of order.
+5. Run the verification queries below.
+6. Optionally apply the single development seed file only to a development project.
+
+Do not use the publishable browser key to apply DDL. Do not request or share a
+database password in chat.
+
+## Safe verification queries
+
+Confirm RLS on all seven tables:
+
+```sql
+select c.relname as table_name, c.relrowsecurity as rls_enabled
+from pg_catalog.pg_class as c
+join pg_catalog.pg_namespace as n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname in (
+    'profiles', 'barangays', 'puroks', 'households',
+    'residents', 'appointments', 'audit_logs'
+  )
+order by c.relname;
+```
+
+Review policies and grants:
+
+```sql
+select schemaname, tablename, policyname, roles, cmd, qual, with_check
+from pg_catalog.pg_policies
+where schemaname = 'public'
+order by tablename, policyname;
+
+select grantee, table_name, privilege_type
+from information_schema.role_table_grants
+where table_schema = 'public'
+  and grantee in ('anon', 'authenticated')
+order by table_name, grantee, privilege_type;
+```
+
+Verify security-definer search paths:
+
+```sql
+select n.nspname, p.proname, p.prosecdef, p.proconfig
+from pg_catalog.pg_proc as p
+join pg_catalog.pg_namespace as n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and p.proname in (
+    'handle_new_auth_user', 'set_resident_number',
+    'set_appointment_number', 'current_profile_role', 'is_admin',
+    'is_staff', 'current_resident_id', 'current_household_id',
+    'validate_appointment_relationships', 'audit_row_change'
+  )
+order by p.proname;
+```
+
+Behavioral RLS tests should use dedicated synthetic Auth accounts in a disposable
+development project. Test one account per role and verify allowed and denied
+operations through the publishable-key client. Never test with real resident or
+healthcare information, and never expose the service-role key to a browser.
+
+## Known Phase 1 limitations
+
+- No live database application was performed during implementation.
+- No admin bootstrap, invitation, or role-management server workflow exists.
+- The Phase 0 navigation placeholder still uses `health_worker`; Phase 2 must map
+  it to the canonical database role `barangay_health_worker` when real auth is added.
+- Nurse/midwife appointment access is assigned-only and read-only.
+- Resident self-booking is disabled.
+- Appointment conflict detection and state-transition enforcement are deferred.
+- `assigned_staff_id` is validated against active staff by a trigger; finer
+  service-specific staff eligibility remains a future workflow rule.
+- Pregnancy status is demographic context only; no maternal record exists.
+- Automatic auditing captures inserts, updates, and exceptional backend deletes
+  on six mutable foundation tables, but not Auth events, reads, failed changes,
+  storage operations, or external service activity.
+- A profile referenced as an audit actor cannot be physically deleted without an
+  explicit privileged retention procedure; this preserves append-only history.
