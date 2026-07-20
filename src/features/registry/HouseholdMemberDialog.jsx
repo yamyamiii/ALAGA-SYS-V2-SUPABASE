@@ -37,7 +37,6 @@ export function HouseholdMemberDialog({
     ],
     queryFn: () =>
       registryService.listAssignableResidents({
-        barangayId: household.barangay_id,
         purokId: household.purok_id,
         search: debouncedSearch,
       }),
@@ -73,7 +72,7 @@ export function HouseholdMemberDialog({
         <DialogHeader>
           <DialogTitle>Add existing resident</DialogTitle>
           <DialogDescription>
-            Results are limited to current residents in the same barangay and
+            Results are limited to current residents in the same Bagongpook
             purok.
           </DialogDescription>
         </DialogHeader>

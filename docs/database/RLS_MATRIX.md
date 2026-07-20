@@ -171,3 +171,10 @@ administrator/BHW users manage current registry rows, nurse/midwife users read
 current resident demographics, and resident users cannot browse either
 registry. Archived visibility/restoration remains administrator-only. Existing
 policies were not broadened in Phase 3A.
+
+`registry_get_deployment_context()` is a narrowly scoped security-definer RPC.
+It returns only the canonical Bagongpook UUID/name and Purok 1–7 reference rows,
+requires an active staff caller, and fails on missing, inactive, duplicated, or
+unexpected deployment reference data. Registry write triggers derive
+`barangay_id` from the selected purok before the existing RLS and relationship
+checks complete; browser-supplied barangay values are not authoritative.

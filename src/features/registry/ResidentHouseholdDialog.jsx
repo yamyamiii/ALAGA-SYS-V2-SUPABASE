@@ -26,10 +26,7 @@ export function ResidentHouseholdDialog({
   onSaved,
 }) {
   const [householdId, setHouseholdId] = useState("");
-  const options = useHouseholdOptions(
-    resident?.barangay_id,
-    resident?.purok_id,
-  );
+  const options = useHouseholdOptions(resident?.purok_id);
   const mutation = useRegistryMutation(async (selectedId) => {
     if (!selectedId) {
       return registryService.removeResidentFromHousehold(resident.id);
@@ -62,8 +59,8 @@ export function ResidentHouseholdDialog({
         <DialogHeader>
           <DialogTitle>Household assignment</DialogTitle>
           <DialogDescription>
-            Only current households in the resident&apos;s barangay and purok
-            are available. Removing an assignment does not delete the resident.
+            Only current households in the resident&apos;s Bagongpook purok are
+            available. Removing an assignment does not delete the resident.
           </DialogDescription>
         </DialogHeader>
         {mutation.error ? (

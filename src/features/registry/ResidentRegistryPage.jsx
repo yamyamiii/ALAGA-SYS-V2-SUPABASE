@@ -19,11 +19,12 @@ import {
 } from "@/features/registry/constants";
 import { formatPersonName } from "@/features/registry/formatters";
 import {
-  useBarangays,
+  useDeploymentContext,
   usePuroks,
   useRegistryMutation,
   useResidents,
 } from "@/features/registry/hooks";
+import { DeploymentBarangayContext } from "@/features/registry/DeploymentBarangayContext";
 import { RegistryActionDialog } from "@/features/registry/RegistryActionDialog";
 import { RegistryPagination } from "@/features/registry/RegistryPagination";
 import { RegistrySkeleton } from "@/features/registry/RegistrySkeleton";
@@ -48,8 +49,8 @@ export default function ResidentRegistryPage() {
     [debouncedSearch, filters],
   );
   const query = useResidents(effectiveFilters);
-  const barangays = useBarangays();
-  const puroks = usePuroks(filters.barangay_id);
+  const deploymentContext = useDeploymentContext();
+  const puroks = usePuroks();
   const [form, setForm] = useState({ open: false, record: null });
   const [detailId, setDetailId] = useState(null);
   const [householdRecord, setHouseholdRecord] = useState(null);
@@ -86,7 +87,6 @@ export default function ResidentRegistryPage() {
   const items = query.data?.items ?? [];
   const hasFilters = Boolean(
     debouncedSearch ||
-    filters.barangay_id ||
     filters.purok_id ||
     filters.sex ||
     filters.status ||
@@ -104,16 +104,22 @@ export default function ResidentRegistryPage() {
         description="Search and maintain demographic registry records. Ages are calculated from date of birth and resident numbers are database-generated."
         actions={
           canManage ? (
-            <Button onClick={() => setForm({ open: true, record: null })}>
+            <Button
+              onClick={() => setForm({ open: true, record: null })}
+              disabled={
+                deploymentContext.isLoading || deploymentContext.isError
+              }
+            >
               <Plus /> Add resident
             </Button>
           ) : null
         }
       />
+      <DeploymentBarangayContext query={deploymentContext} compact />
 
       <Card>
         <CardContent className="space-y-4 p-4 sm:p-6">
-          <div className="grid gap-3 lg:grid-cols-4">
+          <div className="grid gap-3 lg:grid-cols-3">
             <div className="relative lg:col-span-2">
               <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
@@ -128,30 +134,11 @@ export default function ResidentRegistryPage() {
               />
             </div>
             <select
-              value={filters.barangay_id}
-              onChange={(event) =>
-                update({
-                  barangay_id: event.target.value,
-                  purok_id: "",
-                  page: 1,
-                })
-              }
-              className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
-              aria-label="Filter residents by barangay"
-            >
-              <option value="">All barangays</option>
-              {(barangays.data ?? []).map((barangay) => (
-                <option key={barangay.id} value={barangay.id}>
-                  {barangay.name}
-                </option>
-              ))}
-            </select>
-            <select
               value={filters.purok_id}
               onChange={(event) =>
                 update({ purok_id: event.target.value, page: 1 })
               }
-              disabled={!filters.barangay_id}
+              disabled={puroks.isLoading || deploymentContext.isError}
               className="h-10 rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50"
               aria-label="Filter residents by purok"
             >

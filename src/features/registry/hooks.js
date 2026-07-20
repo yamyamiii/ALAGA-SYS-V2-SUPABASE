@@ -9,14 +9,9 @@ export const registryKeys = Object.freeze({
   members: (id) => ["registry", "household-members", id],
   residents: (filters) => ["registry", "residents", filters],
   resident: (id) => ["registry", "resident", id],
-  barangays: ["registry", "barangays"],
-  puroks: (barangayId) => ["registry", "puroks", barangayId],
-  householdOptions: (barangayId, purokId) => [
-    "registry",
-    "household-options",
-    barangayId,
-    purokId,
-  ],
+  deploymentContext: ["registry", "deployment-context"],
+  puroks: ["registry", "puroks"],
+  householdOptions: (purokId) => ["registry", "household-options", purokId],
 });
 
 export function useHouseholds(filters) {
@@ -35,28 +30,27 @@ export function useResidents(filters) {
   });
 }
 
-export function useBarangays() {
+export function useDeploymentContext() {
   return useQuery({
-    queryKey: registryKeys.barangays,
-    queryFn: () => registryService.listBarangays(),
+    queryKey: registryKeys.deploymentContext,
+    queryFn: () => registryService.resolveDeploymentContext(),
     staleTime: 5 * 60 * 1000,
   });
 }
 
-export function usePuroks(barangayId) {
+export function usePuroks() {
   return useQuery({
-    queryKey: registryKeys.puroks(barangayId),
-    queryFn: () => registryService.listPuroks(barangayId),
-    enabled: Boolean(barangayId),
+    queryKey: registryKeys.puroks,
+    queryFn: () => registryService.listPuroks(),
     staleTime: 5 * 60 * 1000,
   });
 }
 
-export function useHouseholdOptions(barangayId, purokId) {
+export function useHouseholdOptions(purokId) {
   return useQuery({
-    queryKey: registryKeys.householdOptions(barangayId, purokId),
-    queryFn: () => registryService.listHouseholdOptions(barangayId, purokId),
-    enabled: Boolean(barangayId && purokId),
+    queryKey: registryKeys.householdOptions(purokId),
+    queryFn: () => registryService.listHouseholdOptions(purokId),
+    enabled: Boolean(purokId),
   });
 }
 

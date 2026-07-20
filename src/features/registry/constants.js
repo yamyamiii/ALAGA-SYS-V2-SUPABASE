@@ -80,7 +80,6 @@ export const RESIDENT_SORTS = Object.freeze({
 
 export const initialHouseholdFilters = Object.freeze({
   search: "",
-  barangay_id: "",
   purok_id: "",
   status: "",
   include_archived: false,
@@ -92,7 +91,6 @@ export const initialHouseholdFilters = Object.freeze({
 
 export const initialResidentFilters = Object.freeze({
   search: "",
-  barangay_id: "",
   purok_id: "",
   sex: "",
   status: "",

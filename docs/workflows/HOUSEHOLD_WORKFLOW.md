@@ -3,8 +3,8 @@
 ## Create
 
 1. An administrator or BHW opens `/households` and selects **Add household**.
-2. Select a barangay and one of its active puroks, enter an address, and
-   optionally enter valid latitude/longitude.
+2. Confirm the read-only Bagongpook context, select Purok 1–7, enter an address,
+   and optionally enter valid latitude/longitude.
 3. Save. The database generates the immutable household number and audit event.
 4. A head is intentionally optional during creation.
 
@@ -29,7 +29,7 @@ can include archived records and restore them. Restoration returns status to
 ## Manual checks
 
 1. Create a household and confirm its `HH-YYYY-NNNNNN` number is read-only.
-2. Search it by number and address; change barangay/purok filters and page size.
+2. Search it by number and address; change the purok filter and page size.
 3. Add a same-locality resident, assign the resident as head, and verify details.
 4. Confirm moving the head fails until a replacement is selected.
 5. Remove a non-head member and verify the resident still exists unassigned.

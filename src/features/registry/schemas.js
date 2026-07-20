@@ -58,7 +58,6 @@ const normalizedRequiredName = (label) =>
     .refine((value) => value.length <= 100, `${label} is too long.`);
 
 export const householdSchema = z.object({
-  barangay_id: z.string().uuid("Select a barangay."),
   purok_id: z.string().uuid("Select a purok."),
   address_line: z
     .string()
@@ -96,7 +95,6 @@ export const residentSchema = z
     phone_number: optionalPhone,
     email: optionalEmail,
     occupation: optionalText(150),
-    barangay_id: z.string().uuid("Select a barangay."),
     purok_id: z.string().uuid("Select a purok."),
     household_id: optionalUuid,
     address_line: optionalText(500),
@@ -121,8 +119,8 @@ export const residentSchema = z
 
 export function validateLocalityConsistency(values, references) {
   const purok = references.puroks?.find((item) => item.id === values.purok_id);
-  if (purok && purok.barangay_id !== values.barangay_id) {
-    return "The selected purok does not belong to the selected barangay.";
+  if (!purok) {
+    return "Select an active Purok 1 through Purok 7 in Brgy. Bagongpook.";
   }
   if (values.household_id) {
     const household = references.households?.find(
@@ -130,7 +128,7 @@ export function validateLocalityConsistency(values, references) {
     );
     if (
       household &&
-      (household.barangay_id !== values.barangay_id ||
+      (household.barangay_id !== purok.barangay_id ||
         household.purok_id !== values.purok_id)
     ) {
       return "The selected household does not match the selected locality.";

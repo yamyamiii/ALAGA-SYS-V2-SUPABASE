@@ -17,8 +17,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { HOUSEHOLD_STATUS_LABELS } from "@/features/registry/constants";
+import { DeploymentBarangayContext } from "@/features/registry/DeploymentBarangayContext";
 import {
-  useBarangays,
+  useDeploymentContext,
   usePuroks,
   useRegistryMutation,
 } from "@/features/registry/hooks";
@@ -26,7 +27,6 @@ import { householdSchema } from "@/features/registry/schemas";
 import { registryService } from "@/services/registryService";
 
 const defaults = {
-  barangay_id: "",
   purok_id: "",
   address_line: "",
   latitude: "",
@@ -47,20 +47,17 @@ export function HouseholdFormDialog({
   onSaved,
 }) {
   const editing = Boolean(household?.id);
-  const barangays = useBarangays();
+  const deploymentContext = useDeploymentContext();
   const {
     register,
     handleSubmit,
     reset,
-    setValue,
-    watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(householdSchema),
     defaultValues: defaults,
   });
-  const barangayId = watch("barangay_id");
-  const puroks = usePuroks(barangayId);
+  const puroks = usePuroks();
   const mutation = useRegistryMutation((values) =>
     editing
       ? registryService.updateHousehold(household.id, values)
@@ -72,7 +69,6 @@ export function HouseholdFormDialog({
     reset(
       household
         ? {
-            barangay_id: household.barangay_id,
             purok_id: household.purok_id,
             address_line: household.address_line,
             latitude: household.latitude ?? "",
@@ -112,6 +108,7 @@ export function HouseholdFormDialog({
             <AlertDescription>{mutation.error.message}</AlertDescription>
           </Alert>
         ) : null}
+        <DeploymentBarangayContext query={deploymentContext} />
         <form
           id="household-form"
           className="grid gap-4 sm:grid-cols-2"
@@ -119,33 +116,11 @@ export function HouseholdFormDialog({
           noValidate
         >
           <div className="space-y-2">
-            <Label htmlFor="household-barangay">Barangay</Label>
-            <select
-              id="household-barangay"
-              {...register("barangay_id")}
-              onChange={(event) => {
-                setValue("barangay_id", event.target.value, {
-                  shouldValidate: true,
-                });
-                setValue("purok_id", "", { shouldValidate: true });
-              }}
-              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-            >
-              <option value="">Select barangay</option>
-              {(barangays.data ?? []).map((barangay) => (
-                <option key={barangay.id} value={barangay.id}>
-                  {barangay.name}
-                </option>
-              ))}
-            </select>
-            <FieldError error={errors.barangay_id} />
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="household-purok">Purok</Label>
             <select
               id="household-purok"
               {...register("purok_id")}
-              disabled={!barangayId || puroks.isLoading}
+              disabled={puroks.isLoading || deploymentContext.isError}
               className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50"
             >
               <option value="">Select purok</option>
@@ -216,7 +191,11 @@ export function HouseholdFormDialog({
           <Button
             type="submit"
             form="household-form"
-            disabled={mutation.isPending}
+            disabled={
+              mutation.isPending ||
+              deploymentContext.isLoading ||
+              deploymentContext.isError
+            }
           >
             {mutation.isPending ? (
               <LoaderCircle className="animate-spin" />

@@ -10,7 +10,7 @@ and resident registry workflows without adding clinical records.
 - [Complete data dictionary and indexes](DATA_DICTIONARY.md)
 - [Registry architecture](../architecture/RESIDENT_REGISTRY.md)
 
-Fourteen migrations are under `supabase/migrations`, and the optional fictional
-development reference seed is `supabase/seed.sql`. Phase 3A migrations 13 and 14
-must be reviewed in a linked-project dry run and explicitly approved before a
-live apply. See the schema guide for exact CLI and SQL Editor instructions.
+Fifteen migrations are under `supabase/migrations`, and the optional synthetic
+development reference seed is `supabase/seed.sql`. Any pending migration must be
+reviewed in a linked-project dry run and explicitly approved before a live
+apply. See the schema guide for exact CLI and SQL Editor instructions.

@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { DEPLOYMENT_BARANGAY } from "@/config/deployment";
 
 const RESIDENT_WRITE_FIELDS = Object.freeze([
   "first_name",
@@ -15,7 +16,6 @@ const RESIDENT_WRITE_FIELDS = Object.freeze([
   "email",
   "occupation",
   "household_id",
-  "barangay_id",
   "purok_id",
   "address_line",
   "philhealth_number",
@@ -29,7 +29,6 @@ const RESIDENT_WRITE_FIELDS = Object.freeze([
 ]);
 
 const HOUSEHOLD_WRITE_FIELDS = Object.freeze([
-  "barangay_id",
   "purok_id",
   "address_line",
   "latitude",
@@ -57,6 +56,14 @@ function pick(values, fields) {
 
 function mapError(error, fallback) {
   const message = error?.message ?? "";
+  if (/Brgy\. Bagongpook|deployment context|deployment purok/i.test(message)) {
+    return new RegistryServiceError(
+      "deployment_context_invalid",
+      message ||
+        "The Brgy. Bagongpook deployment reference data is not configured correctly.",
+      { cause: error },
+    );
+  }
   if (/row-level security|permission denied/i.test(message)) {
     return new RegistryServiceError(
       "permission_denied",
@@ -99,10 +106,10 @@ function resultPage(data, page, pageSize) {
   };
 }
 
-export function buildHouseholdListParameters(filters) {
+export function buildHouseholdListParameters(filters, barangayId = null) {
   return {
     p_search: nullable(filters.search?.trim()),
-    p_barangay_id: nullable(filters.barangay_id),
+    p_barangay_id: nullable(barangayId),
     p_purok_id: nullable(filters.purok_id),
     p_status: nullable(filters.status),
     p_include_archived:
@@ -114,7 +121,7 @@ export function buildHouseholdListParameters(filters) {
   };
 }
 
-export function buildResidentListParameters(filters) {
+export function buildResidentListParameters(filters, barangayId = null) {
   const booleanFilter = (value) =>
     value === true || value === "true"
       ? true
@@ -123,7 +130,7 @@ export function buildResidentListParameters(filters) {
         : null;
   return {
     p_search: nullable(filters.search?.trim()),
-    p_barangay_id: nullable(filters.barangay_id),
+    p_barangay_id: nullable(barangayId),
     p_purok_id: nullable(filters.purok_id),
     p_sex: nullable(filters.sex),
     p_status: nullable(filters.status),
@@ -139,6 +146,8 @@ export function buildResidentListParameters(filters) {
 }
 
 export function createRegistryService(clientProvider = getSupabaseClient) {
+  let deploymentContextPromise;
+
   function client() {
     return clientProvider();
   }
@@ -149,53 +158,106 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
     return data;
   }
 
+  function validateDeploymentContext(rows) {
+    const expected = DEPLOYMENT_BARANGAY.expectedPuroks;
+    const names = rows?.map((row) => row.purok_name) ?? [];
+    const barangayIds = new Set(rows?.map((row) => row.barangay_id));
+    const validNames =
+      names.length === expected.length &&
+      expected.every((name) => names.includes(name)) &&
+      !names.includes("Purok 8");
+
+    if (!validNames || barangayIds.size !== 1) {
+      throw new RegistryServiceError(
+        "deployment_context_invalid",
+        "Brgy. Bagongpook must have exactly seven active puroks named Purok 1 through Purok 7.",
+      );
+    }
+
+    return {
+      barangay: {
+        id: rows[0].barangay_id,
+        name: rows[0].barangay_name,
+      },
+      puroks: rows.map((row) => ({
+        id: row.purok_id,
+        barangay_id: row.barangay_id,
+        name: row.purok_name,
+        code: row.purok_code,
+      })),
+    };
+  }
+
+  async function loadDeploymentContext() {
+    const { data, error } = await client().rpc(
+      "registry_get_deployment_context",
+    );
+    if (error) {
+      throw mapError(
+        error,
+        "The Brgy. Bagongpook deployment context could not be loaded.",
+      );
+    }
+    return validateDeploymentContext(data);
+  }
+
+  async function resolveDeploymentContext() {
+    if (!deploymentContextPromise) {
+      deploymentContextPromise = loadDeploymentContext().catch((error) => {
+        deploymentContextPromise = undefined;
+        throw error;
+      });
+    }
+    return deploymentContextPromise;
+  }
+
+  async function resolvePurok(purokId) {
+    const context = await resolveDeploymentContext();
+    const purok = context.puroks.find((item) => item.id === purokId);
+    if (!purok) {
+      throw new RegistryServiceError(
+        "locality_mismatch",
+        "Select an active Purok 1 through Purok 7 in Brgy. Bagongpook.",
+      );
+    }
+    return purok;
+  }
+
   return {
+    resolveDeploymentContext,
+
     async listHouseholds(filters) {
+      const context = await resolveDeploymentContext();
       const { data, error } = await client().rpc(
         "registry_list_households",
-        buildHouseholdListParameters(filters),
+        buildHouseholdListParameters(filters, context.barangay.id),
       );
       if (error) throw mapError(error, "Households could not be loaded.");
       return resultPage(data, filters.page ?? 1, filters.page_size ?? 20);
     },
 
     async listResidents(filters) {
+      const context = await resolveDeploymentContext();
       const { data, error } = await client().rpc(
         "registry_list_residents",
-        buildResidentListParameters(filters),
+        buildResidentListParameters(filters, context.barangay.id),
       );
       if (error) throw mapError(error, "Residents could not be loaded.");
       return resultPage(data, filters.page ?? 1, filters.page_size ?? 20);
     },
 
-    async listBarangays() {
-      const { data, error } = await client()
-        .from("barangays")
-        .select("id, name, city_or_municipality, province")
-        .eq("is_active", true)
-        .order("name");
-      if (error) throw mapError(error, "Barangays could not be loaded.");
-      return data ?? [];
+    async listPuroks() {
+      const context = await resolveDeploymentContext();
+      return context.puroks;
     },
 
-    async listPuroks(barangayId) {
-      if (!barangayId) return [];
-      const { data, error } = await client()
-        .from("puroks")
-        .select("id, barangay_id, name, code")
-        .eq("barangay_id", barangayId)
-        .eq("is_active", true)
-        .order("name");
-      if (error) throw mapError(error, "Puroks could not be loaded.");
-      return data ?? [];
-    },
-
-    async listHouseholdOptions(barangayId, purokId) {
-      if (!barangayId || !purokId) return [];
+    async listHouseholdOptions(purokId) {
+      if (!purokId) return [];
+      const purok = await resolvePurok(purokId);
       const { data, error } = await client()
         .from("households")
         .select("id, household_number, barangay_id, purok_id, address_line")
-        .eq("barangay_id", barangayId)
+        .eq("barangay_id", purok.barangay_id)
         .eq("purok_id", purokId)
         .is("archived_at", null)
         .order("household_number")
@@ -204,14 +266,15 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       return data ?? [];
     },
 
-    async listAssignableResidents({ barangayId, purokId, search = "" }) {
-      if (!barangayId || !purokId) return [];
+    async listAssignableResidents({ purokId, search = "" }) {
+      if (!purokId) return [];
+      const purok = await resolvePurok(purokId);
       let query = client()
         .from("residents")
         .select(
           "id, resident_number, first_name, middle_name, last_name, suffix, household_id, barangay_id, purok_id",
         )
-        .eq("barangay_id", barangayId)
+        .eq("barangay_id", purok.barangay_id)
         .eq("purok_id", purokId)
         .is("archived_at", null)
         .order("last_name")
@@ -264,8 +327,10 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       );
     },
 
-    createHousehold(values) {
+    async createHousehold(values) {
+      const purok = await resolvePurok(values.purok_id);
       const payload = pick(values, HOUSEHOLD_WRITE_FIELDS);
+      payload.barangay_id = purok.barangay_id;
       payload.status = "active";
       return singleResult(
         client()
@@ -277,11 +342,14 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       );
     },
 
-    updateHousehold(id, values) {
+    async updateHousehold(id, values) {
+      const purok = await resolvePurok(values.purok_id);
+      const payload = pick(values, HOUSEHOLD_WRITE_FIELDS);
+      payload.barangay_id = purok.barangay_id;
       return singleResult(
         client()
           .from("households")
-          .update(pick(values, HOUSEHOLD_WRITE_FIELDS))
+          .update(payload)
           .eq("id", id)
           .select("id, household_number")
           .single(),
@@ -313,14 +381,15 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       );
     },
 
-    assignResidentToHousehold(residentId, household) {
+    async assignResidentToHousehold(residentId, household) {
+      const purok = await resolvePurok(household.purok_id);
       return singleResult(
         client()
           .from("residents")
           .update({
             household_id: household.id,
-            barangay_id: household.barangay_id,
-            purok_id: household.purok_id,
+            barangay_id: purok.barangay_id,
+            purok_id: purok.id,
           })
           .eq("id", residentId)
           .select("id, household_id")
@@ -341,22 +410,28 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       );
     },
 
-    createResident(values) {
+    async createResident(values) {
+      const purok = await resolvePurok(values.purok_id);
+      const payload = pick(values, RESIDENT_WRITE_FIELDS);
+      payload.barangay_id = purok.barangay_id;
       return singleResult(
         client()
           .from("residents")
-          .insert(pick(values, RESIDENT_WRITE_FIELDS))
+          .insert(payload)
           .select("id, resident_number")
           .single(),
         "The resident could not be created.",
       );
     },
 
-    updateResident(id, values) {
+    async updateResident(id, values) {
+      const purok = await resolvePurok(values.purok_id);
+      const payload = pick(values, RESIDENT_WRITE_FIELDS);
+      payload.barangay_id = purok.barangay_id;
       return singleResult(
         client()
           .from("residents")
-          .update(pick(values, RESIDENT_WRITE_FIELDS))
+          .update(payload)
           .eq("id", id)
           .select("id, resident_number")
           .single(),

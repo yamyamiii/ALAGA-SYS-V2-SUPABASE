@@ -18,6 +18,20 @@ The browser contains only a project URL and publishable key. Frontend permission
 checks control navigation and actions for usability, while table grants and RLS
 remain authoritative.
 
+## Single-barangay deployment context
+
+The current deployment is fixed to `Brgy. Bagongpook`. Registry forms and
+filters show a read-only context label instead of a barangay dropdown. The
+frontend calls `registry_get_deployment_context`, which fails if the canonical
+barangay is missing, inactive, duplicated, or does not have exactly seven active
+puroks named `Purok 1` through `Purok 7`.
+
+No UUID is hard-coded in visual code. The service resolves it from database
+reference data and limits all list queries and writes to that UUID. A database
+trigger independently derives `barangay_id` from the selected purok and rejects
+inactive, non-Bagongpook, and Purok 8 values. The normalized `barangay_id`
+columns and foreign keys remain intact for integrity and future reuse.
+
 ## Search and pagination
 
 `registry_list_households` and `registry_list_residents` are stable,
@@ -81,7 +95,8 @@ contact, pregnancy, or other sensitive values.
 
 ## Known limitations
 
-- Local reference barangays and puroks must exist before creating registry rows.
+- The canonical Bagongpook reference and exactly seven active puroks must be
+  provisioned before registry screens can load.
 - Household choice lists intentionally cap at 100 current records per locality;
   a future high-volume phase may add a dedicated searchable picker RPC.
 - Photo upload and profile-link management are outside Phase 3A.

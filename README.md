@@ -107,8 +107,10 @@ npm run preview
 
 Phase 3A adds household and resident listing, creation, editing, details,
 relationship management, archival/restoration, server paging/search, safe audit
-events, and RLS-aligned route permissions. Public registration, physical
-deletion, and password reset remain unavailable.
+events, and RLS-aligned route permissions. Registry locality is configured for
+Brgy. Bagongpook with Purok 1 through Purok 7; barangay UUID resolution remains
+database-backed. Public registration, physical deletion, and password reset
+remain unavailable.
 
 ## Next phase
 

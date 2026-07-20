@@ -23,7 +23,6 @@ const resident = {
   phone_number: "+63 912 345 6789",
   email: "",
   occupation: "",
-  barangay_id: barangayId,
   purok_id: purokId,
   household_id: "",
   address_line: "",
@@ -58,7 +57,6 @@ describe("registry schemas", () => {
   it("validates household coordinates and required address", () => {
     expect(
       householdSchema.safeParse({
-        barangay_id: barangayId,
         purok_id: purokId,
         address_line: "Sitio Mabuhay",
         latitude: "14.6",
@@ -68,7 +66,6 @@ describe("registry schemas", () => {
     ).toBe(true);
     expect(
       householdSchema.safeParse({
-        barangay_id: barangayId,
         purok_id: purokId,
         address_line: "",
         latitude: "",
@@ -81,12 +78,30 @@ describe("registry schemas", () => {
   it("detects mismatched locality references before submission", () => {
     expect(
       validateLocalityConsistency(
-        { barangay_id: barangayId, purok_id: purokId, household_id: "" },
         {
-          puroks: [{ id: purokId, barangay_id: "different-barangay" }],
-          households: [],
+          purok_id: purokId,
+          household_id: "33333333-3333-4333-8333-333333333333",
+        },
+        {
+          puroks: [{ id: purokId, barangay_id: barangayId }],
+          households: [
+            {
+              id: "33333333-3333-4333-8333-333333333333",
+              barangay_id: "different-barangay",
+              purok_id: purokId,
+            },
+          ],
         },
       ),
-    ).toMatch(/does not belong/i);
+    ).toMatch(/does not match/i);
+  });
+
+  it("rejects a purok outside the resolved deployment options", () => {
+    expect(
+      validateLocalityConsistency(
+        { purok_id: purokId, household_id: "" },
+        { puroks: [], households: [] },
+      ),
+    ).toMatch(/Purok 1 through Purok 7/i);
   });
 });

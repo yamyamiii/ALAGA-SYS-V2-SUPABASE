@@ -11,6 +11,14 @@ const residentPage = fs.readFileSync(
   "utf8",
 );
 const router = fs.readFileSync("src/app/router.jsx", "utf8");
+const householdForm = fs.readFileSync(
+  "src/features/registry/HouseholdFormDialog.jsx",
+  "utf8",
+);
+const residentForm = fs.readFileSync(
+  "src/features/registry/ResidentFormDialog.jsx",
+  "utf8",
+);
 
 describe("registry UI boundaries", () => {
   it.each([
@@ -46,5 +54,13 @@ describe("registry UI boundaries", () => {
     const source = `${householdPage}\n${residentPage}`;
     expect(source).not.toMatch(/\.delete\s*\(/);
     expect(source).not.toMatch(/vaccine|health[- ]record|medicine tab/i);
+  });
+
+  it("does not render an editable barangay selector in registry forms or filters", () => {
+    const source = `${householdPage}\n${residentPage}\n${householdForm}\n${residentForm}`;
+    expect(source).not.toMatch(
+      /Select barangay|All barangays|resident-barangay|household-barangay|Filter .* by barangay/i,
+    );
+    expect(source).toMatch(/DeploymentBarangayContext/);
   });
 });

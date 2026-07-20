@@ -3,7 +3,7 @@
 ## Create and edit
 
 Administrators and BHWs open `/residents`, select **Add resident**, complete the
-required name, birth date, sex, barangay, and purok fields, then add optional
+required name, birth date, sex, and Bagongpook purok fields, then add optional
 demographic/contact data. Middle name, household, address, contact details,
 PhilHealth number, and emergency contact are optional.
 
@@ -15,7 +15,7 @@ number. Age is calculated from birth date and is never stored.
 ## Household assignment
 
 Open resident details and choose **Household assignment**. Only current
-households in the resident's selected barangay/purok are offered. Choosing no
+households in the resident's selected Bagongpook purok are offered. Choosing no
 household removes only the relationship. The resident record remains intact.
 
 ## Read access
@@ -43,3 +43,4 @@ neutral archived row to active. No permanent delete path exists.
 6. Confirm a resident role receives access denied for `/residents` and can read
    only its own linked row through RLS.
 7. Archive as BHW, then verify only an administrator can find and restore it.
+8. Confirm no barangay selector or Purok 8 option appears.

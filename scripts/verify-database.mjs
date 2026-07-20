@@ -19,6 +19,7 @@ const expectedMigrations = [
   "20260720001200_trusted_user_management.sql",
   "20260720001300_resident_archived_status.sql",
   "20260720001400_registry_workflows.sql",
+  "20260720001500_bagongpook_deployment.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -72,7 +73,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly fourteen expected migrations exist in lexical order",
+  "Exactly fifteen expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -210,6 +211,17 @@ check(
     /changed_fields/i.test(allSql),
   "Registry audit actions use semantic names and safe changed-field metadata",
 );
+check(
+  /create\s+or\s+replace\s+function\s+public\.registry_get_deployment_context/i.test(
+    allSql,
+  ) && /Brgy\. Bagongpook must have exactly seven active puroks/i.test(allSql),
+  "Bagongpook deployment context requires exactly seven canonical puroks",
+);
+check(
+  /new\.barangay_id\s*:=\s*selected_barangay_id/i.test(allSql) &&
+    /apply_deployment_registry_locality/i.test(allSql),
+  "Registry writes derive barangay_id from the selected database purok",
+);
 
 const functionBlocks = [
   ...allSql.matchAll(
@@ -261,8 +273,16 @@ check(
   "Seed inserts only fictional location reference data",
 );
 check(
-  (seed.match(/'P0[1-8]'/g) ?? []).length === 8,
-  "Seed contains eight fictional puroks",
+  (seed.match(/'P0[1-7]'/g) ?? []).length === 7 && !/'P08'/.test(seed),
+  "Seed contains exactly Purok 1 through Purok 7",
+);
+check(
+  /set is_active = false/i.test(seed) &&
+    /20000000-0000-4000-8000-000000000008/i.test(seed) &&
+    /not exists \([\s\S]*public\.households[\s\S]*not exists \([\s\S]*public\.residents/i.test(
+      seed,
+    ),
+  "Seed safely deactivates an unreferenced legacy Purok 8",
 );
 
 const sourceFiles = [];

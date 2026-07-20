@@ -27,11 +27,12 @@ import {
   SEX_OPTIONS,
 } from "@/features/registry/constants";
 import {
-  useBarangays,
+  useDeploymentContext,
   useHouseholdOptions,
   usePuroks,
   useRegistryMutation,
 } from "@/features/registry/hooks";
+import { DeploymentBarangayContext } from "@/features/registry/DeploymentBarangayContext";
 import {
   residentSchema,
   validateLocalityConsistency,
@@ -52,7 +53,6 @@ const defaults = {
   phone_number: "",
   email: "",
   occupation: "",
-  barangay_id: "",
   purok_id: "",
   household_id: "",
   address_line: "",
@@ -95,7 +95,7 @@ function Select({ id, register, children, disabled = false, onChange }) {
 export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
   const editing = Boolean(resident?.id);
   const [localityError, setLocalityError] = useState("");
-  const barangays = useBarangays();
+  const deploymentContext = useDeploymentContext();
   const {
     register,
     handleSubmit,
@@ -107,11 +107,10 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
     resolver: zodResolver(residentSchema),
     defaultValues: defaults,
   });
-  const barangayId = watch("barangay_id");
   const purokId = watch("purok_id");
   const sex = watch("sex");
-  const puroks = usePuroks(barangayId);
-  const households = useHouseholdOptions(barangayId, purokId);
+  const puroks = usePuroks();
+  const households = useHouseholdOptions(purokId);
   const mutation = useRegistryMutation((values) =>
     editing
       ? registryService.updateResident(resident.id, values)
@@ -171,6 +170,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
             </AlertDescription>
           </Alert>
         ) : null}
+        <DeploymentBarangayContext query={deploymentContext} />
         <form
           id="resident-form"
           className="space-y-7"
@@ -314,33 +314,9 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
           <section className="space-y-4 border-t pt-6">
             <SectionHeading
               title="Locality and household"
-              description="UUID-backed barangay, purok, and optional household relationships"
+              description="Brgy. Bagongpook purok and optional household relationships"
             />
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Field
-                label="Barangay"
-                htmlFor="resident-barangay"
-                error={errors.barangay_id}
-              >
-                <Select
-                  id="resident-barangay"
-                  register={register("barangay_id")}
-                  onChange={(event) => {
-                    setValue("barangay_id", event.target.value, {
-                      shouldValidate: true,
-                    });
-                    setValue("purok_id", "", { shouldValidate: true });
-                    setValue("household_id", "", { shouldValidate: true });
-                  }}
-                >
-                  <option value="">Select barangay</option>
-                  {(barangays.data ?? []).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
               <Field
                 label="Purok"
                 htmlFor="resident-purok"
@@ -349,7 +325,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
                 <Select
                   id="resident-purok"
                   register={register("purok_id")}
-                  disabled={!barangayId}
+                  disabled={puroks.isLoading || deploymentContext.isError}
                   onChange={(event) => {
                     setValue("purok_id", event.target.value, {
                       shouldValidate: true,
@@ -530,7 +506,11 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
           <Button
             type="submit"
             form="resident-form"
-            disabled={mutation.isPending}
+            disabled={
+              mutation.isPending ||
+              deploymentContext.isLoading ||
+              deploymentContext.isError
+            }
           >
             {mutation.isPending ? (
               <LoaderCircle className="animate-spin" />

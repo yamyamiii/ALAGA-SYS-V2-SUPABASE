@@ -10,6 +10,10 @@ const policies = fs.readFileSync(
   "supabase/migrations/20260720001000_rls_policies.sql",
   "utf8",
 );
+const deployment = fs.readFileSync(
+  "supabase/migrations/20260720001500_bagongpook_deployment.sql",
+  "utf8",
+);
 
 describe("registry database safety", () => {
   it("keeps paginated registry queries under caller RLS", () => {
@@ -63,5 +67,29 @@ describe("registry database safety", () => {
     expect(workflow).toMatch(
       /public\.audit_safe_snapshot\(tg_table_name, new_row\)/i,
     );
+  });
+
+  it("derives barangay_id from the selected database purok", () => {
+    expect(deployment).toMatch(/new\.barangay_id\s*:=\s*selected_barangay_id/i);
+    expect(deployment).toMatch(/households_apply_deployment_locality/i);
+    expect(deployment).toMatch(/residents_apply_deployment_locality/i);
+    expect(deployment).toMatch(
+      /selected purok is not an active Brgy\. Bagongpook/i,
+    );
+  });
+
+  it("requires seven distinct canonical deployment puroks", () => {
+    expect(deployment).toMatch(
+      /count\(distinct[\s\S]*expected_distinct_count/i,
+    );
+    expect(deployment).toMatch(/expected_distinct_count\s*<>\s*7/i);
+  });
+
+  it("deactivates Purok 8 only when no registry row references it", () => {
+    expect(deployment).toMatch(/set is_active = false/i);
+    expect(deployment).toMatch(
+      /not exists \([\s\S]*public\.households[\s\S]*not exists \([\s\S]*public\.residents/i,
+    );
+    expect(deployment).not.toMatch(/delete\s+from\s+public\.puroks/i);
   });
 });

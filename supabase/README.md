@@ -7,7 +7,7 @@ ALAGA-SYS through Phase 3A.
 supabase/
   bootstrap/   Reviewed manual first-administrator transaction
   functions/   Trusted server-only Auth Admin operations
-  migrations/  Fourteen ordered forward-only migrations
+  migrations/  Fifteen ordered forward-only migrations
   policies/     Reserved for supplementary reviewed policy notes/fragments
   seed.sql      Optional fictional development reference data
 ```
@@ -31,11 +31,15 @@ Migrations 13 and 14 add neutral resident archival, database-generated
 household numbers, registry workflow guards, RLS-preserving list RPCs, indexes,
 and semantic household/resident audit events. They add no clinical tables.
 
+Migration 15 adds the Brgy. Bagongpook deployment resolver, requires exactly
+Purok 1 through Purok 7, derives registry `barangay_id` from the selected purok,
+and deactivates legacy Purok 8 rows only when unreferenced.
+
 ## Applying migrations
 
-Phase 3A migrations must remain pending until an authenticated linked-project
-dry run is reviewed and a live apply receives explicit approval. Source presence
-does not imply hosted deployment.
+Any unapplied migration must remain pending until an authenticated
+linked-project dry run is reviewed and a live apply receives explicit approval.
+Source presence does not imply hosted deployment.
 
 With an authenticated official Supabase CLI, run from the repository root:
 
@@ -58,9 +62,10 @@ share the database password, access token, connection string, or secret key.
 
 ## Development seed
 
-`seed.sql` contains one explicitly fictional barangay and eight fictional
-puroks. It creates no Auth users, households, residents, contact information, or
-healthcare data. It is idempotent by deterministic development UUID.
+`seed.sql` contains synthetic Brgy. Bagongpook reference data with exactly seven
+active puroks. It creates no Auth users, households, residents, contact
+information, or healthcare data. It is idempotent by deterministic development
+UUID and safely deactivates an unreferenced Purok 8 left by the older seed.
 
 ## Security rules
 

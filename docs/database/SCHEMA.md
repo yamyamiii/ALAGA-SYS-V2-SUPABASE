@@ -34,6 +34,9 @@ Apply every file in lexical order:
 13. `20260720001300_resident_archived_status.sql` — neutral resident archive enum
 14. `20260720001400_registry_workflows.sql` — generated household numbers,
     archive/locality guards, invoker list RPCs, indexes, and semantic auditing
+15. `20260720001500_bagongpook_deployment.sql` — canonical single-barangay
+    resolver, seven-purok guard, derived write locality, and safe Purok 8
+    deactivation
 
 Migrations are forward-only and intended to be applied once by Supabase
 migration tooling. They contain no database reset or destructive database-level
@@ -71,6 +74,10 @@ Purok names and codes are unique case-insensitively within a barangay. Composite
 foreign keys ensure a household or resident cannot claim a purok from a
 different barangay. A resident assigned to a household must use that household's
 barangay and purok.
+
+For the Bagongpook deployment, users select only Purok 1–7. The database derives
+`barangay_id` from the selected purok and rejects any noncanonical or inactive
+locality. The canonical UUID remains reference data rather than application code.
 
 ### Household head relationship
 
