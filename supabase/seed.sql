@@ -10,12 +10,25 @@ insert into public.barangays (
   province,
   is_active
 )
-values (
+select
   '10000000-0000-4000-8000-000000000001',
   'Brgy. Bagongpook',
-  'Sample Municipality',
-  'Sample Province',
+  'Lipa City',
+  'Batangas',
   true
+where not exists (
+  select 1
+  from public.barangays as existing
+  where regexp_replace(
+    regexp_replace(
+      lower(btrim(existing.name)),
+      '^(brgy\.?|barangay)\s+',
+      ''
+    ),
+    '\s+',
+    '',
+    'g'
+  ) = 'bagongpook'
 )
 on conflict (id) do update
 set
@@ -24,57 +37,71 @@ set
   province = excluded.province,
   is_active = excluded.is_active;
 
-insert into public.puroks (id, barangay_id, name, code, is_active)
-values
+with deployment as (
+  select public.deployment_barangay_id() as barangay_id
+), desired (id, name, code, is_active) as (
+  values
   (
     '20000000-0000-4000-8000-000000000001',
-    '10000000-0000-4000-8000-000000000001',
     'Purok 1',
     'P01',
     true
   ),
   (
     '20000000-0000-4000-8000-000000000002',
-    '10000000-0000-4000-8000-000000000001',
     'Purok 2',
     'P02',
     true
   ),
   (
     '20000000-0000-4000-8000-000000000003',
-    '10000000-0000-4000-8000-000000000001',
     'Purok 3',
     'P03',
     true
   ),
   (
     '20000000-0000-4000-8000-000000000004',
-    '10000000-0000-4000-8000-000000000001',
     'Purok 4',
     'P04',
     true
   ),
   (
     '20000000-0000-4000-8000-000000000005',
-    '10000000-0000-4000-8000-000000000001',
     'Purok 5',
     'P05',
     true
   ),
   (
     '20000000-0000-4000-8000-000000000006',
-    '10000000-0000-4000-8000-000000000001',
     'Purok 6',
     'P06',
     true
   ),
   (
     '20000000-0000-4000-8000-000000000007',
-    '10000000-0000-4000-8000-000000000001',
     'Purok 7',
     'P07',
     true
   )
+)
+insert into public.puroks (id, barangay_id, name, code, is_active)
+select
+  desired.id::uuid,
+  deployment.barangay_id,
+  desired.name,
+  desired.code,
+  desired.is_active
+from desired
+cross join deployment
+where not exists (
+  select 1
+  from public.puroks as existing
+  where existing.barangay_id = deployment.barangay_id
+    and (
+      lower(existing.name) = lower(desired.name)
+      or lower(existing.code) = lower(desired.code)
+    )
+)
 on conflict (id) do update
 set
   barangay_id = excluded.barangay_id,
@@ -82,16 +109,13 @@ set
   code = excluded.code,
   is_active = excluded.is_active;
 
--- A Purok 8 row from an older development seed is retained but deactivated
--- only when no registry record references it.
+-- Purok 8 remains a valid historical reference but is never selectable.
 update public.puroks as p
 set is_active = false
-where p.id = '20000000-0000-4000-8000-000000000008'
-  and not exists (
-    select 1 from public.households as h where h.purok_id = p.id
-  )
-  and not exists (
-    select 1 from public.residents as r where r.purok_id = p.id
+where p.barangay_id = public.deployment_barangay_id()
+  and (
+    regexp_replace(lower(btrim(p.name)), '^purok\s*', '') = '8'
+    or upper(btrim(p.code)) in ('P08', 'P8')
   );
 
 commit;

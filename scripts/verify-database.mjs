@@ -21,6 +21,7 @@ const expectedMigrations = [
   "20260720001400_registry_workflows.sql",
   "20260720001500_bagongpook_deployment.sql",
   "20260720001600_registry_hardening.sql",
+  "20260720001700_reconcile_bagongpook_reference.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -53,6 +54,8 @@ const completedMigrationHashes = {
     "2605ea2c5c8d26d4ec17f63e4bdfece8fa13201553eab82533c12414d1971336",
   "20260720001500_bagongpook_deployment.sql":
     "e1a300fc175030195caafbac612a7581b68f53b4d990802aaa1a5d78da534b3b",
+  "20260720001600_registry_hardening.sql":
+    "43b4a14947d3c19e77fb3ad42699a0879333671268fcaf7d7f6f57d1b58358c0",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -80,7 +83,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly sixteen expected migrations exist in lexical order",
+  "Exactly seventeen expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -232,6 +235,35 @@ check(
   "Registry writes derive barangay_id from the selected database purok",
 );
 check(
+  /barangay masigla \(fictional\)/i.test(allSql) &&
+    /name = 'Brgy\. Bagongpook'/i.test(allSql) &&
+    /city_or_municipality = 'Lipa City'/i.test(allSql) &&
+    /province = 'Batangas'/i.test(allSql),
+  "Legacy fictional barangay is reconciled to canonical Lipa City Bagongpook",
+);
+check(
+  /barangay_count <> 1/i.test(allSql) &&
+    /legacy_purok_count <> 8/i.test(allSql) &&
+    /legacy_code_count <> 8/i.test(allSql) &&
+    /expected single-barangay P01-P08 seed/i.test(allSql),
+  "Legacy conversion rejects ambiguous or malformed fictional seed data",
+);
+check(
+  /Legacy Barangay/i.test(allSql) &&
+    /update public\.households[\s\S]*barangay_id = target_barangay_id/i.test(
+      allSql,
+    ) &&
+    /update public\.residents[\s\S]*barangay_id = target_barangay_id/i.test(
+      allSql,
+    ),
+  "Existing deployment and legacy registry references merge without deleting rows",
+);
+check(
+  /is_active = canonical\.ordinal between 1 and 7/i.test(allSql) &&
+    /p\.name = 'Purok 8'[\s\S]*not p\.is_active/i.test(allSql),
+  "Reconciliation keeps exactly Purok 1 through 7 active and Purok 8 inactive",
+);
+check(
   /'resident-photos'[\s\S]*false[\s\S]*5242880/i.test(allSql) &&
     /resident_photos_select_authorized/i.test(allSql) &&
     /can_view_resident_photo/i.test(allSql),
@@ -307,16 +339,18 @@ check(
   "Seed inserts only fictional location reference data",
 );
 check(
-  (seed.match(/'P0[1-7]'/g) ?? []).length === 7 && !/'P08'/.test(seed),
-  "Seed contains exactly Purok 1 through Purok 7",
+  (seed.match(/'P0[1-7]'/g) ?? []).length === 7,
+  "Seed activates exactly Purok 1 through Purok 7",
 );
 check(
   /set is_active = false/i.test(seed) &&
-    /20000000-0000-4000-8000-000000000008/i.test(seed) &&
-    /not exists \([\s\S]*public\.households[\s\S]*not exists \([\s\S]*public\.residents/i.test(
-      seed,
-    ),
-  "Seed safely deactivates an unreferenced legacy Purok 8",
+    /deployment_barangay_id\(\)/i.test(seed) &&
+    /'P08', 'P8'/i.test(seed),
+  "Seed keeps deployment Purok 8 inactive without deleting historical references",
+);
+check(
+  /'Lipa City'/i.test(seed) && /'Batangas'/i.test(seed),
+  "Seed uses the canonical Bagongpook locality",
 );
 
 const sourceFiles = [];

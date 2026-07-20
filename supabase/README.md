@@ -7,7 +7,7 @@ ALAGA-SYS through Phase 3B.
 supabase/
   bootstrap/   Reviewed manual first-administrator transaction
   functions/   Trusted server-only Auth Admin operations
-  migrations/  Sixteen ordered forward-only migrations
+  migrations/  Seventeen ordered forward-only migrations
   policies/     Reserved for supplementary reviewed policy notes/fragments
   seed.sql      Optional fictional development reference data
 ```
@@ -41,6 +41,13 @@ review, hardens archive/head relationships, and restricts resident/profile
 linking to service-role-only administrator RPCs. The updated `manage-user` Edge
 Function provides the narrow candidate, invite, link, status, and unlink path.
 
+Migration 17 reconciles databases that still contain the original fictional
+barangay seed. It preserves the sole legacy UUID, safely merges references when
+Bagongpook already exists, normalizes the locality to Lipa City, Batangas, and
+keeps only Purok 1 through Purok 7 active. Purok 8 remains inactive without
+deleting historical registry rows. A direct Masigla conversion is rejected
+unless the database has the expected sole-barangay P01-P08 seed shape.
+
 ## Applying migrations
 
 Any unapplied migration must remain pending until an authenticated
@@ -68,10 +75,11 @@ share the database password, access token, connection string, or secret key.
 
 ## Development seed
 
-`seed.sql` contains synthetic Brgy. Bagongpook reference data with exactly seven
-active puroks. It creates no Auth users, households, residents, contact
-information, or healthcare data. It is idempotent by deterministic development
-UUID and safely deactivates an unreferenced Purok 8 left by the older seed.
+`seed.sql` contains synthetic Brgy. Bagongpook reference data for Lipa City,
+Batangas, with exactly seven active puroks. It creates no Auth users, households,
+residents, contact information, or healthcare data. It remains idempotent after
+legacy-reference reconciliation and keeps Purok 8 inactive without deleting
+historical references.
 
 ## Security rules
 

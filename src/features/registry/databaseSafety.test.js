@@ -26,6 +26,10 @@ const hardening = fs.readFileSync(
   "supabase/migrations/20260720001600_registry_hardening.sql",
   "utf8",
 );
+const referenceReconciliation = fs.readFileSync(
+  "supabase/migrations/20260720001700_reconcile_bagongpook_reference.sql",
+  "utf8",
+);
 
 describe("registry database safety", () => {
   it("keeps paginated registry queries under caller RLS", () => {
@@ -114,6 +118,57 @@ describe("registry database safety", () => {
       /not exists \([\s\S]*public\.households[\s\S]*not exists \([\s\S]*public\.residents/i,
     );
     expect(deployment).not.toMatch(/delete\s+from\s+public\.puroks/i);
+  });
+
+  it("reconciles the original fictional seed without replacing its UUID", () => {
+    expect(referenceReconciliation).toMatch(/barangay masigla \(fictional\)/i);
+    expect(referenceReconciliation).toMatch(
+      /target_barangay_id[\s\S]*Brgy\. Bagongpook[\s\S]*Lipa City[\s\S]*Batangas/i,
+    );
+    expect(referenceReconciliation).toMatch(
+      /update public\.households[\s\S]*barangay_id = target_barangay_id/i,
+    );
+    expect(referenceReconciliation).toMatch(
+      /update public\.residents[\s\S]*barangay_id = target_barangay_id/i,
+    );
+    expect(referenceReconciliation).not.toMatch(
+      /delete\s+from\s+public\.(barangays|puroks|households|residents)/i,
+    );
+    expect(referenceReconciliation).toMatch(
+      /barangay_count <> 1[\s\S]*legacy_purok_count <> 8[\s\S]*legacy_code_count <> 8/i,
+    );
+    expect(referenceReconciliation).toMatch(
+      /does not match the expected single-barangay P01-P08 seed/i,
+    );
+    expect(referenceReconciliation).toMatch(
+      /legacy_barangay_count > 1[\s\S]*multiple Barangay Masigla seed rows/i,
+    );
+  });
+
+  it("merges duplicate deployment references and restores validated foreign keys", () => {
+    expect(referenceReconciliation).toMatch(/Legacy Barangay/i);
+    expect(referenceReconciliation).toMatch(
+      /Prefer an existing deployment row[\s\S]*registry[\s\S]*references win/i,
+    );
+    expect(referenceReconciliation).toMatch(
+      /add constraint households_purok_belongs_to_barangay[\s\S]*validate constraint households_purok_belongs_to_barangay/i,
+    );
+    expect(referenceReconciliation).toMatch(
+      /add constraint residents_purok_belongs_to_barangay[\s\S]*add constraint residents_household_matches_location[\s\S]*validate constraint residents_household_matches_location/i,
+    );
+  });
+
+  it("normalizes exactly Purok 1 through 7 and keeps Purok 8 inactive", () => {
+    expect(referenceReconciliation).toMatch(/for purok_number in 1\.\.8 loop/i);
+    expect(referenceReconciliation).toMatch(
+      /is_active = canonical\.ordinal between 1 and 7/i,
+    );
+    expect(referenceReconciliation).toMatch(
+      /p\.name = 'Purok 8'[\s\S]*not p\.is_active/i,
+    );
+    expect(referenceReconciliation).toMatch(
+      /public\.deployment_barangay_id\(\) <> target_barangay_id/i,
+    );
   });
 
   it("keeps resident photos private and resident-row authorized for every role", () => {

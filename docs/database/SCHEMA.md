@@ -37,6 +37,12 @@ Apply every file in lexical order:
 15. `20260720001500_bagongpook_deployment.sql` — canonical single-barangay
     resolver, seven-purok guard, derived write locality, and safe Purok 8
     deactivation
+16. `20260720001600_registry_hardening.sql` — private resident photos, scalable
+    household selection, duplicate review, archive integrity, and trusted profile
+    linking
+17. `20260720001700_reconcile_bagongpook_reference.sql` — forward-only legacy
+    seed reconciliation that preserves registry references, normalizes the
+    deployment locality, and keeps only Purok 1 through Purok 7 active
 
 Migrations are forward-only and intended to be applied once by Supabase
 migration tooling. They contain no database reset or destructive database-level
@@ -78,6 +84,13 @@ barangay and purok.
 For the Bagongpook deployment, users select only Purok 1–7. The database derives
 `barangay_id` from the selected purok and rejects any noncanonical or inactive
 locality. The canonical UUID remains reference data rather than application code.
+Migration 17 converts the original `Barangay Masigla (Fictional)` row in place
+when it is the sole seed, preserving its UUID. If a Bagongpook row already
+exists, registry references are merged transactionally and legacy barangay UUIDs
+remain as inactive aliases. The canonical locality is Lipa City, Batangas.
+The direct fictional-seed conversion fails and rolls back unless Masigla is the
+sole barangay and contains exactly one each of P01 through P08, with P01 through
+P07 active.
 
 ### Household head relationship
 

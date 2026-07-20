@@ -115,8 +115,10 @@ administrator-only behind the trusted Edge Function. Household selection is
 debounced/server-paginated, and probable duplicates require an explicit audited
 override. Registry locality is configured for
 Brgy. Bagongpook with Purok 1 through Purok 7; barangay UUID resolution remains
-database-backed. Public registration, physical deletion, and password reset
-remain unavailable.
+database-backed. A pending forward-only reconciliation preserves legacy
+household/resident references while normalizing the deployment locality to Lipa
+City, Batangas. Public registration, physical deletion, and password reset remain
+unavailable.
 
 ## Next phase
 
