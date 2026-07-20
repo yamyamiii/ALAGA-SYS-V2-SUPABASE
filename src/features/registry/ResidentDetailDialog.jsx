@@ -45,6 +45,14 @@ function DetailSection({ title, children }) {
   );
 }
 
+function residentDetailErrorTitle(error) {
+  if (error?.code === "resident_not_found") return "Resident not found";
+  if (error?.code === "permission_denied") return "Access denied";
+  if (error?.code === "invalid_resident_id")
+    return "Invalid resident reference";
+  return "Resident unavailable";
+}
+
 export function ResidentDetailDialog({
   residentId,
   open,
@@ -78,7 +86,7 @@ export function ResidentDetailDialog({
         ) : resident.isError ? (
           <ErrorState
             compact
-            title="Resident unavailable"
+            title={residentDetailErrorTitle(resident.error)}
             description={resident.error.message}
             actionLabel="Try again"
             onAction={() => resident.refetch()}

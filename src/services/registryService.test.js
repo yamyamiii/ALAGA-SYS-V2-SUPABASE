@@ -10,6 +10,7 @@ import {
 } from "@/services/registryService";
 
 const barangayId = "11111111-1111-4111-8111-111111111111";
+const residentId = "33333333-3333-4333-8333-333333333333";
 const deploymentRows = Array.from({ length: 7 }, (_, index) => ({
   barangay_id: barangayId,
   barangay_name: "Brgy. Bagongpook",
@@ -28,6 +29,21 @@ function deploymentRpc(result = { data: deploymentRows, error: null }) {
       error: null,
     });
   });
+}
+
+function residentDetailClient(result) {
+  const maybeSingle = vi.fn().mockResolvedValue(result);
+  const eq = vi.fn(() => ({ maybeSingle }));
+  const select = vi.fn(() => ({ eq }));
+  const from = vi.fn(() => ({ select }));
+
+  return {
+    client: { from },
+    from,
+    select,
+    eq,
+    maybeSingle,
+  };
 }
 
 describe("registry service", () => {
@@ -174,6 +190,78 @@ describe("registry service", () => {
         purok_id: deploymentRows[0].purok_id,
       }),
     );
+  });
+
+  it("loads one resident by UUID through the unambiguous household relationship", async () => {
+    const row = {
+      id: residentId,
+      resident_number: "RES-2026-000001",
+      archived_at: null,
+      household: { household_number: "HH-2026-000001" },
+    };
+    const detail = residentDetailClient({ data: row, error: null });
+    const service = createRegistryService(() => detail.client);
+
+    await expect(service.getResident(residentId)).resolves.toEqual(row);
+    expect(detail.from).toHaveBeenCalledWith("residents");
+    expect(detail.select).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "household:households!residents_household_matches_location",
+      ),
+    );
+    expect(detail.eq).toHaveBeenCalledWith("id", residentId);
+    expect(detail.maybeSingle).toHaveBeenCalledOnce();
+  });
+
+  it("returns a specific safe error when the resident is missing or hidden by RLS", async () => {
+    const detail = residentDetailClient({ data: null, error: null });
+    const service = createRegistryService(() => detail.client);
+
+    await expect(service.getResident(residentId)).rejects.toEqual(
+      expect.objectContaining({
+        code: "resident_not_found",
+        message:
+          "The resident record was not found or is not available to your account.",
+      }),
+    );
+  });
+
+  it("maps an explicit authorization failure without weakening RLS", async () => {
+    const detail = residentDetailClient({
+      data: null,
+      error: {
+        code: "42501",
+        message: "permission denied for table residents",
+      },
+    });
+    const service = createRegistryService(() => detail.client);
+
+    await expect(service.getResident(residentId)).rejects.toEqual(
+      expect.objectContaining({ code: "permission_denied" }),
+    );
+  });
+
+  it("allows an archived row returned by administrator RLS", async () => {
+    const archivedRow = {
+      id: residentId,
+      resident_number: "RES-2026-000001",
+      status: "archived",
+      archived_at: "2026-07-20T00:00:00Z",
+    };
+    const detail = residentDetailClient({ data: archivedRow, error: null });
+    const service = createRegistryService(() => detail.client);
+
+    await expect(service.getResident(residentId)).resolves.toEqual(archivedRow);
+  });
+
+  it("rejects resident numbers and other non-UUID detail identifiers", async () => {
+    const from = vi.fn();
+    const service = createRegistryService(() => ({ from }));
+
+    await expect(service.getResident("RES-2026-000001")).rejects.toEqual(
+      expect.objectContaining({ code: "invalid_resident_id" }),
+    );
+    expect(from).not.toHaveBeenCalled();
   });
 
   it("contains no permanent-delete or service-role browser path", () => {

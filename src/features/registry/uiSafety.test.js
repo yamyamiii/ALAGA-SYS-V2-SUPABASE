@@ -63,4 +63,10 @@ describe("registry UI boundaries", () => {
     );
     expect(source).toMatch(/DeploymentBarangayContext/);
   });
+
+  it("passes the resident UUID rather than resident_number to the detail dialog", () => {
+    expect(residentPage.match(/setDetailId\(item\.id\)/g)).toHaveLength(2);
+    expect(residentPage).toMatch(/residentId=\{detailId\}/);
+    expect(residentPage).not.toMatch(/setDetailId\(item\.resident_number\)/);
+  });
 });

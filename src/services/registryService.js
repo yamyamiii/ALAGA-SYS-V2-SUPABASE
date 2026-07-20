@@ -36,6 +36,9 @@ const HOUSEHOLD_WRITE_FIELDS = Object.freeze([
   "status",
 ]);
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export class RegistryServiceError extends Error {
   constructor(code, message, options = {}) {
     super(message, { cause: options.cause });
@@ -95,6 +98,16 @@ function mapError(error, fallback) {
   return new RegistryServiceError("registry_request_failed", fallback, {
     cause: error,
   });
+}
+
+function reportDeveloperDiagnostic(operation, error, mappedCode) {
+  if (import.meta.env.DEV && import.meta.env.MODE !== "test") {
+    console.warn("[ALAGA-SYS registry diagnostic]", {
+      operation,
+      providerCode: error?.code ?? "none",
+      mappedCode,
+    });
+  }
 }
 
 function resultPage(data, page, pageSize) {
@@ -314,17 +327,39 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       return data ?? [];
     },
 
-    getResident(id) {
-      return singleResult(
-        client()
-          .from("residents")
-          .select(
-            "id, resident_number, linked_profile_id, household_id, barangay_id, purok_id, first_name, middle_name, last_name, suffix, date_of_birth, sex, civil_status, blood_type, nationality, religion, phone_number, email, occupation, address_line, philhealth_number, emergency_contact_name, emergency_contact_number, emergency_contact_relationship, is_senior_citizen, is_pwd, pregnancy_status, status, photo_path, created_by, updated_by, created_at, updated_at, archived_at, barangay:barangays(id,name,city_or_municipality,province), purok:puroks(id,name,code), household:households(id,household_number,address_line,status)",
-          )
-          .eq("id", id)
-          .single(),
-        "The resident could not be loaded.",
-      );
+    async getResident(id) {
+      if (!UUID_PATTERN.test(id ?? "")) {
+        const invalidIdError = new RegistryServiceError(
+          "invalid_resident_id",
+          "The selected resident reference is invalid.",
+        );
+        reportDeveloperDiagnostic("resident_detail", null, invalidIdError.code);
+        throw invalidIdError;
+      }
+
+      const { data, error } = await client()
+        .from("residents")
+        .select(
+          "id, resident_number, linked_profile_id, household_id, barangay_id, purok_id, first_name, middle_name, last_name, suffix, date_of_birth, sex, civil_status, blood_type, nationality, religion, phone_number, email, occupation, address_line, philhealth_number, emergency_contact_name, emergency_contact_number, emergency_contact_relationship, is_senior_citizen, is_pwd, pregnancy_status, status, photo_path, created_by, updated_by, created_at, updated_at, archived_at, barangay:barangays(id,name,city_or_municipality,province), purok:puroks(id,name,code), household:households!residents_household_matches_location(id,household_number,address_line,status)",
+        )
+        .eq("id", id)
+        .maybeSingle();
+
+      if (error) {
+        const mapped = mapError(error, "The resident could not be loaded.");
+        reportDeveloperDiagnostic("resident_detail", error, mapped.code);
+        throw mapped;
+      }
+      if (!data) {
+        const notFoundError = new RegistryServiceError(
+          "resident_not_found",
+          "The resident record was not found or is not available to your account.",
+        );
+        reportDeveloperDiagnostic("resident_detail", null, notFoundError.code);
+        throw notFoundError;
+      }
+
+      return data;
     },
 
     async createHousehold(values) {

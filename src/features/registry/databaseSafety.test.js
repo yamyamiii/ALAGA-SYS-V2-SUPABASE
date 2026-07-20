@@ -10,6 +10,10 @@ const policies = fs.readFileSync(
   "supabase/migrations/20260720001000_rls_policies.sql",
   "utf8",
 );
+const helpers = fs.readFileSync(
+  "supabase/migrations/20260720000800_helper_functions_and_triggers.sql",
+  "utf8",
+);
 const deployment = fs.readFileSync(
   "supabase/migrations/20260720001500_bagongpook_deployment.sql",
   "utf8",
@@ -27,8 +31,19 @@ describe("registry database safety", () => {
   });
 
   it("retains resident self-read and staff/admin mutation policy boundaries", () => {
+    expect(helpers).toMatch(
+      /current_profile_role\(\) in \([\s\S]*'admin'[\s\S]*'barangay_health_worker'[\s\S]*'nurse'[\s\S]*'midwife'/i,
+    );
     expect(policies).toMatch(/residents_select_own/i);
-    expect(policies).toMatch(/residents_select_staff/i);
+    expect(policies).toMatch(
+      /residents_select_staff_active[\s\S]*public\.is_staff\(\)[\s\S]*archived_at is null/i,
+    );
+    expect(policies).toMatch(
+      /residents_select_admin[\s\S]*using \(public\.is_admin\(\)\)/i,
+    );
+    expect(policies).toMatch(
+      /residents_select_own[\s\S]*archived_at is null[\s\S]*linked_profile_id = auth\.uid\(\)/i,
+    );
     expect(policies).toMatch(/residents_insert_admin_bhw/i);
     expect(policies).toMatch(/residents_update_admin/i);
     expect(policies).toMatch(/residents_update_bhw_active/i);
