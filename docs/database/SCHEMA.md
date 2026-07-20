@@ -91,6 +91,11 @@ remain as inactive aliases. The canonical locality is Lipa City, Batangas.
 The direct fictional-seed conversion fails and rolls back unless Masigla is the
 sole barangay and contains exactly one each of P01 through P08, with P01 through
 P07 active.
+During reconciliation, candidate puroks receive deterministic temporary codes
+formed from `M` and a 19-digit row number ordered by barangay UUID and purok
+UUID. Migration 17 transactionally recreates the case-insensitive name/code
+indexes after canonical labels are finalized, preventing collisions from the
+shared prefixes of deterministic development UUIDs.
 
 ### Household head relationship
 

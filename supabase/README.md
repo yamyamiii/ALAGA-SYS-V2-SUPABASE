@@ -47,6 +47,9 @@ Bagongpook already exists, normalizes the locality to Lipa City, Batangas, and
 keeps only Purok 1 through Purok 7 active. Purok 8 remains inactive without
 deleting historical registry rows. A direct Masigla conversion is rejected
 unless the database has the expected sole-barangay P01-P08 seed shape.
+Temporary purok codes use an ordered row number within a transaction; the
+per-barangay name/code uniqueness indexes are recreated before commit so the
+deterministic UUIDs cannot collide while labels are being evacuated.
 
 ## Applying migrations
 

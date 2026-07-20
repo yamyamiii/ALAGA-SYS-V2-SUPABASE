@@ -30,6 +30,11 @@ const referenceReconciliation = fs.readFileSync(
   "supabase/migrations/20260720001700_reconcile_bagongpook_reference.sql",
   "utf8",
 );
+const deterministicPurokIds = Array.from(
+  { length: 8 },
+  (_, index) =>
+    `20000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+);
 
 describe("registry database safety", () => {
   it("keeps paginated registry queries under caller RLS", () => {
@@ -168,6 +173,37 @@ describe("registry database safety", () => {
     );
     expect(referenceReconciliation).toMatch(
       /public\.deployment_barangay_id\(\) <> target_barangay_id/i,
+    );
+  });
+
+  it("uses collision-free temporary codes for deterministic purok UUIDs", () => {
+    const collisionProneCodes = deterministicPurokIds.map(
+      (id) => `M${id.replaceAll("-", "").slice(0, 19)}`,
+    );
+    const orderedTemporaryCodes = deterministicPurokIds
+      .toSorted()
+      .map((_, index) => `M${String(index + 1).padStart(19, "0")}`);
+
+    expect(new Set(collisionProneCodes).size).toBe(1);
+    expect(new Set(orderedTemporaryCodes).size).toBe(8);
+    expect(orderedTemporaryCodes).not.toContain("P01");
+    expect(orderedTemporaryCodes).not.toContain("P08");
+    for (const code of orderedTemporaryCodes) {
+      expect(code).toHaveLength(20);
+      expect(code).toMatch(/^[A-Z0-9][A-Z0-9_-]{0,19}$/);
+    }
+
+    expect(referenceReconciliation).toMatch(
+      /row_number\(\) over \(order by p\.barangay_id, p\.id\)/i,
+    );
+    expect(referenceReconciliation).toMatch(
+      /'M' \|\| lpad\(ordered\.label_number::text, 19, '0'\)/i,
+    );
+    expect(referenceReconciliation).toMatch(
+      /drop index public\.puroks_barangay_code_unique[\s\S]*create unique index puroks_barangay_code_unique/i,
+    );
+    expect(referenceReconciliation).not.toMatch(
+      /'M' \|\| left\(replace\(p\.id::text, '-', ''\), 19\)/i,
     );
   });
 

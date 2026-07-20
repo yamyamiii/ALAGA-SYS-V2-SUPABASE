@@ -264,6 +264,15 @@ check(
   "Reconciliation keeps exactly Purok 1 through 7 active and Purok 8 inactive",
 );
 check(
+  /row_number\(\) over \(order by p\.barangay_id, p\.id\)/i.test(allSql) &&
+    /'M' \|\| lpad\(ordered\.label_number::text, 19, '0'\)/i.test(allSql) &&
+    /drop index public\.puroks_barangay_code_unique[\s\S]*create unique index puroks_barangay_code_unique/i.test(
+      allSql,
+    ) &&
+    !/'M' \|\| left\(replace\(p\.id::text, '-', ''\), 19\)/i.test(allSql),
+  "Temporary Bagongpook purok labels are ordered, unique, and code-valid",
+);
+check(
   /'resident-photos'[\s\S]*false[\s\S]*5242880/i.test(allSql) &&
     /resident_photos_select_authorized/i.test(allSql) &&
     /can_view_resident_photo/i.test(allSql),

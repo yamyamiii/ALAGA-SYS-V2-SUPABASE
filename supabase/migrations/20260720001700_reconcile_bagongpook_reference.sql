@@ -40,6 +40,25 @@ create temporary table migration_bagongpook_canonical_puroks (
   purok_id uuid not null unique
 ) on commit drop;
 
+create temporary table migration_bagongpook_purok_labels (
+  purok_id uuid primary key,
+  temporary_name text not null unique,
+  temporary_code text not null unique,
+  constraint migration_bagongpook_temporary_name_length check (
+    char_length(btrim(temporary_name)) between 1 and 100
+  ),
+  constraint migration_bagongpook_temporary_code_format check (
+    temporary_code = upper(temporary_code)
+    and temporary_code ~ '^[A-Z0-9][A-Z0-9_-]{0,19}$'
+  )
+) on commit drop;
+
+-- These non-deferrable indexes would reject a multi-row code evacuation when
+-- a destination label equals a code held by a row that PostgreSQL has not
+-- updated yet. They are restored and validated by index creation before commit.
+drop index public.puroks_barangay_name_unique;
+drop index public.puroks_barangay_code_unique;
+
 do $$
 declare
   target_barangay_id uuid;
@@ -210,14 +229,35 @@ begin
   where upper(btrim(p.code)) ~ '^P0?[1-8]$'
     or regexp_replace(lower(btrim(p.name)), '^purok\s*', '') ~ '^[1-8]$';
 
+  -- Use a database-guaranteed global row number rather than a truncated UUID.
+  -- The M prefix cannot overlap P01-P08, and a bigint row number always fits
+  -- the remaining 19 characters allowed by puroks_code_format.
+  insert into migration_bagongpook_purok_labels (
+    purok_id,
+    temporary_name,
+    temporary_code
+  )
+  select
+    ordered.id,
+    'Legacy Purok ' || ordered.id::text,
+    'M' || lpad(ordered.label_number::text, 19, '0')
+  from (
+    select
+      p.id,
+      row_number() over (order by p.barangay_id, p.id) as label_number
+    from public.puroks as p
+    join migration_bagongpook_barangays as candidate
+      on candidate.id = p.barangay_id
+  ) as ordered;
+
   update public.puroks as p
   set
-    name = 'Legacy Purok ' || p.id::text,
-    code = 'M' || left(replace(p.id::text, '-', ''), 19),
+    name = labels.temporary_name,
+    code = labels.temporary_code,
     is_active = false,
     updated_at = now()
-  from migration_bagongpook_barangays as candidate
-  where candidate.id = p.barangay_id;
+  from migration_bagongpook_purok_labels as labels
+  where labels.purok_id = p.id;
 
   -- Keep a purok already attached to the target when possible. Otherwise use
   -- a deterministic existing UUID, so all original seed references survive.
@@ -254,7 +294,7 @@ begin
         deterministic_purok_id,
         target_barangay_id,
         'Migration Purok ' || deterministic_purok_id::text,
-        'N' || left(replace(deterministic_purok_id::text, '-', ''), 19),
+        'N' || lpad(purok_number::text, 19, '0'),
         false
       );
 
@@ -325,6 +365,11 @@ begin
   end if;
 end;
 $$;
+
+create unique index puroks_barangay_name_unique
+  on public.puroks (barangay_id, lower(name));
+create unique index puroks_barangay_code_unique
+  on public.puroks (barangay_id, lower(code));
 
 alter table public.households
   add constraint households_purok_belongs_to_barangay
