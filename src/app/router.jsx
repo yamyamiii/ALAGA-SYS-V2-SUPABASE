@@ -3,34 +3,36 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { LoadingState } from "@/components/common/StateDisplay";
 import { AppShell } from "@/components/layout/AppShell";
+import { navigationItems } from "@/config/navigation";
 import { ROUTES } from "@/config/routes";
+import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
+import { PERMISSIONS } from "@/features/auth/permissions";
+import { RoleGuard } from "@/features/auth/RoleGuard";
 
+const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const ComingSoonPage = lazy(() => import("@/pages/ComingSoonPage"));
+const AccessDeniedPage = lazy(() => import("@/pages/AccessDeniedPage"));
+const AccountSettingsPage = lazy(() => import("@/pages/AccountSettingsPage"));
+const UserManagementPage = lazy(
+  () => import("@/features/user-management/UserManagementPage"),
+);
 const ConfigurationErrorPage = lazy(
   () => import("@/pages/ConfigurationErrorPage"),
 );
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
-const placeholderRoutes = [
-  ROUTES.residents,
-  ROUTES.appointments,
-  ROUTES.healthRecords,
-  ROUTES.maternalChildCare,
-  ROUTES.medicineInventory,
-  ROUTES.announcements,
-  ROUTES.reports,
-  ROUTES.auditLogs,
-  ROUTES.userManagement,
-  ROUTES.settings,
-];
+const moduleRoutes = navigationItems.filter(
+  (item) =>
+    item.path !== ROUTES.dashboard && item.path !== ROUTES.userManagement,
+);
 
 function RouteFallback() {
   return (
     <div className="p-6">
       <LoadingState
         title="Loading page"
-        description="Preparing the workspace…"
+        description="Preparing the secure workspace…"
       />
     </div>
   );
@@ -40,21 +42,42 @@ export function AppRouter() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Routes>
-        <Route element={<AppShell />}>
-          <Route index element={<DashboardPage />} />
-          {placeholderRoutes.map((path) => (
-            <Route key={path} path={path} element={<ComingSoonPage />} />
-          ))}
-          <Route
-            path={ROUTES.configurationError}
-            element={<ConfigurationErrorPage />}
-          />
-        </Route>
+        <Route path={ROUTES.login} element={<LoginPage />} />
         <Route
-          path="/dashboard"
-          element={<Navigate to={ROUTES.dashboard} replace />}
+          path={ROUTES.configurationError}
+          element={<ConfigurationErrorPage />}
         />
-        <Route path="*" element={<NotFoundPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppShell />}>
+            <Route index element={<DashboardPage />} />
+            <Route path={ROUTES.account} element={<AccountSettingsPage />} />
+            <Route path={ROUTES.accessDenied} element={<AccessDeniedPage />} />
+            <Route
+              path={ROUTES.userManagement}
+              element={
+                <RoleGuard permission={PERMISSIONS.MANAGE_USERS}>
+                  <UserManagementPage />
+                </RoleGuard>
+              }
+            />
+            {moduleRoutes.map((route) => (
+              <Route
+                key={route.path}
+                path={route.path}
+                element={
+                  <RoleGuard permission={route.permission}>
+                    <ComingSoonPage />
+                  </RoleGuard>
+                }
+              />
+            ))}
+            <Route
+              path="dashboard"
+              element={<Navigate to={ROUTES.dashboard} replace />}
+            />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Route>
       </Routes>
     </Suspense>
   );

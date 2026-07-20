@@ -14,77 +14,75 @@ import {
 } from "lucide-react";
 
 import { ROUTES } from "@/config/routes";
-
-export const USER_ROLES = Object.freeze({
-  ADMIN: "admin",
-  HEALTH_WORKER: "health_worker",
-  STAFF: "staff",
-});
-
-const allRoles = Object.values(USER_ROLES);
+import { PERMISSIONS } from "@/features/auth/permissions";
 
 export const navigationItems = [
   {
     label: "Dashboard",
     path: ROUTES.dashboard,
     icon: LayoutDashboard,
-    roles: allRoles,
+    permission: PERMISSIONS.VIEW_DASHBOARD,
   },
   {
     label: "Residents",
     path: ROUTES.residents,
     icon: UsersRound,
-    roles: allRoles,
+    permission: PERMISSIONS.MANAGE_RESIDENTS,
   },
   {
     label: "Appointments",
     path: ROUTES.appointments,
     icon: CalendarDays,
-    roles: allRoles,
+    permission: PERMISSIONS.MANAGE_APPOINTMENTS,
   },
   {
     label: "Health Records",
     path: ROUTES.healthRecords,
     icon: HeartPulse,
-    roles: allRoles,
+    permission: PERMISSIONS.MANAGE_CONSULTATIONS,
   },
   {
     label: "Maternal and Child Care",
     path: ROUTES.maternalChildCare,
     icon: Users,
-    roles: [USER_ROLES.ADMIN, USER_ROLES.HEALTH_WORKER],
+    permission: PERMISSIONS.MANAGE_MATERNAL_CARE,
   },
   {
     label: "Medicine Inventory",
     path: ROUTES.medicineInventory,
     icon: Package,
-    roles: allRoles,
+    permission: PERMISSIONS.MANAGE_MEDICINES,
   },
   {
     label: "Announcements",
     path: ROUTES.announcements,
     icon: Megaphone,
-    roles: allRoles,
+    permission: PERMISSIONS.MANAGE_ANNOUNCEMENTS,
   },
   {
     label: "Reports",
     path: ROUTES.reports,
     icon: FileBarChart,
-    roles: allRoles,
+    permission: PERMISSIONS.VIEW_REPORTS,
   },
   {
     label: "Audit Logs",
     path: ROUTES.auditLogs,
     icon: ClipboardList,
-    roles: [USER_ROLES.ADMIN],
+    permission: PERMISSIONS.VIEW_AUDIT_LOGS,
   },
   {
     label: "User Management",
     path: ROUTES.userManagement,
     icon: ShieldCheck,
-    roles: [USER_ROLES.ADMIN],
+    permission: PERMISSIONS.MANAGE_USERS,
   },
-  { label: "Settings", path: ROUTES.settings, icon: Settings, roles: allRoles },
+  {
+    label: "Settings",
+    path: ROUTES.settings,
+    icon: Settings,
+    permission: PERMISSIONS.MANAGE_SETTINGS,
+  },
 ];
 
 export const quickActionPreviews = [

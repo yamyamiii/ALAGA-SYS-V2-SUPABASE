@@ -1,4 +1,4 @@
-# Phase 1 data dictionary
+# Data dictionary through Phase 2B
 
 All timestamps are `timestamptz` in UTC storage. UUID values are internal keys;
 display numbers are database-generated text. Nullable means the value may be
@@ -24,20 +24,23 @@ unknown, not collected, not applicable, or not yet linked as described.
 One-to-one application identity for a Supabase Auth user. Email is intentionally
 not mirrored.
 
-| Column           | Type             | Nullable/default     | Meaning                                           |
-| ---------------- | ---------------- | -------------------- | ------------------------------------------------- |
-| `id`             | `uuid`           | Not null             | PK and FK to `auth.users.id`                      |
-| `role`           | `app_role`       | Not null; `resident` | Authorization role                                |
-| `first_name`     | `text`           | Nullable             | Given name, 1–100 trimmed characters when present |
-| `middle_name`    | `text`           | Nullable             | Middle name, 1–100 characters                     |
-| `last_name`      | `text`           | Nullable             | Family name, 1–100 characters                     |
-| `suffix`         | `text`           | Nullable             | Name suffix, maximum 30 characters                |
-| `phone_number`   | `text`           | Nullable             | Contact number, 7–30 characters                   |
-| `account_status` | `account_status` | Not null; `invited`  | Account lifecycle state                           |
-| `avatar_path`    | `text`           | Nullable             | Storage path, maximum 500 characters              |
-| `last_login_at`  | `timestamptz`    | Nullable             | Trusted-workflow login timestamp                  |
-| `created_at`     | `timestamptz`    | Not null; `now()`    | Creation timestamp                                |
-| `updated_at`     | `timestamptz`    | Not null; `now()`    | Trigger-maintained update timestamp               |
+| Column               | Type             | Nullable/default     | Meaning                                            |
+| -------------------- | ---------------- | -------------------- | -------------------------------------------------- |
+| `id`                 | `uuid`           | Not null             | PK and FK to `auth.users.id`                       |
+| `role`               | `app_role`       | Not null; `resident` | Authorization role                                 |
+| `first_name`         | `text`           | Nullable             | Given name, 1–100 trimmed characters when present  |
+| `middle_name`        | `text`           | Nullable             | Middle name, 1–100 characters                      |
+| `last_name`          | `text`           | Nullable             | Family name, 1–100 characters                      |
+| `suffix`             | `text`           | Nullable             | Name suffix, maximum 30 characters                 |
+| `phone_number`       | `text`           | Nullable             | Contact number, 7–30 characters                    |
+| `account_status`     | `account_status` | Not null; `invited`  | Account lifecycle state                            |
+| `avatar_path`        | `text`           | Nullable             | Storage path, maximum 500 characters               |
+| `last_login_at`      | `timestamptz`    | Nullable             | Trusted-workflow login timestamp                   |
+| `created_at`         | `timestamptz`    | Not null; `now()`    | Creation timestamp                                 |
+| `updated_at`         | `timestamptz`    | Not null; `now()`    | Trigger-maintained update timestamp                |
+| `invited_by`         | `uuid`           | Nullable             | Trusted inviter profile FK; never browser-writable |
+| `invitation_sent_at` | `timestamptz`    | Nullable             | Latest successful invitation send time             |
+| `status_changed_at`  | `timestamptz`    | Not null; `now()`    | Trusted lifecycle-change timestamp                 |
 
 ## `barangays`
 
@@ -177,6 +180,17 @@ state-transition APIs are intentionally deferred. Assignment is limited to an
 active staff profile, and a direct authenticated update cannot replace
 `resident_id` after creation.
 
+## `admin_action_rate_limits`
+
+Internal Phase 2B abuse-control state. RLS is enabled and no browser role has a
+policy or grant.
+
+| Column              | Type          | Nullable/default   | Meaning                                |
+| ------------------- | ------------- | ------------------ | -------------------------------------- |
+| `actor_profile_id`  | `uuid`        | Not null           | PK and FK to the administrator profile |
+| `window_started_at` | `timestamptz` | Not null           | Start of the current request window    |
+| `request_count`     | `integer`     | Not null; positive | Atomic requests consumed in the window |
+
 ## `audit_logs`
 
 Append-only record of controlled changes.
@@ -202,6 +216,8 @@ indexes are:
 | Table          | Index                                  | Columns/predicate                         |
 | -------------- | -------------------------------------- | ----------------------------------------- |
 | `profiles`     | `profiles_role_status_idx`             | `(role, account_status)`                  |
+| `profiles`     | `profiles_invited_by_idx`              | Non-null inviter FK                       |
+| `profiles`     | `profiles_status_changed_at_idx`       | Status + descending lifecycle timestamp   |
 | `barangays`    | `barangays_locality_name_unique`       | Lowercased province/locality/name; unique |
 | `puroks`       | `puroks_barangay_name_unique`          | Barangay + lower name; unique             |
 | `puroks`       | `puroks_barangay_code_unique`          | Barangay + lower code; unique             |

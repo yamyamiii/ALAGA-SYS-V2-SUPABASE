@@ -2,11 +2,11 @@
 
 **Automated Local Appointment and General Assistance System** is a planned
 barangay healthcare management system. This repository currently contains the
-Phase 0 application foundation plus the Phase 1 normalized PostgreSQL schema,
-database constraints, audit foundation, and deny-by-default Row Level Security.
+Phase 0 application foundation, the Phase 1 normalized PostgreSQL schema and
+deny-by-default Row Level Security, the Phase 2A Supabase Auth foundation, and
+the Phase 2B trusted administrator/user-management workflow.
 
-No real healthcare records, frontend authentication workflow, or frontend
-database queries exist in this phase.
+No healthcare workflow module is implemented in this phase.
 
 ## Technology stack
 
@@ -17,8 +17,8 @@ database queries exist in this phase.
 - TanStack React Query
 - React Hook Form, Zod, and Hook Form resolvers
 - date-fns and Recharts
-- Supabase JavaScript client (connection foundation only)
-- ESLint and Prettier
+- Supabase JavaScript client with persisted authentication
+- Vitest, Testing Library, ESLint, and Prettier
 
 ## Project structure
 
@@ -35,10 +35,10 @@ src/
   hooks/           Shared React hooks
   lib/             Supabase, query, validation, and utility foundations
   pages/           Route-level pages
-  services/        Future data access boundary used by features/pages
+  services/        Auth and future data-access boundaries used by features
   styles/          Global styles and design tokens
   utils/           Framework-independent helpers
-supabase/          Ordered migrations, synthetic seed, and RLS foundation
+supabase/          Migrations, trusted Edge Functions, bootstrap, and seed
 docs/              Architecture, requirements, database, and UI documentation
 ```
 
@@ -50,7 +50,7 @@ forms will use React Hook Form with Zod validation.
 
 - Node.js 20.19 or newer (Node 24.15 was used for Phase 0 verification)
 - npm 11 or a compatible npm release
-- A Supabase project is optional until the database phase begins
+- A Supabase project with Phase 1 migrations and trusted test accounts for live login
 
 ## Installation
 
@@ -75,9 +75,10 @@ not through this browser configuration.
 > Never add a Supabase secret key or service-role key to this React application,
 > any `VITE_` variable, source control, logs, screenshots, or support messages.
 
-The reusable client boundary is `src/lib/supabase/client.js`. It does not make a
-query. Calling `getSupabaseClient()` without both public variables throws a clear
-`SupabaseConfigurationError`.
+The reusable client boundary is `src/lib/supabase/client.js`. Calling
+`getSupabaseClient()` without both public variables throws a clear
+`SupabaseConfigurationError`. Authentication pages use the auth service and do
+not import the client directly.
 
 ## Development
 
@@ -85,8 +86,8 @@ query. Calling `getSupabaseClient()` without both public variables throws a clea
 npm run dev
 ```
 
-Vite prints the local URL. The dashboard is at `/`; unfinished module routes use
-the shared Coming Soon page.
+Vite prints the local URL. Guests enter at `/login`; authenticated users enter
+the dashboard at `/`. Unfinished module routes remain shared placeholders.
 
 ## Quality commands
 
@@ -94,6 +95,7 @@ the shared Coming Soon page.
 npm run build
 npm run db:verify
 npm run lint
+npm test
 npm run format
 npm run format:check
 npm run preview
@@ -101,17 +103,16 @@ npm run preview
 
 ## Current phase
 
-Phase 1 adds seven normalized foundation tables, ordered migrations, constraints,
-indexes, synthetic reference seed data, audit triggers, explicit grants, and
-restrictive RLS policies. Dashboard values remain previews or empty states.
-Authentication controls, including the account avatar and logout item, remain
-non-functional placeholders.
+Phase 2B adds a reviewed one-time administrator bootstrap, a verified Supabase
+Edge Function for Auth Admin operations, service-role-only lifecycle RPCs,
+last-active-admin protection, semantic audit events, administrator User
+Management, and safe own-profile settings. Public registration, physical account
+deletion, and password reset remain unavailable.
 
 ## Next phase
 
-Phase 2 will implement Supabase Authentication, account invitation/activation,
-trusted role administration, protected routes for user experience, and live RLS
-verification with synthetic accounts. It must not weaken the database policies
-or place service-role credentials in the frontend.
+Future phases will implement resident/household workflows and later healthcare
+modules. They must not weaken database policies or place secret credentials in
+the frontend.
 
-See [Foundation architecture](docs/architecture/FOUNDATION.md), [Database schema](docs/database/SCHEMA.md), [RLS matrix](docs/database/RLS_MATRIX.md), [Design system](docs/ui/DESIGN_SYSTEM.md), and [Roadmap](docs/requirements/ROADMAP.md).
+See [Authentication architecture](docs/architecture/AUTHENTICATION.md), [Trusted user management](docs/architecture/USER_MANAGEMENT.md), [Administrator bootstrap](docs/security/ADMIN_BOOTSTRAP.md), [Hosted Auth settings](docs/deployment/SUPABASE_AUTH_SETTINGS.md), [Database schema](docs/database/SCHEMA.md), [RLS matrix](docs/database/RLS_MATRIX.md), [Design system](docs/ui/DESIGN_SYSTEM.md), and [Roadmap](docs/requirements/ROADMAP.md).

@@ -6,12 +6,16 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { navigationItems } from "@/config/navigation";
+import { useAuth } from "@/features/auth/authContext";
 import { cn } from "@/lib/utils";
 
 export function Navigation({ collapsed = false, onNavigate, className }) {
+  const { can } = useAuth();
+  const visibleItems = navigationItems.filter((item) => can(item.permission));
+
   return (
     <nav className={cn("space-y-1", className)} aria-label="Main navigation">
-      {navigationItems.map((item) => {
+      {visibleItems.map((item) => {
         const Icon = item.icon;
         const link = (
           <NavLink

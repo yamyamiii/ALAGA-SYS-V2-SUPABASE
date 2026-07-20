@@ -19,7 +19,7 @@ export default function ComingSoonPage() {
   return (
     <div className="space-y-6">
       <PageHeading
-        eyebrow="Phase 0 placeholder"
+        eyebrow="Future module"
         title={title}
         description="This route is ready, while its data model, permissions, services, and workflows are intentionally deferred to the appropriate roadmap phase."
         actions={<Badge variant="secondary">Coming soon</Badge>}
@@ -31,8 +31,8 @@ export default function ComingSoonPage() {
           </div>
           <h2 className="mt-5 text-xl font-semibold">Foundation prepared</h2>
           <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-            {title} will be built only after the shared database, Row Level
-            Security, authentication, and role foundations are established.
+            {title} is outside the Authentication Foundation and will be built
+            in its designated roadmap phase.
           </p>
           <Button asChild variant="outline" className="mt-6">
             <Link to={ROUTES.dashboard}>

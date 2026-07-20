@@ -19,7 +19,7 @@ Legend: **R** read, **C** create, **U** update, **—** denied.
 | Table/scope                          | Admin | BHW    | Nurse      | Midwife    | Resident               |
 | ------------------------------------ | ----- | ------ | ---------- | ---------- | ---------------------- |
 | Own profile                          | R/U¹  | R/U¹   | R/U¹       | R/U¹       | R/U¹                   |
-| Other profiles                       | R/U   | R      | R          | R          | —                      |
+| Other profiles                       | R/U²  | R      | R          | R          | —                      |
 | Active barangays/puroks              | R/C/U | R      | R          | R          | R                      |
 | Inactive barangays/puroks            | R/C/U | —      | —          | —          | —                      |
 | Non-archived households              | R/C/U | R/C/U² | R          | R          | Own linked household R |
@@ -29,13 +29,16 @@ Legend: **R** read, **C** create, **U** update, **—** denied.
 | Non-archived appointments            | R/C/U | R/C/U² | Assigned R | Assigned R | Own R                  |
 | Archived appointments                | R/U   | —      | —          | —          | —                      |
 | Audit logs                           | R     | —      | —          | —          | —                      |
-| Physical delete on any Phase 1 table | —³    | —      | —          | —          | —                      |
+| Internal admin rate-limit rows       | —     | —      | —          | —          | —                      |
+| Physical delete on any managed table | —³    | —      | —          | —          | —                      |
 | Direct audit insert/update/delete    | —     | —      | —          | —          | —                      |
 
 1. The profile-protection trigger restricts self-update to names, suffix, phone,
    and avatar. A user cannot change their own role, account status,
    `last_login_at`, identity, or creation timestamp.
-2. A BHW may update a non-archived row into an archived state. Once archived,
+2. Other-profile updates are available only through the verified Edge Function
+   and service-role-only RPCs, not through the browser table API. A BHW may
+   update a non-archived domain row into an archived state. Once archived,
    the row no longer satisfies the BHW update policy and only an admin can act.
 3. No authenticated client has `DELETE`. Elevated database owners remain capable
    of emergency maintenance outside the API, subject to operational governance.
@@ -44,14 +47,14 @@ Legend: **R** read, **C** create, **U** update, **—** denied.
 
 ### `profiles`
 
-| Policy                  | Command | Condition                            |
-| ----------------------- | ------- | ------------------------------------ |
-| `profiles_select_own`   | SELECT  | `id = auth.uid()`                    |
-| `profiles_select_staff` | SELECT  | Active staff role                    |
-| `profiles_update_own`   | UPDATE  | Own row before and after update      |
-| `profiles_update_admin` | UPDATE  | Active admin before and after update |
+| Policy                  | Command | Condition                       |
+| ----------------------- | ------- | ------------------------------- |
+| `profiles_select_own`   | SELECT  | `id = auth.uid()`               |
+| `profiles_select_staff` | SELECT  | Active staff role               |
+| `profiles_update_own`   | UPDATE  | Own row before and after update |
 
-There is no direct profile INSERT policy; the trusted `auth.users` trigger owns
+There is no direct profile INSERT policy and no other-profile browser UPDATE
+policy; the trusted `auth.users` trigger owns
 creation. There is no client DELETE policy. Staff visibility contains profile
 identity and scheduling contact data only—email remains in Supabase Auth, and no
 clinical data exists in profiles.
@@ -142,3 +145,16 @@ service-role key. Test at least:
 
 Use fictional records only. Database-owner or service-role success does not prove
 RLS works because those roles can bypass policies.
+
+## Phase 2B trusted user management
+
+The `admin_action_rate_limits` table has RLS enabled and no `anon` or
+`authenticated` policy or grant. Only the non-browser rate-limit RPC touches it.
+All `admin_*` account-management functions are revoked from browser roles and
+granted only to `service_role`.
+
+The Edge Function must still verify an active administrator. The RPCs repeat
+that check, reject self role/status changes, and write semantic audit events.
+`profiles_protect_last_active_admin_update` and
+`profiles_protect_last_active_admin_delete` prevent removing the final active
+administrator independently of the UI and Edge Function.

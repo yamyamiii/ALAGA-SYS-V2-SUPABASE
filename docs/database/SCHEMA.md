@@ -1,4 +1,4 @@
-# Phase 1 database schema
+# Database schema through Phase 2B
 
 ## Scope
 
@@ -6,7 +6,8 @@ Phase 1 adds the normalized PostgreSQL foundation for ALAGA-SYS V2. It creates
 only `profiles`, `barangays`, `puroks`, `households`, `residents`,
 `appointments`, and `audit_logs`. It does not add encounters, clinical notes,
 diagnoses, prescriptions, medicines, immunizations, maternal records,
-notifications, reports, frontend authentication, or frontend database queries.
+notifications, reports, or healthcare database queries. Phase 2B adds only
+trusted account-management support and one internal abuse-control table.
 
 The schema uses UUID primary keys, real foreign keys, validated database values,
 soft archival for resident/household/appointment records, explicit grants, and
@@ -28,10 +29,16 @@ Apply every file in lexical order:
 9. `20260720000900_indexes.sql` — foreign-key, lookup, and queue indexes
 10. `20260720001000_rls_policies.sql` — RLS enablement and policies
 11. `20260720001100_grants_and_privilege_hardening.sql` — API-role privileges
+12. `20260720001200_trusted_user_management.sql` — trusted account lifecycle,
+    abuse control, and final-administrator safeguards
 
 Migrations are forward-only and intended to be applied once by Supabase
 migration tooling. They contain no database reset or destructive database-level
 operation.
+
+The Phase 2B migration follows the eleven Phase 1 migrations and adds trusted
+account lifecycle metadata, abuse control, service-role-only RPCs, and
+final-active-administrator protection.
 
 ## Key design decisions
 
@@ -44,8 +51,15 @@ metadata. Every new profile starts with role `resident` and status `invited`.
 
 RLS permits self-updates, while `profiles_protect_privileged_fields` prevents a
 user—including an admin—from changing their own role, account status, or
-`last_login_at`. Active admins can update other profiles. An admin bootstrap and
-role-assignment workflow still requires a trusted Phase 2 server-side process.
+`last_login_at`. Phase 2B retires direct browser-admin updates of other profiles
+in favor of the trusted server-side workflow described below.
+
+Phase 2B removes direct authenticated-admin updates of other profiles.
+Privileged changes use the verified Edge Function and service-role-only RPCs;
+safe self-profile updates retain their existing RLS path. Profiles also record
+`invited_by`, `invitation_sent_at`, and `status_changed_at`. A serialized
+database trigger protects the final active administrator during role/status
+updates and exceptional deletes.
 
 ### Location consistency
 
@@ -114,9 +128,10 @@ not applicable. Detailed maternal records remain outside Phase 1.
 
 ## Applying with the Supabase CLI
 
-The CLI was not available during local implementation, so these commands were
-not executed. Install and authenticate the official Supabase CLI outside this
-task, then run from the repository root:
+An authenticated CLI dry run on July 20, 2026 confirmed that the linked project
+has migrations 1–11 and would apply only migration 12. The live push was not
+performed because the environment requires a fresh explicit confirmation for
+shared auth/RLS changes. To apply after review, run from the repository root:
 
 ```bash
 supabase login
@@ -153,7 +168,7 @@ database password in chat.
 
 ## Safe verification queries
 
-Confirm RLS on all seven tables:
+Confirm RLS on all eight managed public tables:
 
 ```sql
 select c.relname as table_name, c.relrowsecurity as rls_enabled
@@ -162,7 +177,8 @@ join pg_catalog.pg_namespace as n on n.oid = c.relnamespace
 where n.nspname = 'public'
   and c.relname in (
     'profiles', 'barangays', 'puroks', 'households',
-    'residents', 'appointments', 'audit_logs'
+    'residents', 'appointments', 'audit_logs',
+    'admin_action_rate_limits'
   )
 order by c.relname;
 ```
@@ -203,12 +219,15 @@ development project. Test one account per role and verify allowed and denied
 operations through the publishable-key client. Never test with real resident or
 healthcare information, and never expose the service-role key to a browser.
 
-## Known Phase 1 limitations
+## Known limitations through Phase 2B
 
-- No live database application was performed during implementation.
-- No admin bootstrap, invitation, or role-management server workflow exists.
-- The Phase 0 navigation placeholder still uses `health_worker`; Phase 2 must map
-  it to the canonical database role `barangay_health_worker` when real auth is added.
+- Migration 12 and the `manage-user` Edge Function are implemented and locally
+  verified but are not deployed to the linked project.
+- Hosted Auth, SMTP, allowed-origin, and invitation-redirect settings require
+  project-owner review before production use.
+- Frontend and server validation use the canonical
+  `barangay_health_worker` role; the obsolete `health_worker` placeholder is
+  rejected by tests.
 - Nurse/midwife appointment access is assigned-only and read-only.
 - Resident self-booking is disabled.
 - Appointment conflict detection and state-transition enforcement are deferred.

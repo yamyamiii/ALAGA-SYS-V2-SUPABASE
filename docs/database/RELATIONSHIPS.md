@@ -1,4 +1,4 @@
-# Phase 1 relationships
+# Relationships through Phase 2B
 
 ## Entity relationship diagram
 
@@ -17,6 +17,8 @@ erDiagram
   PROFILES o|--o{ APPOINTMENTS : "assigned staff"
   APPOINTMENTS o|--o{ APPOINTMENTS : "rescheduled from"
   PROFILES o|--o{ AUDIT_LOGS : acts
+  PROFILES o|--o{ PROFILES : invites
+  PROFILES ||--o| ADMIN_ACTION_RATE_LIMITS : throttles
 
   PROFILES {
     uuid id PK,FK
@@ -61,6 +63,11 @@ erDiagram
     uuid actor_profile_id FK
     uuid entity_id
   }
+  ADMIN_ACTION_RATE_LIMITS {
+    uuid actor_profile_id PK,FK
+    timestamptz window_started_at
+    integer request_count
+  }
 ```
 
 `AUTH_USERS` represents Supabase's `auth.users` table and is not created by these
@@ -85,6 +92,8 @@ cannot have one foreign key; `entity_type` identifies the source table.
 | `appointments.rescheduled_from_id`                | `appointments.id`                        | Restrict        | Rescheduling lineage                                                  |
 | `appointments.created_by`, `updated_by`           | `profiles.id`                            | Set null        | Scheduling attribution                                                |
 | `audit_logs.actor_profile_id`                     | `profiles.id`                            | Restrict        | Preserve actor identity and block deletion that would rewrite history |
+| `profiles.invited_by`                             | `profiles.id`                            | Restrict        | Preserve trusted invitation attribution                               |
+| `admin_action_rate_limits.actor_profile_id`       | `profiles.id`                            | Cascade         | Internal per-administrator abuse-control window                       |
 
 ## Circular-dependency handling
 

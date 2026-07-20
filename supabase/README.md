@@ -1,30 +1,37 @@
-# Supabase Phase 1 database foundation
+# Supabase database and trusted-function foundation
 
-This directory contains the reviewable PostgreSQL source for ALAGA-SYS V2 Phase 1.
+This directory contains the reviewable PostgreSQL and Edge Function source for
+ALAGA-SYS V2 through Phase 2B.
 
 ```text
 supabase/
-  migrations/  Eleven ordered schema, function, index, RLS, and grant migrations
+  bootstrap/   Reviewed manual first-administrator transaction
+  functions/   Trusted server-only Auth Admin operations
+  migrations/  Twelve ordered forward-only migrations
   policies/     Reserved for supplementary reviewed policy notes/fragments
   seed.sql      Optional fictional development reference data
 ```
 
 ## Scope
 
-The migrations create exactly seven public tables: `profiles`, `barangays`,
+The Phase 1 migrations create seven domain tables: `profiles`, `barangays`,
 `puroks`, `households`, `residents`, `appointments`, and `audit_logs`. They also
 create validated enums, number sequences, security helpers, timestamp/audit
 triggers, indexes, restrictive RLS policies, and explicit API-role grants.
 
 There are no clinical encounters, diagnoses, prescriptions, medicines,
-immunizations, maternal records, reports, Auth UI, or frontend queries in this
-phase.
+immunizations, maternal records, reports, or healthcare frontend queries.
+
+Migration 12 adds profile invitation/status metadata, an internal rate-limit
+table, service-role-only administrator RPCs, and final-active-administrator
+protection. It removes direct browser-admin updates of other profiles. The
+`manage-user` Edge Function owns privileged Auth Admin calls.
 
 ## Applying migrations
 
-The Supabase CLI was not installed during implementation, and the public project
-URL/publishable key cannot apply DDL. Nothing in this directory has been claimed
-as live-applied.
+An authenticated CLI dry run confirmed that the linked project would apply only
+`20260720001200_trusted_user_management.sql`. The live push was not performed;
+nothing added by Phase 2B is claimed as live-applied.
 
 With an authenticated official Supabase CLI, run from the repository root:
 

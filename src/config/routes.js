@@ -1,4 +1,5 @@
 export const ROUTES = Object.freeze({
+  login: "/login",
   dashboard: "/",
   residents: "/residents",
   appointments: "/appointments",
@@ -10,5 +11,7 @@ export const ROUTES = Object.freeze({
   auditLogs: "/audit-logs",
   userManagement: "/user-management",
   settings: "/settings",
+  account: "/account",
+  accessDenied: "/access-denied",
   configurationError: "/configuration-error",
 });

@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
+import { authStorage } from "@/lib/supabase/authStorage";
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
@@ -14,9 +16,15 @@ export class SupabaseConfigurationError extends Error {
 
 const hasSupabaseConfiguration = Boolean(supabaseUrl && supabasePublishableKey);
 
-// The client is intentionally not imported by the UI during Phase 0. No query is made.
 export const supabase = hasSupabaseConfiguration
-  ? createClient(supabaseUrl, supabasePublishableKey)
+  ? createClient(supabaseUrl, supabasePublishableKey, {
+      auth: {
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+        persistSession: true,
+        storage: authStorage,
+      },
+    })
   : null;
 
 export function getSupabaseClient() {

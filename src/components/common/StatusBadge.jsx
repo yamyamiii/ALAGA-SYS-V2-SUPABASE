@@ -4,7 +4,9 @@ const statusVariants = {
   active: "success",
   completed: "success",
   pending: "warning",
+  invited: "warning",
   inactive: "secondary",
+  suspended: "destructive",
   cancelled: "destructive",
 };
 
