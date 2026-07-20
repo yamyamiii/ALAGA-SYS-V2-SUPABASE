@@ -1,4 +1,4 @@
-# Relationships through Phase 2B
+# Relationships through Phase 3A
 
 ## Entity relationship diagram
 
@@ -102,6 +102,10 @@ must be a resident. Migration 3 creates nullable `head_resident_id` without a
 foreign key. Migration 4 creates residents. Migration 5 then adds the composite
 head relationship. There is no temporary disabled constraint and no free-text
 resident relationship.
+
+Phase 3A validates the relationship before writes: the household must be current
+and share the resident's barangay/purok, the head must be a current member, and a
+head cannot be moved or archived until the role is reassigned.
 
 ## Cardinality and optionality
 

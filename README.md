@@ -1,12 +1,13 @@
-# ALAGA-SYS V2
+# ALAGA-SYS
 
 **Automated Local Appointment and General Assistance System** is a planned
 barangay healthcare management system. This repository currently contains the
 Phase 0 application foundation, the Phase 1 normalized PostgreSQL schema and
 deny-by-default Row Level Security, the Phase 2A Supabase Auth foundation, and
-the Phase 2B trusted administrator/user-management workflow.
+the Phase 2B trusted administrator/user-management workflow, and the Phase 3A
+household and resident demographic registry.
 
-No healthcare workflow module is implemented in this phase.
+No appointment or clinical healthcare workflow is implemented in this phase.
 
 ## Technology stack
 
@@ -87,7 +88,8 @@ npm run dev
 ```
 
 Vite prints the local URL. Guests enter at `/login`; authenticated users enter
-the dashboard at `/`. Unfinished module routes remain shared placeholders.
+the dashboard at `/`. Households are available at `/households`, residents at
+`/residents`, and unfinished healthcare module routes remain shared placeholders.
 
 ## Quality commands
 
@@ -103,16 +105,14 @@ npm run preview
 
 ## Current phase
 
-Phase 2B adds a reviewed one-time administrator bootstrap, a verified Supabase
-Edge Function for Auth Admin operations, service-role-only lifecycle RPCs,
-last-active-admin protection, semantic audit events, administrator User
-Management, and safe own-profile settings. Public registration, physical account
+Phase 3A adds household and resident listing, creation, editing, details,
+relationship management, archival/restoration, server paging/search, safe audit
+events, and RLS-aligned route permissions. Public registration, physical
 deletion, and password reset remain unavailable.
 
 ## Next phase
 
-Future phases will implement resident/household workflows and later healthcare
-modules. They must not weaken database policies or place secret credentials in
-the frontend.
+Future phases may extend registry workflows or implement appointments. They must
+not weaken database policies or place secret credentials in the frontend.
 
 See [Authentication architecture](docs/architecture/AUTHENTICATION.md), [Trusted user management](docs/architecture/USER_MANAGEMENT.md), [Administrator bootstrap](docs/security/ADMIN_BOOTSTRAP.md), [Hosted Auth settings](docs/deployment/SUPABASE_AUTH_SETTINGS.md), [Database schema](docs/database/SCHEMA.md), [RLS matrix](docs/database/RLS_MATRIX.md), [Design system](docs/ui/DESIGN_SYSTEM.md), and [Roadmap](docs/requirements/ROADMAP.md).

@@ -1,4 +1,4 @@
-# Database schema through Phase 2B
+# Database schema through Phase 3A
 
 ## Scope
 
@@ -31,6 +31,9 @@ Apply every file in lexical order:
 11. `20260720001100_grants_and_privilege_hardening.sql` — API-role privileges
 12. `20260720001200_trusted_user_management.sql` — trusted account lifecycle,
     abuse control, and final-administrator safeguards
+13. `20260720001300_resident_archived_status.sql` — neutral resident archive enum
+14. `20260720001400_registry_workflows.sql` — generated household numbers,
+    archive/locality guards, invoker list RPCs, indexes, and semantic auditing
 
 Migrations are forward-only and intended to be applied once by Supabase
 migration tooling. They contain no database reset or destructive database-level
@@ -82,7 +85,8 @@ head before moving that resident to a different household.
 There are no normal-client `DELETE` grants or policies for important records.
 
 - Households use status `archived` together with a non-null `archived_at`.
-- Residents use `moved_out` or `deceased` together with `archived_at`.
+- Residents use `moved_out`, `deceased`, or neutral `archived` together with
+  `archived_at`.
 - Appointments retain `archived_at`; archival is access-controlled by policy.
 - Audit logs are append-only and reject every update or delete through a trigger.
 
@@ -91,12 +95,14 @@ rows, allowing a one-way archive action but preventing later BHW modification.
 
 ### Number generation
 
-`resident_number_seq` and `appointment_number_seq` are PostgreSQL sequences.
+`household_number_seq`, `resident_number_seq`, and `appointment_number_seq` are
+PostgreSQL sequences.
 Security-definer triggers always overwrite a client-supplied number during
 insert and reject changes during update.
 
 Display formats are:
 
+- `HH-YYYY-000001`
 - `RES-YYYY-000001`
 - `APT-YYYY-000001`
 

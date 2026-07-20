@@ -1,13 +1,13 @@
 # Supabase database and trusted-function foundation
 
 This directory contains the reviewable PostgreSQL and Edge Function source for
-ALAGA-SYS V2 through Phase 2B.
+ALAGA-SYS through Phase 3A.
 
 ```text
 supabase/
   bootstrap/   Reviewed manual first-administrator transaction
   functions/   Trusted server-only Auth Admin operations
-  migrations/  Twelve ordered forward-only migrations
+  migrations/  Fourteen ordered forward-only migrations
   policies/     Reserved for supplementary reviewed policy notes/fragments
   seed.sql      Optional fictional development reference data
 ```
@@ -27,11 +27,15 @@ table, service-role-only administrator RPCs, and final-active-administrator
 protection. It removes direct browser-admin updates of other profiles. The
 `manage-user` Edge Function owns privileged Auth Admin calls.
 
+Migrations 13 and 14 add neutral resident archival, database-generated
+household numbers, registry workflow guards, RLS-preserving list RPCs, indexes,
+and semantic household/resident audit events. They add no clinical tables.
+
 ## Applying migrations
 
-An authenticated CLI dry run confirmed that the linked project would apply only
-`20260720001200_trusted_user_management.sql`. The live push was not performed;
-nothing added by Phase 2B is claimed as live-applied.
+Phase 3A migrations must remain pending until an authenticated linked-project
+dry run is reviewed and a live apply receives explicit approval. Source presence
+does not imply hosted deployment.
 
 With an authenticated official Supabase CLI, run from the repository root:
 

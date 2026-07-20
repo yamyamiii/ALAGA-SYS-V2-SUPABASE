@@ -4,6 +4,7 @@ import {
   ClipboardList,
   FileBarChart,
   HeartPulse,
+  House,
   LayoutDashboard,
   Megaphone,
   Package,
@@ -24,10 +25,16 @@ export const navigationItems = [
     permission: PERMISSIONS.VIEW_DASHBOARD,
   },
   {
+    label: "Households",
+    path: ROUTES.households,
+    icon: House,
+    permission: PERMISSIONS.VIEW_HOUSEHOLDS,
+  },
+  {
     label: "Residents",
     path: ROUTES.residents,
     icon: UsersRound,
-    permission: PERMISSIONS.MANAGE_RESIDENTS,
+    permission: PERMISSIONS.VIEW_RESIDENTS,
   },
   {
     label: "Appointments",

@@ -17,6 +17,12 @@ const AccountSettingsPage = lazy(() => import("@/pages/AccountSettingsPage"));
 const UserManagementPage = lazy(
   () => import("@/features/user-management/UserManagementPage"),
 );
+const HouseholdRegistryPage = lazy(
+  () => import("@/features/registry/HouseholdRegistryPage"),
+);
+const ResidentRegistryPage = lazy(
+  () => import("@/features/registry/ResidentRegistryPage"),
+);
 const ConfigurationErrorPage = lazy(
   () => import("@/pages/ConfigurationErrorPage"),
 );
@@ -24,7 +30,10 @@ const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 const moduleRoutes = navigationItems.filter(
   (item) =>
-    item.path !== ROUTES.dashboard && item.path !== ROUTES.userManagement,
+    item.path !== ROUTES.dashboard &&
+    item.path !== ROUTES.userManagement &&
+    item.path !== ROUTES.households &&
+    item.path !== ROUTES.residents,
 );
 
 function RouteFallback() {
@@ -52,6 +61,22 @@ export function AppRouter() {
             <Route index element={<DashboardPage />} />
             <Route path={ROUTES.account} element={<AccountSettingsPage />} />
             <Route path={ROUTES.accessDenied} element={<AccessDeniedPage />} />
+            <Route
+              path={ROUTES.households}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_HOUSEHOLDS}>
+                  <HouseholdRegistryPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.residents}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_RESIDENTS}>
+                  <ResidentRegistryPage />
+                </RoleGuard>
+              }
+            />
             <Route
               path={ROUTES.userManagement}
               element={

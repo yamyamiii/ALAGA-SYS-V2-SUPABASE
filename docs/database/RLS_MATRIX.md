@@ -158,3 +158,16 @@ that check, reject self role/status changes, and write semantic audit events.
 `profiles_protect_last_active_admin_update` and
 `profiles_protect_last_active_admin_delete` prevent removing the final active
 administrator independently of the UI and Edge Function.
+
+## Phase 3A registry queries
+
+`registry_list_households` and `registry_list_residents` are explicitly
+`security invoker`. They retain the caller's table grants and RLS visibility;
+they do not provide broader access than direct table reads. Execute is revoked
+from `anon` and granted to `authenticated` only for parameterized listing.
+
+Application route permissions mirror, but never replace, these policies:
+administrator/BHW users manage current registry rows, nurse/midwife users read
+current resident demographics, and resident users cannot browse either
+registry. Archived visibility/restoration remains administrator-only. Existing
+policies were not broadened in Phase 3A.

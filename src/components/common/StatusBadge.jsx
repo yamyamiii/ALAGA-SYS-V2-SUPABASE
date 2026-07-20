@@ -6,6 +6,10 @@ const statusVariants = {
   pending: "warning",
   invited: "warning",
   inactive: "secondary",
+  archived: "secondary",
+  moved_out: "secondary",
+  "moved out": "secondary",
+  deceased: "destructive",
   suspended: "destructive",
   cancelled: "destructive",
 };

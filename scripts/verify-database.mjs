@@ -17,8 +17,10 @@ const expectedMigrations = [
   "20260720001000_rls_policies.sql",
   "20260720001100_grants_and_privilege_hardening.sql",
   "20260720001200_trusted_user_management.sql",
+  "20260720001300_resident_archived_status.sql",
+  "20260720001400_registry_workflows.sql",
 ];
-const phaseOneMigrationHashes = {
+const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
     "4a26c3b621bba5785c9007b75c65aed8c828ab010523d10f4ac7b510ed8bef0c",
   "20260720000200_profiles_and_auth_trigger.sql":
@@ -41,6 +43,8 @@ const phaseOneMigrationHashes = {
     "3de14167399edd7e9e217316971aa8914d221c2d4f85cb79b45f345118284214",
   "20260720001100_grants_and_privilege_hardening.sql":
     "71d8faacc421b6542a5328d0a58501fb315700e1fb22a66f87d590a87ae43ba8",
+  "20260720001200_trusted_user_management.sql":
+    "ae0f5a82b3c27efaeb36f8a3fe4349dad54f4a5e2562a61c36930859b93285cf",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -68,7 +72,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly twelve expected migrations exist in lexical order",
+  "Exactly fourteen expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -77,12 +81,12 @@ const migrationEntries = migrationFiles.map((file) => ({
 }));
 const allSql = migrationEntries.map(({ sql }) => sql).join("\n");
 
-for (const [file, expectedHash] of Object.entries(phaseOneMigrationHashes)) {
+for (const [file, expectedHash] of Object.entries(completedMigrationHashes)) {
   const sql = fs.readFileSync(path.join(migrationsDirectory, file));
   const actualHash = crypto.createHash("sha256").update(sql).digest("hex");
   check(
     actualHash === expectedHash,
-    `${file} remains byte-identical to the completed Phase 1 migration`,
+    `${file} remains byte-identical to its completed migration`,
   );
 }
 
@@ -153,7 +157,7 @@ check(
   "Privileged role mutation is executable by service_role",
 );
 check(
-  !/grant\s+execute\s+on\s+function\s+public\.admin_[a-z_]+[\s\S]*?to\s+authenticated/i.test(
+  !/grant\s+execute\s+on\s+function\s+public\.admin_[a-z_]+[^;]*to\s+authenticated/i.test(
     allSql,
   ),
   "Privileged administrator RPCs are not executable by authenticated",
@@ -167,6 +171,10 @@ check(
   "Resident numbers use an atomic sequence",
 );
 check(
+  /nextval\('public\.household_number_seq'\)/i.test(allSql),
+  "Household numbers use an atomic sequence",
+);
+check(
   /nextval\('public\.appointment_number_seq'\)/i.test(allSql),
   "Appointment numbers use an atomic sequence",
 );
@@ -175,8 +183,32 @@ check(
   "Resident numbers are immutable",
 );
 check(
+  /household_number is database-generated and immutable/i.test(allSql),
+  "Household numbers are immutable",
+);
+check(
   /appointment_number is database-generated and immutable/i.test(allSql),
   "Appointment numbers are immutable",
+);
+check(
+  /alter\s+type\s+public\.resident_status\s+add\s+value\s+if\s+not\s+exists\s+'archived'/i.test(
+    migrationEntries.find(({ file }) =>
+      file.includes("resident_archived_status"),
+    )?.sql ?? "",
+  ),
+  "Resident archival receives a dedicated forward-only enum migration",
+);
+check(
+  /security\s+invoker/i.test(
+    migrationEntries.find(({ file }) => file.includes("registry_workflows"))
+      ?.sql ?? "",
+  ),
+  "Registry list RPCs retain caller RLS with security invoker",
+);
+check(
+  /household\.archived|resident\.archived/i.test(allSql) &&
+    /changed_fields/i.test(allSql),
+  "Registry audit actions use semantic names and safe changed-field metadata",
 );
 
 const functionBlocks = [

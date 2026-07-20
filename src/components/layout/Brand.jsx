@@ -23,7 +23,7 @@ export function Brand({ compact = false, inverse = false }) {
               inverse && "text-white",
             )}
           >
-            ALAGA-SYS V2
+            ALAGA-SYS
           </p>
           <p
             className={cn(
