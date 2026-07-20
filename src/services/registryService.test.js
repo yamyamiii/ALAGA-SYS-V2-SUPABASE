@@ -7,6 +7,7 @@ import {
   buildResidentListParameters,
   createRegistryService,
   RegistryServiceError,
+  validateResidentPhoto,
 } from "@/services/registryService";
 
 const barangayId = "11111111-1111-4111-8111-111111111111";
@@ -269,5 +270,169 @@ describe("registry service", () => {
     expect(source).not.toMatch(/\.delete\s*\(/);
     expect(source).not.toMatch(/service[_-]?role/i);
     expect(source).not.toContain(barangayId);
+  });
+
+  it("validates resident photo MIME, size, and magic bytes", async () => {
+    const jpeg = new File(
+      [new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 0x00])],
+      "resident.jpg",
+      { type: "image/jpeg" },
+    );
+    await expect(validateResidentPhoto(jpeg)).resolves.toEqual({
+      mimeType: "image/jpeg",
+      extension: "jpg",
+    });
+    const disguised = new File(["not an image"], "resident.jpg", {
+      type: "image/jpeg",
+    });
+    await expect(validateResidentPhoto(disguised)).rejects.toMatchObject({
+      code: "photo_content_invalid",
+    });
+    const oversized = {
+      size: 5 * 1024 * 1024 + 1,
+      type: "image/png",
+      arrayBuffer: vi.fn(),
+    };
+    await expect(validateResidentPhoto(oversized)).rejects.toMatchObject({
+      code: "photo_too_large",
+    });
+  });
+
+  it("uses server pagination for searchable current households", async () => {
+    const rpc = vi.fn((name) => {
+      if (name === "registry_get_deployment_context") {
+        return Promise.resolve({ data: deploymentRows, error: null });
+      }
+      return Promise.resolve({
+        data: [{ id: "household-1", total_count: 31 }],
+        error: null,
+      });
+    });
+    const service = createRegistryService(() => ({ rpc }));
+    const result = await service.searchHouseholds({
+      purokId: deploymentRows[0].purok_id,
+      search: "Reyes",
+      page: 2,
+      pageSize: 10,
+    });
+    expect(rpc).toHaveBeenLastCalledWith("registry_search_households", {
+      p_purok_id: deploymentRows[0].purok_id,
+      p_search: "Reyes",
+      p_limit: 10,
+      p_offset: 10,
+    });
+    expect(result).toMatchObject({ total: 31, page: 2 });
+  });
+
+  it("passes normalized identity inputs to the RLS-safe duplicate RPC", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{ id: residentId, resident_number: "RES-2026-000001" }],
+      error: null,
+    });
+    const service = createRegistryService(() => ({ rpc }));
+    await expect(
+      service.findResidentDuplicates(
+        {
+          first_name: "Ana",
+          middle_name: "",
+          last_name: "Reyes",
+          suffix: "",
+          date_of_birth: "1990-01-01",
+          sex: "female",
+          phone_number: "",
+        },
+        residentId,
+      ),
+    ).resolves.toHaveLength(1);
+    expect(rpc).toHaveBeenCalledWith("registry_find_resident_duplicates", {
+      p_first_name: "Ana",
+      p_middle_name: null,
+      p_last_name: "Reyes",
+      p_suffix: null,
+      p_date_of_birth: "1990-01-01",
+      p_sex: "female",
+      p_phone_number: null,
+      p_exclude_id: residentId,
+    });
+  });
+
+  it("removes the old photo only after upload and database update succeed", async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const remove = vi.fn().mockResolvedValue({ error: null });
+    const single = vi.fn().mockResolvedValue({
+      data: { id: residentId, photo_path: "new-path" },
+      error: null,
+    });
+    const select = vi.fn(() => ({ single }));
+    const eq = vi.fn(() => ({ select }));
+    const update = vi.fn(() => ({ eq }));
+    const service = createRegistryService(() => ({
+      storage: { from: vi.fn(() => ({ upload, remove })) },
+      from: vi.fn(() => ({ update })),
+    }));
+    const file = new File(
+      [new Uint8Array([0xff, 0xd8, 0xff, 0xdb])],
+      "resident.jpg",
+      { type: "image/jpeg" },
+    );
+    await service.uploadResidentPhoto(residentId, file, "old/photo.jpg");
+    expect(upload).toHaveBeenCalledWith(
+      expect.stringMatching(
+        new RegExp(`^${residentId}/[0-9a-f-]{36}\\.jpg$`, "i"),
+      ),
+      file,
+      expect.objectContaining({ contentType: "image/jpeg", upsert: false }),
+    );
+    expect(upload.mock.invocationCallOrder[0]).toBeLessThan(
+      update.mock.invocationCallOrder[0],
+    );
+    expect(update.mock.invocationCallOrder[0]).toBeLessThan(
+      remove.mock.invocationCallOrder[0],
+    );
+    expect(remove).toHaveBeenCalledWith(["old/photo.jpg"]);
+  });
+
+  it("rolls back the new object and preserves the old path when database attachment fails", async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const remove = vi.fn().mockResolvedValue({ error: null });
+    const single = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "database unavailable" },
+    });
+    const service = createRegistryService(() => ({
+      storage: { from: vi.fn(() => ({ upload, remove })) },
+      from: vi.fn(() => ({
+        update: vi.fn(() => ({
+          eq: vi.fn(() => ({ select: vi.fn(() => ({ single })) })),
+        })),
+      })),
+    }));
+    const file = new File(
+      [new Uint8Array([0xff, 0xd8, 0xff, 0xdb])],
+      "resident.jpg",
+      { type: "image/jpeg" },
+    );
+    await expect(
+      service.uploadResidentPhoto(residentId, file, "old/photo.jpg"),
+    ).rejects.toMatchObject({ code: "registry_request_failed" });
+    expect(remove).toHaveBeenCalledOnce();
+    expect(remove).not.toHaveBeenCalledWith(["old/photo.jpg"]);
+  });
+
+  it("creates short-lived signed URLs without exposing a public URL", async () => {
+    const createSignedUrl = vi.fn().mockResolvedValue({
+      data: { signedUrl: "https://example.invalid/signed" },
+      error: null,
+    });
+    const service = createRegistryService(() => ({
+      storage: { from: vi.fn(() => ({ createSignedUrl })) },
+    }));
+    await expect(
+      service.createResidentPhotoUrl(`${residentId}/photo.jpg`),
+    ).resolves.toBe("https://example.invalid/signed");
+    expect(createSignedUrl).toHaveBeenCalledWith(
+      `${residentId}/photo.jpg`,
+      300,
+    );
   });
 });

@@ -1,8 +1,30 @@
-# Data dictionary through Phase 3A
+# Data dictionary through Phase 3B
 
 All timestamps are `timestamptz` in UTC storage. UUID values are internal keys;
 display numbers are database-generated text. Nullable means the value may be
 unknown, not collected, not applicable, or not yet linked as described.
+
+Phase 3B adds no healthcare tables or columns. It activates the existing
+`residents.photo_path` and `residents.linked_profile_id` fields through private
+storage and trusted workflows, and adds functions, policies, triggers, and an
+identity-search index.
+
+## Phase 3B operational objects
+
+| Object                               | Kind                   | Meaning                                                   |
+| ------------------------------------ | ---------------------- | --------------------------------------------------------- |
+| `resident-photos`                    | Private Storage bucket | JPEG/PNG/WebP resident images, 5 MB maximum               |
+| `resident_photo_object_resident_id`  | Function               | Strict UUID-path parser                                   |
+| `can_view_resident_photo`            | Function               | Storage read authorization bound to resident/profile      |
+| `can_manage_resident_photo`          | Function               | Admin/BHW storage mutation authorization                  |
+| `registry_search_households`         | Invoker RPC            | Paginated current household picker                        |
+| `registry_find_resident_duplicates`  | Invoker RPC            | RLS-safe probable identity matches                        |
+| `registry_record_duplicate_override` | RPC                    | Safe explicit-override audit event                        |
+| `admin_*_resident_*`                 | Trusted RPCs           | Service-role-only candidate/status/link/unlink operations |
+
+`residents.photo_path` contains only `<resident UUID>/<object UUID>.<extension>`.
+It is never a signed URL. `linked_profile_id` remains a nullable unique foreign
+key to a resident-role `profiles` row; direct browser changes are rejected.
 
 ## Enum types
 

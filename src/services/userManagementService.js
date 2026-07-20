@@ -85,6 +85,29 @@ export function createUserManagementService(
         (result) => result.user,
       );
     },
+    listResidentLinkCandidates(filters) {
+      return invoke("list_resident_link_candidates", filters);
+    },
+    getResidentAccount(residentId) {
+      return invoke("get_resident_account", {
+        resident_id: residentId,
+      }).then((result) => result.account);
+    },
+    linkResidentAccount(residentId, profileId) {
+      return invoke("link_resident_account", {
+        resident_id: residentId,
+        profile_id: profileId,
+      });
+    },
+    unlinkResidentAccount(residentId) {
+      return invoke("unlink_resident_account", { resident_id: residentId });
+    },
+    inviteResidentAccount(residentId, values) {
+      return invoke("invite_resident_account", {
+        resident_id: residentId,
+        ...values,
+      }).then((result) => result.account);
+    },
   };
 }
 

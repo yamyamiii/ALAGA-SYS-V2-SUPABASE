@@ -1,13 +1,13 @@
 # Supabase database and trusted-function foundation
 
 This directory contains the reviewable PostgreSQL and Edge Function source for
-ALAGA-SYS through Phase 3A.
+ALAGA-SYS through Phase 3B.
 
 ```text
 supabase/
   bootstrap/   Reviewed manual first-administrator transaction
   functions/   Trusted server-only Auth Admin operations
-  migrations/  Fifteen ordered forward-only migrations
+  migrations/  Sixteen ordered forward-only migrations
   policies/     Reserved for supplementary reviewed policy notes/fragments
   seed.sql      Optional fictional development reference data
 ```
@@ -34,6 +34,12 @@ and semantic household/resident audit events. They add no clinical tables.
 Migration 15 adds the Brgy. Bagongpook deployment resolver, requires exactly
 Purok 1 through Purok 7, derives registry `barangay_id` from the selected purok,
 and deactivates legacy Purok 8 rows only when unreferenced.
+
+Migration 16 configures the private resident-photo bucket and resident-aware
+storage policies, adds paginated household selection and RLS-safe duplicate
+review, hardens archive/head relationships, and restricts resident/profile
+linking to service-role-only administrator RPCs. The updated `manage-user` Edge
+Function provides the narrow candidate, invite, link, status, and unlink path.
 
 ## Applying migrations
 

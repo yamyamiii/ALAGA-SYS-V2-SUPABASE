@@ -1,4 +1,4 @@
-# Relationships through Phase 3A
+# Relationships through Phase 3B
 
 ## Entity relationship diagram
 
@@ -118,3 +118,8 @@ head cannot be moved or archived until the role is reassigned.
 - An appointment belongs to one resident and may have one assigned staff profile.
 - An appointment may reference one earlier appointment; conflict and chain-cycle
   validation is deferred to the scheduling workflow.
+
+Phase 3B permits resident/profile link changes only through service-role-only
+administrator RPCs. A linked profile must have role `resident`, status `active`
+or `invited`, and no existing resident link. Direct browser mutation is rejected;
+unlinking preserves the Auth user and profile.

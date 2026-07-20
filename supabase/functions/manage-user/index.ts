@@ -191,6 +191,20 @@ function metadata(payload: SafeRecord) {
   };
 }
 
+function sanitizeResidentAccount(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as SafeRecord;
+  return {
+    id: row.id ?? null,
+    email: row.email ?? null,
+    first_name: row.first_name ?? null,
+    middle_name: row.middle_name ?? null,
+    last_name: row.last_name ?? null,
+    suffix: row.suffix ?? null,
+    account_status: row.account_status ?? null,
+  };
+}
+
 async function finalizeProvisioning(
   admin: SupabaseClient,
   actorId: string,
@@ -254,6 +268,50 @@ async function provisionUser(
   return safeUser(admin, actorId, targetId);
 }
 
+async function inviteAndLinkResident(
+  admin: SupabaseClient,
+  actorId: string,
+  payload: SafeRecord,
+  invitationRedirectUrl: string,
+) {
+  const authResult = await admin.auth.admin.inviteUserByEmail(
+    payload.email as string,
+    {
+      data: metadata(payload),
+      redirectTo: invitationRedirectUrl,
+    },
+  );
+  if (authResult.error || !authResult.data.user) {
+    throw mapAuthAdminError(authResult.error);
+  }
+
+  const targetId = authResult.data.user.id;
+  try {
+    await finalizeProvisioning(admin, actorId, targetId, payload, true);
+    await rpc(admin, "admin_link_resident_profile", {
+      p_actor_id: actorId,
+      p_resident_id: payload.resident_id,
+      p_profile_id: targetId,
+    });
+  } catch (error) {
+    const compensation = await admin.auth.admin.deleteUser(targetId);
+    if (compensation.error) {
+      throw new ManageUserError(
+        "provisioning_incomplete",
+        "Account invitation succeeded but resident linking failed. An operator must reconcile this account.",
+        500,
+      );
+    }
+    throw error;
+  }
+
+  const rows = (await rpc(admin, "admin_get_resident_account", {
+    p_actor_id: actorId,
+    p_resident_id: payload.resident_id,
+  })) as SafeRecord[];
+  return sanitizeResidentAccount(rows?.[0]);
+}
+
 async function performAction(
   admin: SupabaseClient,
   actorId: string,
@@ -284,6 +342,51 @@ async function performAction(
     case "get_user":
       return {
         user: await safeUser(admin, actorId, payload.user_id as string),
+      };
+    case "list_resident_link_candidates": {
+      const page = payload.page as number;
+      const pageSize = payload.page_size as number;
+      const rows = (await rpc(admin, "admin_list_resident_link_candidates", {
+        p_actor_id: actorId,
+        p_search: payload.search,
+        p_limit: pageSize,
+        p_offset: (page - 1) * pageSize,
+      })) as SafeRecord[];
+      return {
+        items: rows.map(sanitizeResidentAccount).filter(Boolean),
+        page,
+        page_size: pageSize,
+        total: Number(rows?.[0]?.total_count ?? 0),
+      };
+    }
+    case "get_resident_account": {
+      const rows = (await rpc(admin, "admin_get_resident_account", {
+        p_actor_id: actorId,
+        p_resident_id: payload.resident_id,
+      })) as SafeRecord[];
+      return { account: sanitizeResidentAccount(rows?.[0]) };
+    }
+    case "link_resident_account":
+      await rpc(admin, "admin_link_resident_profile", {
+        p_actor_id: actorId,
+        p_resident_id: payload.resident_id,
+        p_profile_id: payload.profile_id,
+      });
+      return { linked: true };
+    case "unlink_resident_account":
+      await rpc(admin, "admin_unlink_resident_profile", {
+        p_actor_id: actorId,
+        p_resident_id: payload.resident_id,
+      });
+      return { linked: false };
+    case "invite_resident_account":
+      return {
+        account: await inviteAndLinkResident(
+          admin,
+          actorId,
+          payload,
+          invitationRedirectUrl,
+        ),
       };
     case "invite_user":
       return {
@@ -468,7 +571,9 @@ Deno.serve(async (request) => {
     targetId =
       typeof validated.payload.user_id === "string"
         ? validated.payload.user_id
-        : null;
+        : typeof validated.payload.resident_id === "string"
+          ? validated.payload.resident_id
+          : null;
     const data = await performAction(
       admin,
       actorId,

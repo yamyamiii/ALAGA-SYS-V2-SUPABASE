@@ -1,4 +1,4 @@
-import { Archive, Home, Pencil, RotateCcw } from "lucide-react";
+import { Archive, Home, Link2, Pencil, RotateCcw } from "lucide-react";
 
 import { ErrorState, LoadingState } from "@/components/common/StateDisplay";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -24,6 +24,7 @@ import {
   titleCaseStatus,
 } from "@/features/registry/formatters";
 import { useResident } from "@/features/registry/hooks";
+import { ResidentPhoto } from "@/features/registry/ResidentPhoto";
 
 function Value({ label, children, wide = false }) {
   return (
@@ -59,9 +60,11 @@ export function ResidentDetailDialog({
   onOpenChange,
   canManage,
   canRestore,
+  canLinkAccount = false,
   onEdit,
   onArchive,
   onHousehold,
+  onAccount,
 }) {
   const resident = useResident(residentId, open);
   const record = resident.data;
@@ -104,13 +107,16 @@ export function ResidentDetailDialog({
             ) : null}
 
             <div className="flex flex-col gap-3 rounded-xl bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-heading text-xl font-semibold">
-                  {formatPersonName(record)}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {record.resident_number}
-                </p>
+              <div className="flex items-center gap-4">
+                <ResidentPhoto resident={record} />
+                <div>
+                  <p className="font-heading text-xl font-semibold">
+                    {formatPersonName(record)}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {record.resident_number}
+                  </p>
+                </div>
               </div>
               <Badge variant={archived ? "secondary" : "success"}>
                 {RESIDENT_STATUS_LABELS[record.status] ?? record.status}
@@ -233,6 +239,17 @@ export function ResidentDetailDialog({
                     <RotateCcw /> Restore
                   </Button>
                 ) : null}
+              </div>
+            ) : null}
+            {canLinkAccount ? (
+              <div className="border-t pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onAccount(record)}
+                >
+                  <Link2 /> Manage portal account
+                </Button>
               </div>
             ) : null}
           </div>

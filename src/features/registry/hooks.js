@@ -11,7 +11,8 @@ export const registryKeys = Object.freeze({
   resident: (id) => ["registry", "resident", id],
   deploymentContext: ["registry", "deployment-context"],
   puroks: ["registry", "puroks"],
-  householdOptions: (purokId) => ["registry", "household-options", purokId],
+  householdSearch: (parameters) => ["registry", "household-search", parameters],
+  residentPhoto: (photoPath) => ["registry", "resident-photo", photoPath],
 });
 
 export function useHouseholds(filters) {
@@ -46,11 +47,22 @@ export function usePuroks() {
   });
 }
 
-export function useHouseholdOptions(purokId) {
+export function useHouseholdSearch(parameters, enabled = true) {
   return useQuery({
-    queryKey: registryKeys.householdOptions(purokId),
-    queryFn: () => registryService.listHouseholdOptions(purokId),
-    enabled: Boolean(purokId),
+    queryKey: registryKeys.householdSearch(parameters),
+    queryFn: () => registryService.searchHouseholds(parameters),
+    enabled: enabled && Boolean(parameters.purokId),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useResidentPhoto(photoPath, enabled = true) {
+  return useQuery({
+    queryKey: registryKeys.residentPhoto(photoPath),
+    queryFn: () => registryService.createResidentPhotoUrl(photoPath),
+    enabled: enabled && Boolean(photoPath),
+    staleTime: 4 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 }
 

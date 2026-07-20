@@ -1,4 +1,4 @@
-# Database schema through Phase 3A
+# Database schema through Phase 3B
 
 ## Scope
 

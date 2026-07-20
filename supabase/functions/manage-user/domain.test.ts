@@ -145,4 +145,48 @@ describe("manage-user trust boundary", () => {
       status_changed_at: null,
     });
   });
+
+  it("forces resident invitations to the resident role", () => {
+    const result = validateManageUserRequest({
+      action: "invite_resident_account",
+      payload: {
+        resident_id: targetId,
+        email: "resident@example.com",
+        ...validProfile,
+      },
+    });
+    expect(result.payload).toMatchObject({
+      resident_id: targetId,
+      role: "resident",
+      email: "resident@example.com",
+    });
+    expect(() =>
+      validateManageUserRequest({
+        action: "invite_resident_account",
+        payload: {
+          resident_id: targetId,
+          email: "resident@example.com",
+          role: "admin",
+          ...validProfile,
+        },
+      }),
+    ).toThrowError(expect.objectContaining({ code: "unknown_field" }));
+  });
+
+  it("validates narrowly scoped resident link actions", () => {
+    expect(
+      validateManageUserRequest({
+        action: "link_resident_account",
+        payload: { resident_id: targetId, profile_id: targetId },
+      }),
+    ).toMatchObject({
+      payload: { resident_id: targetId, profile_id: targetId },
+    });
+    expect(() =>
+      validateManageUserRequest({
+        action: "unlink_resident_account",
+        payload: { resident_id: targetId, delete_auth_user: true },
+      }),
+    ).toThrowError(expect.objectContaining({ code: "unknown_field" }));
+  });
 });

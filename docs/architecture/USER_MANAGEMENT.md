@@ -31,11 +31,22 @@ active administrator is also protected by a database trigger.
 - `update_profile`
 - `list_users`
 - `get_user`
+- `list_resident_link_candidates`
+- `get_resident_account`
+- `link_resident_account`
+- `unlink_resident_account`
+- `invite_resident_account`
 
 There is no delete-user action. `create_user` marks the Auth user's server-side
 app metadata with `requires_password_change`; because Supabase does not provide a
 native forced-password-change state for this workflow, administrators must use
 the documented secure handoff. Invitations remain the preferred workflow.
+
+Resident-link actions are administrator-only and narrowly scoped. Candidate
+listing returns only active/invited, resident-role profiles not already linked.
+Resident invitation forces the resident role, compensates a failed link by
+removing only the newly created Auth user, and never exposes a general Auth
+Admin browser client. Unlinking never deletes Auth or profile rows.
 
 ## Data minimization
 

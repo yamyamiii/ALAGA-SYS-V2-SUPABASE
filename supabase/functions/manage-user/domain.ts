@@ -22,6 +22,11 @@ export const MANAGE_USER_ACTIONS = [
   "update_profile",
   "list_users",
   "get_user",
+  "list_resident_link_candidates",
+  "get_resident_account",
+  "link_resident_account",
+  "unlink_resident_account",
+  "invite_resident_account",
 ] as const;
 
 type UserRole = (typeof USER_ROLES)[number];
@@ -281,6 +286,30 @@ export function validateManageUserRequest(input: unknown): {
   switch (action) {
     case "invite_user":
       return { action, payload: validateProvisioning(payload, false) };
+    case "invite_resident_account": {
+      rejectUnknownKeys(
+        payload,
+        [
+          "resident_id",
+          "email",
+          "first_name",
+          "middle_name",
+          "last_name",
+          "suffix",
+          "phone_number",
+        ],
+        "Action payload",
+      );
+      return {
+        action,
+        payload: {
+          resident_id: validUuid(payload.resident_id, "Resident"),
+          email: normalizedEmail(payload.email),
+          role: "resident",
+          ...profileFields(payload),
+        },
+      };
+    }
     case "create_user":
       return { action, payload: validateProvisioning(payload, true) };
     case "resend_invitation":
@@ -289,6 +318,26 @@ export function validateManageUserRequest(input: unknown): {
       return {
         action,
         payload: { user_id: validUuid(payload.user_id) },
+      };
+    case "get_resident_account":
+    case "unlink_resident_account":
+      rejectUnknownKeys(payload, ["resident_id"], "Action payload");
+      return {
+        action,
+        payload: { resident_id: validUuid(payload.resident_id, "Resident") },
+      };
+    case "link_resident_account":
+      rejectUnknownKeys(
+        payload,
+        ["resident_id", "profile_id"],
+        "Action payload",
+      );
+      return {
+        action,
+        payload: {
+          resident_id: validUuid(payload.resident_id, "Resident"),
+          profile_id: validUuid(payload.profile_id, "Profile"),
+        },
       };
     case "update_role":
       rejectUnknownKeys(payload, ["user_id", "role"], "Action payload");
@@ -377,6 +426,39 @@ export function validateManageUserRequest(input: unknown): {
         },
       };
     }
+    case "list_resident_link_candidates": {
+      rejectUnknownKeys(
+        payload,
+        ["page", "page_size", "search"],
+        "Action payload",
+      );
+      const page = payload.page ?? 1;
+      const pageSize = payload.page_size ?? 20;
+      if (!Number.isInteger(page) || Number(page) < 1) {
+        throw new ManageUserError(
+          "validation_error",
+          "Page must be a positive integer.",
+        );
+      }
+      if (
+        !Number.isInteger(pageSize) ||
+        Number(pageSize) < 1 ||
+        Number(pageSize) > 50
+      ) {
+        throw new ManageUserError(
+          "validation_error",
+          "Page size must be between 1 and 50.",
+        );
+      }
+      return {
+        action,
+        payload: {
+          page: Number(page),
+          page_size: Number(pageSize),
+          search: optionalString(payload.search, "Search", 100),
+        },
+      };
+    }
   }
 }
 
@@ -446,6 +528,34 @@ export function mapDatabaseError(error: unknown): ManageUserError {
       "profile_not_found",
       "The requested user profile was not found.",
       404,
+    );
+  }
+  if (/resident not found/i.test(message)) {
+    return new ManageUserError(
+      "resident_not_found",
+      "The requested resident was not found.",
+      404,
+    );
+  }
+  if (/already linked/i.test(message)) {
+    return new ManageUserError(
+      "profile_already_linked",
+      "That portal account is already linked to another resident.",
+      409,
+    );
+  }
+  if (/archived residents cannot/i.test(message)) {
+    return new ManageUserError(
+      "archived_resident_link_forbidden",
+      "Archived residents cannot be linked to portal accounts.",
+      409,
+    );
+  }
+  if (/active or invited resident-role profile/i.test(message)) {
+    return new ManageUserError(
+      "invalid_resident_profile",
+      "Select an active or invited resident portal account.",
+      409,
     );
   }
   return new ManageUserError(

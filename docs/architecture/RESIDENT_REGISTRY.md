@@ -2,7 +2,7 @@
 
 ## Scope
 
-Phase 3A implements demographic household and resident registry workflows only.
+Phase 3B hardens the demographic household and resident registry workflows.
 It does not create appointment, clinical, medicine, maternal-care, reporting,
 notification, or AI functionality.
 
@@ -44,6 +44,34 @@ The UI debounces search and sends `limit` and `offset`; it never downloads the
 whole registry for client-side paging. Household search covers number, head
 name, and address. Resident search covers number, full name, phone, address, and
 household number.
+
+Resident forms and relationship dialogs use `registry_search_households`
+instead of a fixed first-100 dropdown. The RLS-preserving RPC searches number,
+head name, and address, requires the selected Bagongpook purok, excludes
+archived households, limits each page to 25, and returns a total count.
+
+## Duplicate review
+
+Before create and every identity edit, `registry_find_resident_duplicates`
+compares normalized first/last names, optional middle name and suffix, birth
+date, and sex. Phone is only an extra signal. The invoker RPC returns only rows
+visible through caller RLS. Matches produce a warning and explicit “save
+anyway” step whose safe count/operation metadata is audited.
+
+This is deliberately a warning rather than a database uniqueness constraint:
+twins and unrelated people can legitimately share names and birth dates. Hard
+constraints still protect resident number, profile link uniqueness, locality,
+and foreign keys.
+
+## Photos and portal profiles
+
+Private photo architecture and signed URL lifecycle are documented in
+[STORAGE.md](STORAGE.md). Administrator/BHW users manage active photos;
+nurse/midwife users view authorized active photos; linked residents see only
+their own. Account linking is administrator-only through the trusted Edge
+Function and service-role-only RPCs. Direct client link mutation is rejected by
+the database trigger. See
+[Resident account linking](../workflows/RESIDENT_ACCOUNT_LINKING.md).
 
 ## Identifiers and calculated age
 
@@ -99,6 +127,9 @@ contact, pregnancy, or other sensitive values.
   provisioned before registry screens can load.
 - Household choice lists intentionally cap at 100 current records per locality;
   a future high-volume phase may add a dedicated searchable picker RPC.
-- Photo upload and profile-link management are outside Phase 3A.
+- Photo upload has no crop editor or byte-level progress callback; the UI shows
+  validated workflow-stage progress.
+- A failed old-object cleanup may require reviewed private-storage
+  reconciliation.
 - Hosted migrations require reviewed dry-run output and explicit approval before
   apply.

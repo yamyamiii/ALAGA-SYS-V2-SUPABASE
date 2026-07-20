@@ -1,5 +1,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LoaderCircle, Save } from "lucide-react";
+import {
+  ImagePlus,
+  LoaderCircle,
+  Save,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -28,16 +34,20 @@ import {
 } from "@/features/registry/constants";
 import {
   useDeploymentContext,
-  useHouseholdOptions,
   usePuroks,
   useRegistryMutation,
 } from "@/features/registry/hooks";
 import { DeploymentBarangayContext } from "@/features/registry/DeploymentBarangayContext";
+import { HouseholdSearchField } from "@/features/registry/HouseholdSearchField";
+import { ResidentPhoto } from "@/features/registry/ResidentPhoto";
 import {
   residentSchema,
   validateLocalityConsistency,
 } from "@/features/registry/schemas";
-import { registryService } from "@/services/registryService";
+import {
+  registryService,
+  validateResidentPhoto,
+} from "@/services/registryService";
 
 const defaults = {
   first_name: "",
@@ -95,6 +105,13 @@ function Select({ id, register, children, disabled = false, onChange }) {
 export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
   const editing = Boolean(resident?.id);
   const [localityError, setLocalityError] = useState("");
+  const [selectedHousehold, setSelectedHousehold] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [duplicateReview, setDuplicateReview] = useState(null);
   const deploymentContext = useDeploymentContext();
   const {
     register,
@@ -110,12 +127,49 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
   const purokId = watch("purok_id");
   const sex = watch("sex");
   const puroks = usePuroks();
-  const households = useHouseholdOptions(purokId);
-  const mutation = useRegistryMutation((values) =>
-    editing
-      ? registryService.updateResident(resident.id, values)
-      : registryService.createResident(values),
-  );
+  const mutation = useRegistryMutation(async ({ values, duplicateMatches }) => {
+    const options = { duplicateMatchCount: duplicateMatches.length };
+    let saved;
+    try {
+      saved = editing
+        ? await registryService.updateResident(resident.id, values, options)
+        : await registryService.createResident(values, options);
+    } catch (error) {
+      if (error.code === "duplicate_audit_failed_after_save") {
+        return { savedWithAuditWarning: true, warning: error.message };
+      }
+      throw error;
+    }
+
+    if (removePhoto && resident?.photo_path && !photoFile) {
+      const result = await registryService.removeResidentPhoto(
+        saved.id,
+        resident.photo_path,
+      );
+      if (result.cleanupWarning) toast.warning(result.cleanupWarning);
+    }
+    if (photoFile) {
+      try {
+        const result = await registryService.uploadResidentPhoto(
+          saved.id,
+          photoFile,
+          resident?.photo_path,
+          setUploadProgress,
+        );
+        if (result.cleanupWarning) toast.warning(result.cleanupWarning);
+      } catch (error) {
+        if (!editing) {
+          return {
+            ...saved,
+            photoWarning:
+              "The resident was created, but the photo upload failed. Open the resident again to retry the photo.",
+          };
+        }
+        throw error;
+      }
+    }
+    return saved;
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -129,23 +183,96 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
       ),
     );
     setLocalityError("");
+    setSelectedHousehold(
+      source.household_id && source.household
+        ? {
+            ...source.household,
+            id: source.household_id,
+            barangay_id: source.barangay_id,
+            purok_id: source.purok_id,
+          }
+        : null,
+    );
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setRemovePhoto(false);
+    setPhotoError("");
+    setUploadProgress(null);
+    setDuplicateReview(null);
     mutation.reset();
   }, [open, resident, reset]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function submit(values) {
+  useEffect(() => {
+    if (!photoFile) {
+      setPhotoPreview(null);
+      return undefined;
+    }
+    const url = URL.createObjectURL(photoFile);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photoFile]);
+
+  async function choosePhoto(event) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+    try {
+      await validateResidentPhoto(file);
+      setPhotoFile(file);
+      setRemovePhoto(false);
+      setPhotoError("");
+    } catch (error) {
+      setPhotoError(error.message);
+      setPhotoFile(null);
+    }
+  }
+
+  async function save(values, duplicateMatches = []) {
     const mismatch = validateLocalityConsistency(values, {
       puroks: puroks.data,
-      households: households.data,
+      households: selectedHousehold ? [selectedHousehold] : [],
     });
     if (mismatch) {
       setLocalityError(mismatch);
       return;
     }
     setLocalityError("");
-    await mutation.mutateAsync(values);
-    toast.success(editing ? "Resident updated" : "Resident created");
+    const result = await mutation.mutateAsync({ values, duplicateMatches });
+    if (result.savedWithAuditWarning) {
+      toast.error(result.warning);
+    } else if (result.photoWarning) {
+      toast.warning(result.photoWarning);
+    } else {
+      toast.success(editing ? "Resident updated" : "Resident created");
+    }
     onOpenChange(false);
     onSaved?.();
+  }
+
+  async function submit(values) {
+    setDuplicateReview(null);
+    try {
+      const matches = await registryService.findResidentDuplicates(
+        values,
+        resident?.id,
+      );
+      if (matches.length > 0) {
+        setDuplicateReview({ values, matches });
+        return;
+      }
+      await save(values);
+    } catch (error) {
+      setLocalityError(error.message);
+    }
+  }
+
+  async function confirmDuplicateSave() {
+    if (!duplicateReview) return;
+    try {
+      await save(duplicateReview.values, duplicateReview.matches);
+    } catch {
+      // The mapped mutation error remains visible in the dialog.
+    }
   }
 
   return (
@@ -170,6 +297,46 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
             </AlertDescription>
           </Alert>
         ) : null}
+        {duplicateReview ? (
+          <Alert>
+            <TriangleAlert className="h-4 w-4 text-warning-foreground" />
+            <AlertDescription className="space-y-3">
+              <p className="font-semibold">Possible duplicate resident found</p>
+              <p>
+                Review the matching active record
+                {duplicateReview.matches.length > 1 ? "s" : ""} before saving.
+                This warning does not block a legitimate resident.
+              </p>
+              <ul className="space-y-1 text-xs">
+                {duplicateReview.matches.map((match) => (
+                  <li key={match.id}>
+                    {match.resident_number} · {match.display_name} ·{" "}
+                    {match.purok_name}
+                    {match.phone_match ? " · phone also matches" : ""}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDuplicateReview(null)}
+                >
+                  Review form
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={confirmDuplicateSave}
+                  disabled={mutation.isPending}
+                >
+                  Save anyway and record override
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <DeploymentBarangayContext query={deploymentContext} />
         <form
           id="resident-form"
@@ -177,6 +344,81 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
           onSubmit={handleSubmit(submit)}
           noValidate
         >
+          <section className="space-y-4">
+            <SectionHeading
+              title="Resident photo"
+              description="Private JPEG, PNG, or WebP up to 5 MB"
+            />
+            <div className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center">
+              {photoPreview ? (
+                <img
+                  src={photoPreview}
+                  alt="Selected resident preview"
+                  className="h-20 w-20 rounded-full border object-cover"
+                />
+              ) : resident && !removePhoto ? (
+                <ResidentPhoto resident={resident} className="h-20 w-20" />
+              ) : (
+                <div className="flex h-20 w-20 items-center justify-center rounded-full border bg-muted text-lg font-semibold text-muted-foreground">
+                  {watch("first_name")?.[0] ?? ""}
+                  {watch("last_name")?.[0] ?? ""}
+                </div>
+              )}
+              <div className="space-y-2">
+                <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border bg-background px-3 text-sm font-semibold hover:bg-accent">
+                  <ImagePlus className="h-4 w-4" />
+                  {resident?.photo_path ? "Replace photo" : "Choose photo"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    onChange={choosePhoto}
+                  />
+                </label>
+                {resident?.photo_path && !removePhoto ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setPhotoFile(null);
+                      setRemovePhoto(true);
+                      setPhotoError("");
+                    }}
+                  >
+                    <Trash2 /> Remove photo
+                  </Button>
+                ) : null}
+                {photoFile ? (
+                  <p className="text-xs text-muted-foreground">
+                    Selected: {photoFile.name}
+                  </p>
+                ) : null}
+                {removePhoto ? (
+                  <p className="text-xs text-muted-foreground">
+                    The current photo will be removed when saved.
+                  </p>
+                ) : null}
+                {photoError ? (
+                  <p className="text-xs text-destructive">{photoError}</p>
+                ) : null}
+              </div>
+            </div>
+            {uploadProgress ? (
+              <div className="space-y-1" aria-live="polite">
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${uploadProgress.percent}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Photo {uploadProgress.stage}… {uploadProgress.percent}%
+                </p>
+              </div>
+            ) : null}
+          </section>
+
           <section className="space-y-4">
             <SectionHeading
               title="Personal information"
@@ -331,6 +573,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
                       shouldValidate: true,
                     });
                     setValue("household_id", "", { shouldValidate: true });
+                    setSelectedHousehold(null);
                   }}
                 >
                   <option value="">Select purok</option>
@@ -346,18 +589,18 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
                 htmlFor="resident-household"
                 error={errors.household_id}
               >
-                <Select
-                  id="resident-household"
-                  register={register("household_id")}
-                  disabled={!purokId || households.isLoading}
-                >
-                  <option value="">No household</option>
-                  {(households.data ?? []).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.household_number} — {item.address_line}
-                    </option>
-                  ))}
-                </Select>
+                <HouseholdSearchField
+                  purokId={purokId}
+                  value={watch("household_id")}
+                  selectedHousehold={selectedHousehold}
+                  onChange={(household) => {
+                    setSelectedHousehold(household);
+                    setValue("household_id", household?.id ?? "", {
+                      shouldValidate: true,
+                    });
+                  }}
+                  disabled={mutation.isPending}
+                />
               </Field>
               <Field
                 label="Address (optional)"

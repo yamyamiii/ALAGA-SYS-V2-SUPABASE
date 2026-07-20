@@ -28,12 +28,21 @@ describe("role permissions", () => {
         PERMISSIONS.MANAGE_HOUSEHOLDS,
       ),
     ).toBe(true);
+    expect(
+      hasPermission(
+        USER_ROLES.BARANGAY_HEALTH_WORKER,
+        PERMISSIONS.MANAGE_RESIDENT_PHOTOS,
+      ),
+    ).toBe(true);
     expect(hasPermission(USER_ROLES.NURSE, PERMISSIONS.VIEW_RESIDENTS)).toBe(
       true,
     );
     expect(hasPermission(USER_ROLES.NURSE, PERMISSIONS.MANAGE_RESIDENTS)).toBe(
       false,
     );
+    expect(
+      hasPermission(USER_ROLES.NURSE, PERMISSIONS.VIEW_RESIDENT_PHOTOS),
+    ).toBe(true);
     expect(hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.VIEW_RESIDENTS)).toBe(
       true,
     );
@@ -50,11 +59,23 @@ describe("role permissions", () => {
       hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.MANAGE_MATERNAL_CARE),
     ).toBe(true);
     expect(
+      hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.MANAGE_RESIDENT_PHOTOS),
+    ).toBe(false);
+    expect(
       hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.MANAGE_RESIDENTS),
     ).toBe(false);
     expect(hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.VIEW_RESIDENTS)).toBe(
       false,
     );
+    expect(
+      hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.VIEW_RESIDENT_PHOTOS),
+    ).toBe(true);
+    expect(
+      hasPermission(
+        USER_ROLES.BARANGAY_HEALTH_WORKER,
+        PERMISSIONS.LINK_RESIDENT_ACCOUNTS,
+      ),
+    ).toBe(false);
   });
 
   it("rejects unknown frontend role values", () => {

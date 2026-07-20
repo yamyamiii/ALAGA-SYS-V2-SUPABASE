@@ -13,10 +13,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  useHouseholdOptions,
-  useRegistryMutation,
-} from "@/features/registry/hooks";
+import { HouseholdSearchField } from "@/features/registry/HouseholdSearchField";
+import { useRegistryMutation } from "@/features/registry/hooks";
 import { registryService } from "@/services/registryService";
 
 export function ResidentHouseholdDialog({
@@ -25,27 +23,35 @@ export function ResidentHouseholdDialog({
   resident,
   onSaved,
 }) {
-  const [householdId, setHouseholdId] = useState("");
-  const options = useHouseholdOptions(resident?.purok_id);
-  const mutation = useRegistryMutation(async (selectedId) => {
-    if (!selectedId) {
+  const [selectedHousehold, setSelectedHousehold] = useState(null);
+  const mutation = useRegistryMutation(async (household) => {
+    if (!household) {
       return registryService.removeResidentFromHousehold(resident.id);
     }
-    const household = options.data?.find((item) => item.id === selectedId);
-    if (!household) throw new Error("Select a valid household.");
     return registryService.assignResidentToHousehold(resident.id, household);
   });
 
   useEffect(() => {
     if (open) {
-      setHouseholdId(resident?.household_id ?? "");
+      setSelectedHousehold(
+        resident?.household_id && resident?.household
+          ? {
+              ...resident.household,
+              id: resident.household_id,
+              barangay_id: resident.barangay_id,
+              purok_id: resident.purok_id,
+            }
+          : null,
+      );
       mutation.reset();
     }
-  }, [open, resident?.household_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, resident]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save() {
-    await mutation.mutateAsync(householdId);
-    toast.success(householdId ? "Household assigned" : "Household removed");
+    await mutation.mutateAsync(selectedHousehold);
+    toast.success(
+      selectedHousehold ? "Household assigned" : "Household removed",
+    );
     onOpenChange(false);
     onSaved?.();
   }
@@ -59,8 +65,8 @@ export function ResidentHouseholdDialog({
         <DialogHeader>
           <DialogTitle>Household assignment</DialogTitle>
           <DialogDescription>
-            Only current households in the resident&apos;s Bagongpook purok are
-            available. Removing an assignment does not delete the resident.
+            Search current households in the resident&apos;s Bagongpook purok.
+            Removing an assignment does not delete the resident.
           </DialogDescription>
         </DialogHeader>
         {mutation.error ? (
@@ -69,20 +75,14 @@ export function ResidentHouseholdDialog({
           </Alert>
         ) : null}
         <div className="space-y-2">
-          <Label htmlFor="resident-household-assignment">Household</Label>
-          <select
-            id="resident-household-assignment"
-            value={householdId}
-            onChange={(event) => setHouseholdId(event.target.value)}
-            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-          >
-            <option value="">No household</option>
-            {(options.data ?? []).map((household) => (
-              <option key={household.id} value={household.id}>
-                {household.household_number} — {household.address_line}
-              </option>
-            ))}
-          </select>
+          <Label>Household</Label>
+          <HouseholdSearchField
+            purokId={resident?.purok_id}
+            value={selectedHousehold?.id ?? ""}
+            selectedHousehold={selectedHousehold}
+            onChange={setSelectedHousehold}
+            disabled={mutation.isPending}
+          />
         </div>
         <DialogFooter>
           <Button
@@ -93,11 +93,7 @@ export function ResidentHouseholdDialog({
           >
             Cancel
           </Button>
-          <Button
-            type="button"
-            onClick={save}
-            disabled={mutation.isPending || options.isLoading}
-          >
+          <Button type="button" onClick={save} disabled={mutation.isPending}>
             {mutation.isPending ? (
               <LoaderCircle className="animate-spin" />
             ) : (

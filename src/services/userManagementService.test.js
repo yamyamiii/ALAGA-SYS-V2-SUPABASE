@@ -63,4 +63,24 @@ describe("user management service", () => {
       UserManagementServiceError,
     );
   });
+
+  it("routes resident linking only through the trusted function", async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      data: { data: { linked: true } },
+      error: null,
+    });
+    const service = createUserManagementService(() => ({
+      functions: { invoke },
+    }));
+    await service.linkResidentAccount("resident-id", "profile-id");
+    expect(invoke).toHaveBeenCalledWith("manage-user", {
+      body: {
+        action: "link_resident_account",
+        payload: {
+          resident_id: "resident-id",
+          profile_id: "profile-id",
+        },
+      },
+    });
+  });
 });

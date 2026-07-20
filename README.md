@@ -5,7 +5,9 @@ barangay healthcare management system. This repository currently contains the
 Phase 0 application foundation, the Phase 1 normalized PostgreSQL schema and
 deny-by-default Row Level Security, the Phase 2A Supabase Auth foundation, and
 the Phase 2B trusted administrator/user-management workflow, and the Phase 3A
-household and resident demographic registry.
+household and resident demographic registry. Phase 3B adds private resident
+photos, trusted resident-account linking, scalable household selection, and
+RLS-safe duplicate review.
 
 No appointment or clinical healthcare workflow is implemented in this phase.
 
@@ -105,9 +107,13 @@ npm run preview
 
 ## Current phase
 
-Phase 3A adds household and resident listing, creation, editing, details,
+Phase 3B hardens household and resident listing, creation, editing, details,
 relationship management, archival/restoration, server paging/search, safe audit
-events, and RLS-aligned route permissions. Registry locality is configured for
+events, and RLS-aligned route permissions. Resident images use a private,
+resident-authorized bucket and short-lived signed URLs. Account linking remains
+administrator-only behind the trusted Edge Function. Household selection is
+debounced/server-paginated, and probable duplicates require an explicit audited
+override. Registry locality is configured for
 Brgy. Bagongpook with Purok 1 through Purok 7; barangay UUID resolution remains
 database-backed. Public registration, physical deletion, and password reset
 remain unavailable.
@@ -117,4 +123,10 @@ remain unavailable.
 Future phases may extend registry workflows or implement appointments. They must
 not weaken database policies or place secret credentials in the frontend.
 
-See [Authentication architecture](docs/architecture/AUTHENTICATION.md), [Trusted user management](docs/architecture/USER_MANAGEMENT.md), [Administrator bootstrap](docs/security/ADMIN_BOOTSTRAP.md), [Hosted Auth settings](docs/deployment/SUPABASE_AUTH_SETTINGS.md), [Database schema](docs/database/SCHEMA.md), [RLS matrix](docs/database/RLS_MATRIX.md), [Design system](docs/ui/DESIGN_SYSTEM.md), and [Roadmap](docs/requirements/ROADMAP.md).
+See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
+[Private photo storage](docs/architecture/STORAGE.md),
+[Resident account linking](docs/workflows/RESIDENT_ACCOUNT_LINKING.md),
+[Storage deployment](docs/deployment/SUPABASE_STORAGE.md),
+[Authentication architecture](docs/architecture/AUTHENTICATION.md),
+[RLS matrix](docs/database/RLS_MATRIX.md), and
+[Roadmap](docs/requirements/ROADMAP.md).

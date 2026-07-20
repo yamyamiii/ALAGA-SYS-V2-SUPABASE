@@ -6,6 +6,10 @@ const workflow = fs.readFileSync(
   "supabase/migrations/20260720001400_registry_workflows.sql",
   "utf8",
 );
+const residentSchema = fs.readFileSync(
+  "supabase/migrations/20260720000400_residents.sql",
+  "utf8",
+);
 const policies = fs.readFileSync(
   "supabase/migrations/20260720001000_rls_policies.sql",
   "utf8",
@@ -16,6 +20,10 @@ const helpers = fs.readFileSync(
 );
 const deployment = fs.readFileSync(
   "supabase/migrations/20260720001500_bagongpook_deployment.sql",
+  "utf8",
+);
+const hardening = fs.readFileSync(
+  "supabase/migrations/20260720001600_registry_hardening.sql",
   "utf8",
 );
 
@@ -106,5 +114,63 @@ describe("registry database safety", () => {
       /not exists \([\s\S]*public\.households[\s\S]*not exists \([\s\S]*public\.residents/i,
     );
     expect(deployment).not.toMatch(/delete\s+from\s+public\.puroks/i);
+  });
+
+  it("keeps resident photos private and resident-row authorized for every role", () => {
+    expect(hardening).toMatch(/'resident-photos'[\s\S]*false[\s\S]*5242880/i);
+    expect(hardening).toMatch(/resident_photos_select_authorized/i);
+    expect(hardening).toMatch(/resident_photos_insert_admin_bhw/i);
+    expect(hardening).toMatch(/resident_photos_delete_admin_bhw/i);
+    expect(hardening).toMatch(
+      /'nurse'[\s\S]*'midwife'[\s\S]*r\.archived_at is null/i,
+    );
+    expect(hardening).toMatch(
+      /p\.role = 'resident'[\s\S]*r\.linked_profile_id = p\.id/i,
+    );
+    expect(hardening).not.toMatch(/resident_photos[^\n]*using\s*\(\s*true/i);
+  });
+
+  it("uses paginated RLS-preserving household and duplicate searches", () => {
+    expect(hardening).toMatch(
+      /registry_search_households[\s\S]*security invoker/i,
+    );
+    expect(hardening).toMatch(/p_limit not between 1 and 25/i);
+    expect(hardening).toMatch(/h\.archived_at is null/i);
+    expect(hardening).toMatch(
+      /registry_find_resident_duplicates[\s\S]*security invoker/i,
+    );
+    expect(hardening).toMatch(/resident\.duplicate_override/i);
+  });
+
+  it("requires the trusted administrator workflow for account linking", () => {
+    expect(residentSchema).toMatch(
+      /constraint residents_linked_profile_unique unique \(linked_profile_id\)/i,
+    );
+    expect(hardening).toMatch(
+      /resident profile links require the trusted administrator workflow/i,
+    );
+    expect(hardening).toMatch(
+      /admin_link_resident_profile[\s\S]*assert_active_administrator/i,
+    );
+    expect(hardening).toMatch(
+      /grant execute on function public\.admin_link_resident_profile[^;]+to service_role/i,
+    );
+    expect(hardening).not.toMatch(
+      /grant execute on function public\.admin_link_resident_profile[^;]+to authenticated/i,
+    );
+    expect(hardening).toMatch(
+      /p\.role = 'resident'[\s\S]*p\.account_status in/i,
+    );
+    expect(hardening).toMatch(/archived residents cannot be linked/i);
+  });
+
+  it("prevents archived assignment and requires active household heads", () => {
+    expect(hardening).toMatch(
+      /archived residents cannot change household assignment/i,
+    );
+    expect(hardening).toMatch(
+      /household head must be an active member of the household/i,
+    );
+    expect(hardening).not.toMatch(/delete\s+from\s+public\.residents/i);
   });
 });

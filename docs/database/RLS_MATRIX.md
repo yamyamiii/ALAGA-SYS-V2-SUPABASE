@@ -1,5 +1,27 @@
 # Row Level Security matrix
 
+## Phase 3B storage and linking additions
+
+| Resource/action                             | Admin                    | BHW                      | Nurse                    | Midwife                  | Resident        | Anonymous |
+| ------------------------------------------- | ------------------------ | ------------------------ | ------------------------ | ------------------------ | --------------- | --------- |
+| Active resident photo read                  | Yes                      | Yes                      | Yes                      | Yes                      | Own linked only | No        |
+| Archived resident photo read                | Yes                      | No                       | No                       | No                       | No              | No        |
+| Active resident photo upload/replace/remove | Yes                      | Yes                      | No                       | No                       | No              | No        |
+| Resident profile candidate list             | Trusted Edge only        | No                       | No                       | No                       | No              | No        |
+| Resident profile link/unlink                | Trusted Edge only        | No                       | No                       | No                       | No              | No        |
+| Duplicate candidate search                  | RLS-visible active rows  | RLS-visible active rows  | RLS-visible active rows  | RLS-visible active rows  | No              | No        |
+| Household picker search                     | RLS-visible current rows | RLS-visible current rows | RLS-visible current rows | RLS-visible current rows | Own policy only | No        |
+
+Storage policies parse the resident UUID from a strict UUID-only object path and
+re-check the active canonical profile and resident relationship. Private objects
+have no anonymous policy. Nurse/midwife and linked-resident access is read-only.
+The account RPCs revoke `public`, `anon`, and `authenticated` execution and grant
+only `service_role`; the Edge Function independently verifies an active admin.
+
+Duplicate and household search functions are `security invoker`, so they cannot
+return table rows hidden by RLS. Client permission helpers are usability
+controls only and do not replace these database/storage policies.
+
 ## Security model
 
 RLS is enabled on every Phase 1 public table. Access is deny-by-default: a user

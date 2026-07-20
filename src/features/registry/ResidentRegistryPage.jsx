@@ -29,6 +29,7 @@ import { RegistryActionDialog } from "@/features/registry/RegistryActionDialog";
 import { RegistryPagination } from "@/features/registry/RegistryPagination";
 import { RegistrySkeleton } from "@/features/registry/RegistrySkeleton";
 import { ResidentDetailDialog } from "@/features/registry/ResidentDetailDialog";
+import { ResidentAccountDialog } from "@/features/registry/ResidentAccountDialog";
 import { ResidentFormDialog } from "@/features/registry/ResidentFormDialog";
 import { ResidentHouseholdDialog } from "@/features/registry/ResidentHouseholdDialog";
 import { useDebouncedValue } from "@/features/registry/useDebouncedValue";
@@ -40,6 +41,10 @@ export default function ResidentRegistryPage() {
   const canRestore = hasPermission(
     profile.role,
     PERMISSIONS.RESTORE_ARCHIVED_REGISTRY,
+  );
+  const canLinkAccount = hasPermission(
+    profile.role,
+    PERMISSIONS.LINK_RESIDENT_ACCOUNTS,
   );
   const [filters, setFilters] = useState({ ...initialResidentFilters });
   const [search, setSearch] = useState("");
@@ -54,6 +59,7 @@ export default function ResidentRegistryPage() {
   const [form, setForm] = useState({ open: false, record: null });
   const [detailId, setDetailId] = useState(null);
   const [householdRecord, setHouseholdRecord] = useState(null);
+  const [accountRecord, setAccountRecord] = useState(null);
   const [action, setAction] = useState({ record: null, restoring: false });
   const statusMutation = useRegistryMutation(({ id, status }) =>
     registryService.setResidentStatus(id, status),
@@ -399,9 +405,18 @@ export default function ResidentRegistryPage() {
         }}
         canManage={canManage}
         canRestore={canRestore}
+        canLinkAccount={canLinkAccount}
         onEdit={(record) => setForm({ open: true, record })}
         onArchive={(record, restoring) => setAction({ record, restoring })}
         onHousehold={setHouseholdRecord}
+        onAccount={setAccountRecord}
+      />
+      <ResidentAccountDialog
+        open={Boolean(accountRecord)}
+        onOpenChange={(open) => {
+          if (!open) setAccountRecord(null);
+        }}
+        resident={accountRecord}
       />
       <ResidentHouseholdDialog
         open={Boolean(householdRecord)}

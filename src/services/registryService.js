@@ -38,6 +38,13 @@ const HOUSEHOLD_WRITE_FIELDS = Object.freeze([
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const RESIDENT_PHOTO_BUCKET = "resident-photos";
+const MAX_RESIDENT_PHOTO_BYTES = 5 * 1024 * 1024;
+const PHOTO_MIME_TYPES = Object.freeze({
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+});
 
 export class RegistryServiceError extends Error {
   constructor(code, message, options = {}) {
@@ -108,6 +115,58 @@ function reportDeveloperDiagnostic(operation, error, mappedCode) {
       mappedCode,
     });
   }
+}
+
+function photoError(code, message, cause) {
+  return new RegistryServiceError(code, message, { cause });
+}
+
+export async function validateResidentPhoto(file) {
+  if (!file || typeof file.arrayBuffer !== "function") {
+    throw photoError("photo_required", "Choose a resident photo to upload.");
+  }
+  if (file.size > MAX_RESIDENT_PHOTO_BYTES) {
+    throw photoError(
+      "photo_too_large",
+      "Resident photos must be 5 MB or smaller.",
+    );
+  }
+  if (!PHOTO_MIME_TYPES[file.type]) {
+    throw photoError(
+      "photo_type_invalid",
+      "Use a JPEG, PNG, or WebP resident photo.",
+    );
+  }
+
+  const bytes = new Uint8Array((await file.arrayBuffer()).slice(0, 16));
+  const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const isPng =
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a;
+  const isWebp =
+    String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
+    String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+  const detectedMime = isJpeg
+    ? "image/jpeg"
+    : isPng
+      ? "image/png"
+      : isWebp
+        ? "image/webp"
+        : null;
+
+  if (!detectedMime || detectedMime !== file.type) {
+    throw photoError(
+      "photo_content_invalid",
+      "The selected file content does not match its image type.",
+    );
+  }
+  return { mimeType: detectedMime, extension: PHOTO_MIME_TYPES[detectedMime] };
 }
 
 function resultPage(data, page, pageSize) {
@@ -264,19 +323,17 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       return context.puroks;
     },
 
-    async listHouseholdOptions(purokId) {
-      if (!purokId) return [];
-      const purok = await resolvePurok(purokId);
-      const { data, error } = await client()
-        .from("households")
-        .select("id, household_number, barangay_id, purok_id, address_line")
-        .eq("barangay_id", purok.barangay_id)
-        .eq("purok_id", purokId)
-        .is("archived_at", null)
-        .order("household_number")
-        .limit(100);
-      if (error) throw mapError(error, "Households could not be loaded.");
-      return data ?? [];
+    async searchHouseholds({ purokId, search = "", page = 1, pageSize = 10 }) {
+      if (!purokId) return { items: [], total: 0, page, page_size: pageSize };
+      await resolvePurok(purokId);
+      const { data, error } = await client().rpc("registry_search_households", {
+        p_purok_id: purokId,
+        p_search: nullable(search.trim()),
+        p_limit: pageSize,
+        p_offset: (page - 1) * pageSize,
+      });
+      if (error) throw mapError(error, "Households could not be searched.");
+      return resultPage(data, page, pageSize);
     },
 
     async listAssignableResidents({ purokId, search = "" }) {
@@ -362,6 +419,128 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       return data;
     },
 
+    async findResidentDuplicates(values, excludeId = null) {
+      const { data, error } = await client().rpc(
+        "registry_find_resident_duplicates",
+        {
+          p_first_name: values.first_name,
+          p_middle_name: nullable(values.middle_name),
+          p_last_name: values.last_name,
+          p_suffix: nullable(values.suffix),
+          p_date_of_birth: values.date_of_birth,
+          p_sex: values.sex,
+          p_phone_number: nullable(values.phone_number),
+          p_exclude_id: nullable(excludeId),
+        },
+      );
+      if (error) {
+        throw mapError(
+          error,
+          "Potential duplicate residents could not be checked.",
+        );
+      }
+      return data ?? [];
+    },
+
+    async createResidentPhotoUrl(photoPath) {
+      if (!photoPath) return null;
+      const { data, error } = await client()
+        .storage.from(RESIDENT_PHOTO_BUCKET)
+        .createSignedUrl(photoPath, 300);
+      if (error || !data?.signedUrl) {
+        throw photoError(
+          "photo_url_failed",
+          "The resident photo could not be displayed.",
+          error,
+        );
+      }
+      return data.signedUrl;
+    },
+
+    async uploadResidentPhoto(
+      residentId,
+      file,
+      oldPhotoPath = null,
+      onProgress,
+    ) {
+      if (!UUID_PATTERN.test(residentId ?? "")) {
+        throw photoError(
+          "invalid_resident_id",
+          "The resident reference is invalid.",
+        );
+      }
+      const validated = await validateResidentPhoto(file);
+      const objectPath = `${residentId}/${crypto.randomUUID()}.${validated.extension}`;
+      onProgress?.({ stage: "uploading", percent: 20 });
+      const storage = client().storage.from(RESIDENT_PHOTO_BUCKET);
+      const { error: uploadError } = await storage.upload(objectPath, file, {
+        cacheControl: "3600",
+        contentType: validated.mimeType,
+        upsert: false,
+      });
+      if (uploadError) {
+        throw photoError(
+          "photo_upload_failed",
+          "The resident photo could not be uploaded. The existing photo relationship was not changed.",
+          uploadError,
+        );
+      }
+
+      onProgress?.({ stage: "saving", percent: 70 });
+      const { data, error: updateError } = await client()
+        .from("residents")
+        .update({ photo_path: objectPath })
+        .eq("id", residentId)
+        .select("id, photo_path")
+        .single();
+      if (updateError || !data) {
+        await storage.remove([objectPath]).catch(() => undefined);
+        throw mapError(
+          updateError,
+          "The uploaded photo could not be attached to the resident record.",
+        );
+      }
+
+      let cleanupWarning = null;
+      if (oldPhotoPath && oldPhotoPath !== objectPath) {
+        onProgress?.({ stage: "cleaning", percent: 90 });
+        const { error: cleanupError } = await storage.remove([oldPhotoPath]);
+        if (cleanupError) {
+          cleanupWarning =
+            "The new photo was saved, but the previous private object could not be cleaned up automatically.";
+          reportDeveloperDiagnostic(
+            "resident_photo_cleanup",
+            cleanupError,
+            "cleanup_failed",
+          );
+        }
+      }
+      onProgress?.({ stage: "complete", percent: 100 });
+      return { ...data, cleanupWarning };
+    },
+
+    async removeResidentPhoto(residentId, photoPath) {
+      if (!photoPath) return { id: residentId, photo_path: null };
+      const { data, error: updateError } = await client()
+        .from("residents")
+        .update({ photo_path: null })
+        .eq("id", residentId)
+        .select("id, photo_path")
+        .single();
+      if (updateError || !data) {
+        throw mapError(updateError, "The resident photo could not be removed.");
+      }
+      const { error: removeError } = await client()
+        .storage.from(RESIDENT_PHOTO_BUCKET)
+        .remove([photoPath]);
+      return {
+        ...data,
+        cleanupWarning: removeError
+          ? "The photo was detached, but its private object requires administrator cleanup."
+          : null,
+      };
+    },
+
     async createHousehold(values) {
       const purok = await resolvePurok(values.purok_id);
       const payload = pick(values, HOUSEHOLD_WRITE_FIELDS);
@@ -445,11 +624,11 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       );
     },
 
-    async createResident(values) {
+    async createResident(values, options = {}) {
       const purok = await resolvePurok(values.purok_id);
       const payload = pick(values, RESIDENT_WRITE_FIELDS);
       payload.barangay_id = purok.barangay_id;
-      return singleResult(
+      const saved = await singleResult(
         client()
           .from("residents")
           .insert(payload)
@@ -457,13 +636,31 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
           .single(),
         "The resident could not be created.",
       );
+      if (options.duplicateMatchCount) {
+        const { error } = await client().rpc(
+          "registry_record_duplicate_override",
+          {
+            p_resident_id: saved.id,
+            p_match_count: options.duplicateMatchCount,
+            p_operation: "create",
+          },
+        );
+        if (error) {
+          throw new RegistryServiceError(
+            "duplicate_audit_failed_after_save",
+            "The resident was created, but the duplicate-review audit could not be recorded. Contact an administrator before retrying.",
+            { cause: error },
+          );
+        }
+      }
+      return saved;
     },
 
-    async updateResident(id, values) {
+    async updateResident(id, values, options = {}) {
       const purok = await resolvePurok(values.purok_id);
       const payload = pick(values, RESIDENT_WRITE_FIELDS);
       payload.barangay_id = purok.barangay_id;
-      return singleResult(
+      const saved = await singleResult(
         client()
           .from("residents")
           .update(payload)
@@ -472,6 +669,24 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
           .single(),
         "The resident changes could not be saved.",
       );
+      if (options.duplicateMatchCount) {
+        const { error } = await client().rpc(
+          "registry_record_duplicate_override",
+          {
+            p_resident_id: saved.id,
+            p_match_count: options.duplicateMatchCount,
+            p_operation: "update",
+          },
+        );
+        if (error) {
+          throw new RegistryServiceError(
+            "duplicate_audit_failed_after_save",
+            "The resident was updated, but the duplicate-review audit could not be recorded. Contact an administrator before retrying.",
+            { cause: error },
+          );
+        }
+      }
+      return saved;
     },
 
     setResidentStatus(id, status) {

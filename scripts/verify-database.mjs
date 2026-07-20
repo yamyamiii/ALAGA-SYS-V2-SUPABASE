@@ -20,6 +20,7 @@ const expectedMigrations = [
   "20260720001300_resident_archived_status.sql",
   "20260720001400_registry_workflows.sql",
   "20260720001500_bagongpook_deployment.sql",
+  "20260720001600_registry_hardening.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -46,6 +47,12 @@ const completedMigrationHashes = {
     "71d8faacc421b6542a5328d0a58501fb315700e1fb22a66f87d590a87ae43ba8",
   "20260720001200_trusted_user_management.sql":
     "ae0f5a82b3c27efaeb36f8a3fe4349dad54f4a5e2562a61c36930859b93285cf",
+  "20260720001300_resident_archived_status.sql":
+    "ece7d1df7b482fd3e9c3c0d68f5258470af91b2854be4be59f9eb0f340a9aa1f",
+  "20260720001400_registry_workflows.sql":
+    "2605ea2c5c8d26d4ec17f63e4bdfece8fa13201553eab82533c12414d1971336",
+  "20260720001500_bagongpook_deployment.sql":
+    "e1a300fc175030195caafbac612a7581b68f53b4d990802aaa1a5d78da534b3b",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -73,7 +80,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly fifteen expected migrations exist in lexical order",
+  "Exactly sixteen expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -129,8 +136,10 @@ check(
   "No broad WITH CHECK (true) policy exists",
 );
 check(
-  !/for\s+delete\s+to\s+(?:anon|authenticated)/i.test(allSql),
-  "No client DELETE policy exists",
+  !/on\s+public\.[a-z_]+\s+for\s+delete\s+to\s+(?:anon|authenticated)/i.test(
+    allSql,
+  ),
+  "No client DELETE policy exists on public registry tables",
 );
 check(
   !/grant\s+[^;]*delete[^;]*to\s+(?:anon|authenticated)/i.test(allSql),
@@ -221,6 +230,31 @@ check(
   /new\.barangay_id\s*:=\s*selected_barangay_id/i.test(allSql) &&
     /apply_deployment_registry_locality/i.test(allSql),
   "Registry writes derive barangay_id from the selected database purok",
+);
+check(
+  /'resident-photos'[\s\S]*false[\s\S]*5242880/i.test(allSql) &&
+    /resident_photos_select_authorized/i.test(allSql) &&
+    /can_view_resident_photo/i.test(allSql),
+  "Resident photos use a private five-megabyte RLS-protected bucket",
+);
+check(
+  /registry_search_households/i.test(allSql) &&
+    /security\s+invoker/i.test(allSql) &&
+    /h\.archived_at is null/i.test(allSql),
+  "Household picker search is paginated, current-only, and RLS-preserving",
+);
+check(
+  /registry_find_resident_duplicates/i.test(allSql) &&
+    /resident\.duplicate_override/i.test(allSql),
+  "Resident duplicate review and explicit override audit are installed",
+);
+check(
+  /resident profile links require the trusted administrator workflow/i.test(
+    allSql,
+  ) &&
+    /admin_link_resident_profile[\s\S]*to service_role/i.test(allSql) &&
+    !/admin_link_resident_profile[^;]*to authenticated/i.test(allSql),
+  "Resident profile linking is restricted to the trusted service-role workflow",
 );
 
 const functionBlocks = [

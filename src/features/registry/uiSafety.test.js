@@ -19,6 +19,14 @@ const residentForm = fs.readFileSync(
   "src/features/registry/ResidentFormDialog.jsx",
   "utf8",
 );
+const householdSearch = fs.readFileSync(
+  "src/features/registry/HouseholdSearchField.jsx",
+  "utf8",
+);
+const accountDialog = fs.readFileSync(
+  "src/features/registry/ResidentAccountDialog.jsx",
+  "utf8",
+);
 
 describe("registry UI boundaries", () => {
   it.each([
@@ -68,5 +76,28 @@ describe("registry UI boundaries", () => {
     expect(residentPage.match(/setDetailId\(item\.id\)/g)).toHaveLength(2);
     expect(residentPage).toMatch(/residentId=\{detailId\}/);
     expect(residentPage).not.toMatch(/setDetailId\(item\.resident_number\)/);
+  });
+
+  it("replaces the first-100 household dropdown with debounced server search", () => {
+    expect(residentForm).toMatch(/HouseholdSearchField/);
+    expect(householdSearch).toMatch(/useHouseholdSearch/);
+    expect(householdSearch).toMatch(/useDebouncedValue/);
+    expect(residentForm).not.toMatch(/listHouseholdOptions/);
+    expect(residentForm).not.toMatch(/households\.data/);
+  });
+
+  it("keeps photo and account actions behind service boundaries", () => {
+    expect(residentForm).toMatch(/validateResidentPhoto/);
+    expect(residentForm).toMatch(/uploadResidentPhoto/);
+    expect(accountDialog).toMatch(/userManagementService/);
+    expect(accountDialog).not.toMatch(/getSupabaseClient|service[_-]?role/i);
+    expect(accountDialog).toMatch(/Confirm unlink/);
+  });
+
+  it("requires explicit confirmation before overriding a duplicate warning", () => {
+    expect(residentForm).toMatch(/findResidentDuplicates/);
+    expect(residentForm).toMatch(/Possible duplicate resident found/);
+    expect(residentForm).toMatch(/Save anyway and record override/);
+    expect(residentForm).toMatch(/duplicateMatchCount/);
   });
 });
