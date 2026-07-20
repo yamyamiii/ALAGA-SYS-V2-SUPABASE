@@ -8,13 +8,21 @@ export function AuthLoadingScreen({ error, onRetry }) {
   const Icon = isError ? AlertCircle : LoaderCircle;
 
   return (
-    <main className="bg-dashboard-pattern flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-sm rounded-2xl border bg-card p-8 text-center shadow-card">
+    <main className="bg-dashboard-pattern flex min-h-dvh items-center justify-center p-6">
+      <div
+        role={isError ? "alert" : "status"}
+        aria-live={isError ? "assertive" : "polite"}
+        aria-busy={!isError}
+        className="w-full max-w-sm rounded-2xl border bg-card p-8 text-center shadow-card"
+      >
         <div className="flex justify-center">
           <Brand />
         </div>
         <div className="mx-auto mt-8 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Icon className={isError ? "h-5 w-5" : "h-5 w-5 animate-spin"} />
+          <Icon
+            className={isError ? "h-5 w-5" : "h-5 w-5 animate-spin"}
+            aria-hidden="true"
+          />
         </div>
         <h1 className="mt-4 font-heading text-lg font-semibold">
           {isError

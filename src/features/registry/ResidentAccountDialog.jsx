@@ -100,7 +100,7 @@ export function ResidentAccountDialog({ open, onOpenChange, resident }) {
 
   return (
     <Dialog open={open} onOpenChange={pending ? undefined : onOpenChange}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Resident portal account</DialogTitle>
           <DialogDescription>

@@ -31,4 +31,13 @@ describe("public branding", () => {
 
     expect(interfaceSource).not.toMatch(/ALAGA-SYS\s+V2/i);
   });
+
+  it("keeps internal phase numbers out of user-facing source", () => {
+    const interfaceFiles = ["index.html", ...collectInterfaceFiles("src")];
+    const interfaceSource = interfaceFiles
+      .map((file) => fs.readFileSync(file, "utf8"))
+      .join("\n");
+
+    expect(interfaceSource).not.toMatch(/\bPhase\s+\d+[A-Z]?\b/i);
+  });
 });

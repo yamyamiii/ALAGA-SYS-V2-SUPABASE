@@ -16,7 +16,7 @@ export default function ConfigurationErrorPage() {
   }
 
   return (
-    <main className="bg-dashboard-pattern min-h-screen p-6 sm:p-10">
+    <main className="bg-dashboard-pattern min-h-dvh p-6 sm:p-10">
       <div className="mx-auto max-w-2xl space-y-6">
         <Brand />
         <div>

@@ -7,7 +7,8 @@ deny-by-default Row Level Security, the Phase 2A Supabase Auth foundation, and
 the Phase 2B trusted administrator/user-management workflow, and the Phase 3A
 household and resident demographic registry. Phase 3B adds private resident
 photos, trusted resident-account linking, scalable household selection, and
-RLS-safe duplicate review.
+RLS-safe duplicate review. Phase 3C adds production QA, responsive and
+accessibility hardening, bounded network requests, and bundle optimization.
 
 No appointment or clinical healthcare workflow is implemented in this phase.
 
@@ -19,7 +20,7 @@ No appointment or clinical healthcare workflow is implemented in this phase.
 - Lucide React and Sonner
 - TanStack React Query
 - React Hook Form, Zod, and Hook Form resolvers
-- date-fns and Recharts
+- date-fns
 - Supabase JavaScript client with persisted authentication
 - Vitest, Testing Library, ESLint, and Prettier
 
@@ -107,7 +108,9 @@ npm run preview
 
 ## Current phase
 
-Phase 3B hardens household and resident listing, creation, editing, details,
+Phase 3C reviews and hardens the completed authentication, user-management, and
+registry workflows without adding a healthcare module. Phase 3B provides
+household and resident listing, creation, editing, details,
 relationship management, archival/restoration, server paging/search, safe audit
 events, and RLS-aligned route permissions. Resident images use a private,
 resident-authorized bucket and short-lived signed URLs. Account linking remains
@@ -122,8 +125,9 @@ unavailable.
 
 ## Next phase
 
-Future phases may extend registry workflows or implement appointments. They must
-not weaken database policies or place secret credentials in the frontend.
+Phase 4 may implement appointment scheduling after its capacity, conflict,
+authorization, notification, and audit rules are reviewed. It must not weaken
+database policies or place secret credentials in the frontend.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Private photo storage](docs/architecture/STORAGE.md),
@@ -131,4 +135,5 @@ See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Storage deployment](docs/deployment/SUPABASE_STORAGE.md),
 [Authentication architecture](docs/architecture/AUTHENTICATION.md),
 [RLS matrix](docs/database/RLS_MATRIX.md), and
-[Roadmap](docs/requirements/ROADMAP.md).
+[Roadmap](docs/requirements/ROADMAP.md). Phase 3C findings and regression scope
+are recorded in [Production QA](docs/quality/PHASE_3C_QA.md).

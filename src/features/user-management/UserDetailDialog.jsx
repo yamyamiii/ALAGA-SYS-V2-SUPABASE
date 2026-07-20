@@ -132,7 +132,7 @@ export function UserDetailDialog({
       open={open}
       onOpenChange={isSubmitting || resending ? undefined : onOpenChange}
     >
-      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>User details</DialogTitle>
           <DialogDescription>

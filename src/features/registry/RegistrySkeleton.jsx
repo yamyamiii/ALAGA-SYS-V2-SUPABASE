@@ -2,7 +2,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function RegistrySkeleton() {
   return (
-    <div className="space-y-3 p-4" aria-label="Loading registry records">
+    <div
+      className="space-y-3 p-4"
+      role="status"
+      aria-label="Loading registry records"
+      aria-live="polite"
+      aria-busy="true"
+    >
       {Array.from({ length: 6 }, (_, index) => (
         <div
           key={index}

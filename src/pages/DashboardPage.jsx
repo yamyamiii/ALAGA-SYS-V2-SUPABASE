@@ -28,9 +28,9 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeading
-        eyebrow="Foundation dashboard"
+        eyebrow="Operations overview"
         title="Good day, Barangay Health Team"
-        description="Your future operational overview will live here. All values and modules are intentionally disconnected during Phase 0."
+        description="Use the available registry and account tools from the navigation. Unavailable healthcare services remain clearly marked until they are ready."
         actions={
           <div className="rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
             <span className="font-medium text-foreground">
@@ -62,8 +62,8 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <EmptyState
-              title="Trend chart placeholder"
-              description="A Recharts visualization will appear after the appointment schema, access policies, and query service are ready."
+              title="No appointment data"
+              description="Verified appointment activity will appear here when scheduling becomes available."
             />
           </CardContent>
         </Card>
@@ -79,8 +79,8 @@ export default function DashboardPage() {
           <CardContent>
             <EmptyState
               compact
-              title="Breakdown chart placeholder"
-              description="No fabricated healthcare statistics are shown."
+              title="No service data"
+              description="Only verified healthcare statistics will be shown here."
             />
           </CardContent>
         </Card>
@@ -98,7 +98,7 @@ export default function DashboardPage() {
             <EmptyState
               compact
               title="No connected schedule"
-              description="Scheduling begins in Phase 4."
+              description="Appointment scheduling is not available yet."
             />
           </CardContent>
         </Card>
@@ -114,7 +114,7 @@ export default function DashboardPage() {
             <EmptyState
               compact
               title="No announcements yet"
-              description="Announcement publishing begins in Phase 8."
+              description="Announcement publishing is not available yet."
             />
           </CardContent>
         </Card>
@@ -156,8 +156,8 @@ export default function DashboardPage() {
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Megaphone className="h-4 w-4" />
-        Phase 0 preview — no resident or healthcare records are stored or
-        displayed.
+        Only verified, connected information is displayed. Unavailable modules
+        remain disabled.
       </div>
     </div>
   );

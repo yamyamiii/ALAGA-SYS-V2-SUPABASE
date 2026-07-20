@@ -42,7 +42,7 @@
   }
 
   body {
-    @apply min-h-screen bg-background font-sans text-foreground antialiased;
+    @apply min-h-dvh bg-background font-sans text-foreground antialiased;
   }
 
   h1,

@@ -280,7 +280,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
       open={open}
       onOpenChange={mutation.isPending ? undefined : onOpenChange}
     >
-      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-4xl overflow-y-auto">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editing ? "Edit resident" : "Add resident"}

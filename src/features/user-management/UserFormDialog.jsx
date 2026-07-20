@@ -93,7 +93,7 @@ export function UserFormDialog({ open, onOpenChange, onSuccess }) {
 
   return (
     <Dialog open={open} onOpenChange={isSubmitting ? undefined : onOpenChange}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add a trusted user</DialogTitle>
           <DialogDescription>

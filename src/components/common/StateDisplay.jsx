@@ -19,9 +19,14 @@ export function StateDisplay({
   className,
 }) {
   const Icon = stateIcons[state] ?? Inbox;
+  const isLoading = state === "loading";
+  const isError = state === "error";
 
   return (
     <div
+      role={isError ? "alert" : isLoading ? "status" : undefined}
+      aria-live={isError ? "assertive" : isLoading ? "polite" : undefined}
+      aria-busy={isLoading || undefined}
       className={cn(
         "flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/25 px-5 text-center",
         compact ? "min-h-40 py-7" : "min-h-64 py-10",
@@ -30,7 +35,7 @@ export function StateDisplay({
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-background text-muted-foreground shadow-sm ring-1 ring-border">
         <Icon
-          className={cn("h-5 w-5", state === "loading" && "animate-spin")}
+          className={cn("h-5 w-5", isLoading && "animate-spin")}
           aria-hidden="true"
         />
       </div>

@@ -19,7 +19,12 @@ export function ResidentPhoto({ resident, className, enabled = true }) {
   return (
     <Avatar className={cn("h-16 w-16 border bg-background", className)}>
       {query.data ? (
-        <AvatarImage src={query.data} alt={`Photo of ${name}`} />
+        <AvatarImage
+          src={query.data}
+          alt={`Photo of ${name}`}
+          loading="lazy"
+          decoding="async"
+        />
       ) : null}
       <AvatarFallback aria-label={`${name} initials`}>
         {query.isLoading ? (

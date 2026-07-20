@@ -6,7 +6,7 @@ import { ROUTES } from "@/config/routes";
 
 export default function NotFoundPage() {
   return (
-    <main className="bg-dashboard-pattern flex min-h-screen items-center justify-center p-6">
+    <main className="bg-dashboard-pattern flex min-h-dvh items-center justify-center p-6">
       <div className="max-w-md text-center">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
           <SearchX className="h-8 w-8" />

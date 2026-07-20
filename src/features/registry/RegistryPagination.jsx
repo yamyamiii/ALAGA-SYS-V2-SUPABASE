@@ -13,7 +13,7 @@ export function RegistryPagination({ page, pageSize, total, onChange }) {
       <p className="text-muted-foreground">
         {total === 0 ? "No records" : `${first}–${last} of ${total}`}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-2 text-muted-foreground">
           <span className="sr-only sm:not-sr-only">Rows</span>
           <select
@@ -21,7 +21,7 @@ export function RegistryPagination({ page, pageSize, total, onChange }) {
             onChange={(event) =>
               onChange({ page: 1, page_size: Number(event.target.value) })
             }
-            className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground"
+            className="h-9 rounded-lg border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label="Rows per page"
           >
             {PAGE_SIZES.map((size) => (

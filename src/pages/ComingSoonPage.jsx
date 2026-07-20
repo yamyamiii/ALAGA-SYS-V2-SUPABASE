@@ -19,9 +19,9 @@ export default function ComingSoonPage() {
   return (
     <div className="space-y-6">
       <PageHeading
-        eyebrow="Future module"
+        eyebrow="Service unavailable"
         title={title}
-        description="This route is ready, while its data model, permissions, services, and workflows are intentionally deferred to the appropriate roadmap phase."
+        description="This service is not available yet. Existing account and registry tools remain available from the navigation."
         actions={<Badge variant="secondary">Coming soon</Badge>}
       />
       <Card>
@@ -29,10 +29,10 @@ export default function ComingSoonPage() {
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <Icon className="h-8 w-8" aria-hidden="true" />
           </div>
-          <h2 className="mt-5 text-xl font-semibold">Foundation prepared</h2>
+          <h2 className="mt-5 text-xl font-semibold">Coming soon</h2>
           <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-            {title} is outside the Authentication Foundation and will be built
-            in its designated roadmap phase.
+            {title} will appear here once its secure data and workflows are
+            ready for use.
           </p>
           <Button asChild variant="outline" className="mt-6">
             <Link to={ROUTES.dashboard}>

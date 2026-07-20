@@ -86,7 +86,7 @@ export function HouseholdDetailDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-4xl overflow-y-auto">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-4xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Household details</DialogTitle>
             <DialogDescription>
@@ -194,7 +194,8 @@ export function HouseholdDetailDialog({
                       <select
                         value={headId}
                         onChange={(event) => setHeadId(event.target.value)}
-                        className="h-10 min-w-52 flex-1 rounded-lg border border-input bg-background px-3 text-sm"
+                        aria-label="Household head"
+                        className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-w-52"
                       >
                         <option value="">No household head</option>
                         {(members.data ?? []).map((member) => (

@@ -75,7 +75,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
+    <main className="min-h-dvh bg-background lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
       <section className="relative hidden overflow-hidden bg-primary p-12 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
         <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_20%_20%,white_0,transparent_35%),radial-gradient(circle_at_80%_70%,white_0,transparent_30%)]" />
         <div className="relative">
@@ -98,7 +98,7 @@ export default function LoginPage() {
         </p>
       </section>
 
-      <section className="flex min-h-screen items-center justify-center p-5 sm:p-8 lg:p-12">
+      <section className="flex min-h-dvh items-center justify-center p-5 sm:p-8 lg:p-12">
         <div className="w-full max-w-md">
           <div className="mb-8 flex items-center justify-between gap-4 lg:hidden">
             <Brand />

@@ -33,13 +33,17 @@ renders fabricated data in Phase 0.
 - `EmptyState`, `LoadingState`, `ErrorState`: consistent async states
 - `StatusBadge`: semantic status-to-visual mapping
 - `AppShell`: desktop, tablet, and mobile navigation frame
+- `ConnectivityBanner`: announced offline state without discarding the current
+  screen
 
 ## Accessibility
 
 The palette maintains readable contrast, interactive controls have keyboard focus
 rings, icon-only controls include accessible labels, navigation uses semantic
-elements, and motion is minimized when the operating system requests it. Content
-must never rely on color alone to communicate a healthcare state.
+elements, loading and error states are announced, dialogs trap focus and remain
+scrollable within the dynamic viewport, and motion is minimized when the
+operating system requests it. Content must never rely on color alone to
+communicate a healthcare state.
 
 ## Usage guardrails
 
