@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2.109.1";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 import {
   assertNotSelf,
