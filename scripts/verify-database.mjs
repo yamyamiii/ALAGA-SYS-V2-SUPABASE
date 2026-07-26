@@ -25,6 +25,7 @@ const expectedMigrations = [
   "20260720001800_appointment_workflows.sql",
   "20260720001900_fix_appointment_rpc_contracts.sql",
   "20260720002000_health_records_foundation.sql",
+  "20260720002100_fix_clinical_manila_dates.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -65,6 +66,8 @@ const completedMigrationHashes = {
     "48ae971ab31b2f60ab9134aa82a6e6951b9a329e2615ceba1beede422f6a12e4",
   "20260720001900_fix_appointment_rpc_contracts.sql":
     "c6893be3aa0c072a6e924a6229c052cca3ed7e002e4eca0b352b2cb1155fb55c",
+  "20260720002000_health_records_foundation.sql":
+    "384c8eb23e083f90df91900b5e9b35d60e32abb85b2a3e210ea77d0eb6ebae54",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -137,7 +140,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly twenty expected migrations exist in lexical order",
+  "Exactly twenty-one expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -563,6 +566,45 @@ check(
     /p_limit integer default 20/i.test(healthRecordsMigration) &&
     /p_offset integer default 0/i.test(healthRecordsMigration),
   "Health-record search and filters are server-paginated",
+);
+
+const clinicalManilaDatesMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("fix_clinical_manila_dates"),
+  )?.sql ?? "";
+check(
+  /drop constraint health_encounters_date_valid/i.test(
+    clinicalManilaDatesMigration,
+  ) &&
+    /encounter_date\s*<=\s*\(pg_catalog\.now\(\)\s+at time zone 'Asia\/Manila'\)::date/i.test(
+      clinicalManilaDatesMigration,
+    ) &&
+    /onset_date\s+is null[\s\S]*onset_date\s*<=\s*\(pg_catalog\.now\(\)\s+at time zone 'Asia\/Manila'\)::date/i.test(
+      clinicalManilaDatesMigration,
+    ),
+  "Clinical date constraints use the explicit Manila business date",
+);
+check(
+  (
+    clinicalManilaDatesMigration.match(
+      /manila_today date\s*:=\s*\(pg_catalog\.now\(\)\s+at time zone 'Asia\/Manila'\)::date/gi,
+    ) ?? []
+  ).length === 3 &&
+    !/\bcurrent_date\b/i.test(clinicalManilaDatesMigration) &&
+    !/current_setting\s*\(\s*'TimeZone'/i.test(clinicalManilaDatesMigration),
+  "Clinical RPC date rules are deterministic and session-timezone independent",
+);
+check(
+  /health_encounters_follow_up_valid check \([\s\S]*follow_up_date >= encounter_date/i.test(
+    healthRecordsMigration,
+  ) &&
+    /recorded_at timestamptz not null default now\(\)/i.test(
+      healthRecordsMigration,
+    ) &&
+    /noted_at timestamptz not null default now\(\)/i.test(
+      healthRecordsMigration,
+    ),
+  "Relative follow-up validation and UTC clinical event timestamps remain intact",
 );
 
 const functionBlocks = [
