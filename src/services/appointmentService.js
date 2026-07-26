@@ -169,10 +169,11 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
           "The appointment reference is invalid.",
         );
       }
-      const { data, error } = await client()
+      const supabase = client();
+      const { data, error } = await supabase
         .from("appointments")
         .select(
-          "id, appointment_number, resident_id, assigned_staff_id, appointment_type, service_type, scheduled_date, start_time, end_time, priority, status, reason, operational_notes, cancellation_reason, rescheduled_from_id, checked_in_at, started_at, completed_at, cancelled_at, created_at, updated_at, archived_at, version, resident:residents(id,resident_number,first_name,middle_name,last_name,suffix,date_of_birth,purok:puroks(name)), staff:profiles!appointments_assigned_staff_id_fkey(id,first_name,middle_name,last_name,suffix,role), rescheduled_from:appointments!appointments_rescheduled_from_id_fkey(id,appointment_number)",
+          "id, appointment_number, resident_id, assigned_staff_id, appointment_type, service_type, scheduled_date, start_time, end_time, priority, status, reason, operational_notes, cancellation_reason, rescheduled_from_id, checked_in_at, started_at, completed_at, cancelled_at, created_at, updated_at, archived_at, version, resident:residents(id,resident_number,first_name,middle_name,last_name,suffix,date_of_birth,purok:puroks(name)), staff:profiles!appointments_assigned_staff_id_fkey(id,first_name,middle_name,last_name,suffix,role)",
         )
         .eq("id", id)
         .maybeSingle();
@@ -187,7 +188,26 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
           "The appointment was not found or is not available to your account.",
         );
       }
-      return data;
+
+      let rescheduledFrom = null;
+      if (data.rescheduled_from_id) {
+        const { data: original, error: originalError } = await supabase
+          .from("appointments")
+          .select("id, appointment_number")
+          .eq("id", data.rescheduled_from_id)
+          .maybeSingle();
+        if (originalError) {
+          const mapped = mapError(
+            originalError,
+            "The original appointment reference could not be loaded.",
+          );
+          diagnostic("appointment_detail_lineage", originalError, mapped.code);
+          throw mapped;
+        }
+        rescheduledFrom = original;
+      }
+
+      return { ...data, rescheduled_from: rescheduledFrom };
     },
 
     async listQueue({

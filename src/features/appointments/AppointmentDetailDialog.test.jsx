@@ -1,0 +1,116 @@
+import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { AppointmentDetailDialog } from "@/features/appointments/AppointmentDetailDialog";
+import { useAppointment } from "@/features/appointments/hooks";
+import { useAuth } from "@/features/auth/authContext";
+
+vi.mock("@/features/appointments/hooks", () => ({
+  useAppointment: vi.fn(),
+}));
+
+vi.mock("@/features/auth/authContext", () => ({
+  useAuth: vi.fn(),
+}));
+
+vi.mock("@/features/appointments/AppointmentActionDialog", () => ({
+  AppointmentActionDialog: () => null,
+}));
+
+const appointmentId = "11111111-1111-4111-8111-111111111111";
+const originalAppointmentId = "44444444-4444-4444-8444-444444444444";
+
+function appointment(overrides = {}) {
+  return {
+    id: appointmentId,
+    appointment_number: "APT-2026-000001",
+    assigned_staff_id: null,
+    appointment_type: "scheduled",
+    service_type: "General Consultation",
+    scheduled_date: "2026-08-01",
+    start_time: "08:00",
+    end_time: "08:30",
+    priority: "normal",
+    status: "confirmed",
+    reason: "Routine visit",
+    operational_notes: null,
+    cancellation_reason: null,
+    rescheduled_from_id: null,
+    rescheduled_from: null,
+    checked_in_at: null,
+    started_at: null,
+    completed_at: null,
+    cancelled_at: null,
+    created_at: "2026-07-26T00:00:00Z",
+    updated_at: "2026-07-26T00:00:00Z",
+    resident: {
+      resident_number: "RES-000001",
+      first_name: "Juan",
+      last_name: "Dela Cruz",
+      purok: { name: "Purok 1" },
+    },
+    staff: null,
+    ...overrides,
+  };
+}
+
+function renderDialog() {
+  return render(
+    <AppointmentDetailDialog
+      appointmentId={appointmentId}
+      open
+      onOpenChange={vi.fn()}
+      onEdit={vi.fn()}
+    />,
+  );
+}
+
+describe("AppointmentDetailDialog rescheduling lineage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAuth.mockReturnValue({
+      profile: { id: "55555555-5555-4555-8555-555555555555", role: "resident" },
+    });
+  });
+
+  it("opens an original appointment detail record", () => {
+    useAppointment.mockReturnValue({
+      data: appointment(),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderDialog();
+
+    expect(useAppointment).toHaveBeenCalledWith(appointmentId, true);
+    expect(
+      screen.getByRole("heading", { name: "Appointment details" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("APT-2026-000001")).toBeInTheDocument();
+    expect(screen.queryByText("Rescheduled from")).not.toBeInTheDocument();
+  });
+
+  it("opens a replacement appointment and shows its original appointment", () => {
+    useAppointment.mockReturnValue({
+      data: appointment({
+        appointment_number: "APT-2026-000002",
+        status: "pending",
+        rescheduled_from_id: originalAppointmentId,
+        rescheduled_from: {
+          id: originalAppointmentId,
+          appointment_number: "APT-2026-000001",
+        },
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderDialog();
+
+    expect(screen.getByText("APT-2026-000002")).toBeInTheDocument();
+    expect(screen.getByText("Rescheduled from")).toBeInTheDocument();
+    expect(screen.getByText("APT-2026-000001")).toBeInTheDocument();
+  });
+});

@@ -9,6 +9,7 @@ import {
 const appointmentId = "11111111-1111-4111-8111-111111111111";
 const residentId = "22222222-2222-4222-8222-222222222222";
 const requestKey = "33333333-3333-4333-8333-333333333333";
+const originalAppointmentId = "44444444-4444-4444-8444-444444444444";
 
 function rpcClient(result) {
   return { rpc: vi.fn().mockResolvedValue(result) };
@@ -119,5 +120,76 @@ describe("appointment service", () => {
     );
     expect(eq).toHaveBeenCalledWith("id", appointmentId);
     expect(maybeSingle).toHaveBeenCalledOnce();
+  });
+
+  it("loads an original appointment without requesting a recursive relationship", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: appointmentId,
+        appointment_number: "APT-2026-000001",
+        rescheduled_from_id: null,
+      },
+      error: null,
+    });
+    const eq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq }));
+    const client = { from: vi.fn(() => ({ select })) };
+    const service = createAppointmentService(() => client);
+
+    await expect(service.getAppointment(appointmentId)).resolves.toEqual(
+      expect.objectContaining({
+        appointment_number: "APT-2026-000001",
+        rescheduled_from: null,
+      }),
+    );
+    expect(client.from).toHaveBeenCalledOnce();
+    expect(select.mock.calls[0][0]).not.toContain(
+      "appointments_rescheduled_from_id_fkey",
+    );
+  });
+
+  it("loads a replacement and its original appointment through separate RLS-protected queries", async () => {
+    const replacementMaybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: appointmentId,
+        appointment_number: "APT-2026-000002",
+        rescheduled_from_id: originalAppointmentId,
+      },
+      error: null,
+    });
+    const replacementEq = vi.fn(() => ({
+      maybeSingle: replacementMaybeSingle,
+    }));
+    const replacementSelect = vi.fn(() => ({ eq: replacementEq }));
+    const originalMaybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: originalAppointmentId,
+        appointment_number: "APT-2026-000001",
+      },
+      error: null,
+    });
+    const originalEq = vi.fn(() => ({ maybeSingle: originalMaybeSingle }));
+    const originalSelect = vi.fn(() => ({ eq: originalEq }));
+    const client = {
+      from: vi
+        .fn()
+        .mockReturnValueOnce({ select: replacementSelect })
+        .mockReturnValueOnce({ select: originalSelect }),
+    };
+    const service = createAppointmentService(() => client);
+
+    await expect(service.getAppointment(appointmentId)).resolves.toEqual(
+      expect.objectContaining({
+        appointment_number: "APT-2026-000002",
+        rescheduled_from: {
+          id: originalAppointmentId,
+          appointment_number: "APT-2026-000001",
+        },
+      }),
+    );
+    expect(client.from).toHaveBeenNthCalledWith(1, "appointments");
+    expect(client.from).toHaveBeenNthCalledWith(2, "appointments");
+    expect(originalEq).toHaveBeenCalledWith("id", originalAppointmentId);
+    expect(originalSelect).toHaveBeenCalledWith("id, appointment_number");
   });
 });
