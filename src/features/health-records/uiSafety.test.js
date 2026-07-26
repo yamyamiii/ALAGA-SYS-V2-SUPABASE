@@ -19,6 +19,10 @@ const encounterCreate = fs.readFileSync(
   "src/features/health-records/EncounterCreateDialog.jsx",
   "utf8",
 );
+const appointmentConstants = fs.readFileSync(
+  "src/features/appointments/constants.js",
+  "utf8",
+);
 
 describe("health-record UI boundaries", () => {
   it("protects list and detail routes with the centralized permission", () => {
@@ -67,5 +71,11 @@ describe("health-record UI boundaries", () => {
     expect(residentIntegration).toMatch(/Allergies/);
     expect(residentIntegration).toMatch(/Medical History/);
     expect(residentIntegration).toMatch(/Recent Encounters/);
+  });
+
+  it("loads health-record staff within the deployed search pagination contract", () => {
+    expect(pages[0]).toMatch(/pageSize: STAFF_SEARCH_MAX_PAGE_SIZE/);
+    expect(pages[0]).not.toMatch(/pageSize:\s*100/);
+    expect(appointmentConstants).toMatch(/STAFF_SEARCH_MAX_PAGE_SIZE\s*=\s*25/);
   });
 });

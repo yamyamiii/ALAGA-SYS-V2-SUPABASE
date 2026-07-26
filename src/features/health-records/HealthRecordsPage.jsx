@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ROUTES } from "@/config/routes";
 import { useAppointmentStaffSearch } from "@/features/appointments/hooks";
+import { STAFF_SEARCH_MAX_PAGE_SIZE } from "@/features/appointments/constants";
 import { formatManilaDate } from "@/features/appointments/timezone";
 import { useAuth } from "@/features/auth/authContext";
 import {
@@ -59,7 +60,12 @@ export default function HealthRecordsPage() {
   );
   const query = useHealthRecords(effectiveFilters);
   const staffQuery = useAppointmentStaffSearch(
-    { search: "", serviceType: "", page: 1, pageSize: 100 },
+    {
+      search: "",
+      serviceType: "",
+      page: 1,
+      pageSize: STAFF_SEARCH_MAX_PAGE_SIZE,
+    },
     profile.role !== "resident",
   );
   const records = query.data?.items ?? [];

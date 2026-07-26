@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AppointmentServiceError,
   buildAppointmentListParameters,
+  buildAppointmentStaffSearchRequest,
   createAppointmentService,
 } from "@/services/appointmentService";
 
@@ -16,6 +17,128 @@ function rpcClient(result) {
 }
 
 describe("appointment service", () => {
+  it("uses the deployed defaults for staff search", () => {
+    expect(buildAppointmentStaffSearchRequest()).toEqual({
+      page: 1,
+      pageSize: 10,
+      parameters: {
+        p_search: null,
+        p_service_type: null,
+        p_limit: 10,
+        p_offset: 0,
+      },
+    });
+  });
+
+  it("sends the first staff-search page with a zero offset", () => {
+    expect(
+      buildAppointmentStaffSearchRequest({
+        search: " Nurse ",
+        serviceType: "General Consultation",
+        page: 1,
+        pageSize: 10,
+      }),
+    ).toEqual({
+      page: 1,
+      pageSize: 10,
+      parameters: {
+        p_search: "Nurse",
+        p_service_type: "General Consultation",
+        p_limit: 10,
+        p_offset: 0,
+      },
+    });
+  });
+
+  it("normalizes an empty staff search to the RPC null contract", () => {
+    expect(
+      buildAppointmentStaffSearchRequest({ search: "   " }).parameters,
+    ).toEqual(
+      expect.objectContaining({
+        p_search: null,
+        p_service_type: null,
+      }),
+    );
+  });
+
+  it("normalizes invalid and fractional staff-search pagination", () => {
+    expect(
+      buildAppointmentStaffSearchRequest({
+        page: -4.8,
+        pageSize: 9.9,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        page: 1,
+        pageSize: 9,
+        parameters: expect.objectContaining({
+          p_limit: 9,
+          p_offset: 0,
+        }),
+      }),
+    );
+  });
+
+  it("clamps staff-search page size to the RPC maximum", () => {
+    expect(
+      buildAppointmentStaffSearchRequest({ page: 2, pageSize: 100 }),
+    ).toEqual(
+      expect.objectContaining({
+        page: 2,
+        pageSize: 25,
+        parameters: expect.objectContaining({
+          p_limit: 25,
+          p_offset: 25,
+        }),
+      }),
+    );
+  });
+
+  it("loads health-encounter staff without sending P0001 pagination", async () => {
+    const client = {
+      rpc: vi.fn(async (name, parameters) => {
+        if (
+          name === "appointment_search_staff" &&
+          (parameters.p_limit < 1 ||
+            parameters.p_limit > 25 ||
+            parameters.p_offset < 0 ||
+            !Number.isInteger(parameters.p_limit) ||
+            !Number.isInteger(parameters.p_offset))
+        ) {
+          return {
+            data: null,
+            error: {
+              code: "P0001",
+              message: "invalid staff search pagination",
+            },
+          };
+        }
+        return { data: [], error: null };
+      }),
+    };
+    const service = createAppointmentService(() => client);
+
+    await expect(
+      service.searchStaff({
+        search: "",
+        serviceType: "",
+        page: 1,
+        pageSize: 100,
+      }),
+    ).resolves.toEqual({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 25,
+    });
+    expect(client.rpc).toHaveBeenCalledWith("appointment_search_staff", {
+      p_search: null,
+      p_service_type: null,
+      p_limit: 25,
+      p_offset: 0,
+    });
+  });
+
   it("builds bounded server pagination and explicit filters", () => {
     expect(
       buildAppointmentListParameters({

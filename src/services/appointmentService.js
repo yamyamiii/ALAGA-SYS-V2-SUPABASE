@@ -1,4 +1,8 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
+import {
+  STAFF_SEARCH_DEFAULT_PAGE_SIZE,
+  STAFF_SEARCH_MAX_PAGE_SIZE,
+} from "@/features/appointments/constants";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -123,6 +127,38 @@ function pageResult(data, page, pageSize) {
     total: Number(data?.[0]?.total_count ?? 0),
     page,
     page_size: pageSize,
+  };
+}
+
+function normalizePositiveInteger(value, fallback, maximum) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(Math.max(Math.trunc(numeric), 1), maximum);
+}
+
+export function buildAppointmentStaffSearchRequest({
+  search = "",
+  serviceType = "",
+  page = 1,
+  pageSize = STAFF_SEARCH_DEFAULT_PAGE_SIZE,
+} = {}) {
+  const normalizedPageSize = normalizePositiveInteger(
+    pageSize,
+    STAFF_SEARCH_DEFAULT_PAGE_SIZE,
+    STAFF_SEARCH_MAX_PAGE_SIZE,
+  );
+  const maximumPage = Math.floor(2_147_483_647 / normalizedPageSize) + 1;
+  const normalizedPage = normalizePositiveInteger(page, 1, maximumPage);
+
+  return {
+    page: normalizedPage,
+    pageSize: normalizedPageSize,
+    parameters: {
+      p_search: nullable(String(search ?? "").trim()),
+      p_service_type: nullable(String(serviceType ?? "").trim()),
+      p_limit: normalizedPageSize,
+      p_offset: (normalizedPage - 1) * normalizedPageSize,
+    },
   };
 }
 
@@ -261,20 +297,21 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
       search = "",
       serviceType = "",
       page = 1,
-      pageSize = 10,
-    }) {
+      pageSize = STAFF_SEARCH_DEFAULT_PAGE_SIZE,
+    } = {}) {
+      const request = buildAppointmentStaffSearchRequest({
+        search,
+        serviceType,
+        page,
+        pageSize,
+      });
       const data = await rpc(
         client(),
         "appointment_search_staff",
-        {
-          p_search: nullable(search.trim()),
-          p_service_type: nullable(serviceType),
-          p_limit: pageSize,
-          p_offset: (page - 1) * pageSize,
-        },
+        request.parameters,
         "Staff members could not be searched.",
       );
-      return pageResult(data, page, pageSize);
+      return pageResult(data, request.page, request.pageSize);
     },
 
     async listResidentHistory(residentId, page = 1, pageSize = 5) {
