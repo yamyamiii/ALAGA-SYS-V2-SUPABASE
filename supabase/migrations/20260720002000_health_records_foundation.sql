@@ -785,7 +785,6 @@ declare
   actor_id uuid := auth.uid();
   actor_role public.app_role := public.current_profile_role();
   appointment_record public.appointments%rowtype;
-  existing_record public.health_encounters%rowtype;
 begin
   select * into appointment_record
   from public.appointments as a
@@ -842,6 +841,7 @@ declare
   actor_id uuid := auth.uid();
   actor_role public.app_role := public.current_profile_role();
   appointment_record public.appointments%rowtype;
+  existing_record public.health_encounters%rowtype;
 begin
   if actor_role not in ('nurse'::public.app_role, 'midwife'::public.app_role) then
     raise exception 'encounter creation requires authorized clinical staff'

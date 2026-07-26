@@ -7,7 +7,58 @@ const migration = fs.readFileSync(
   "utf8",
 );
 
+function findUndeclaredIntoTargets(sql) {
+  const undeclared = [];
+  const functions = [
+    ...sql.matchAll(
+      /create or replace function public\.([a-z_][a-z0-9_]*)\s*\([\s\S]*?\)\s*returns[\s\S]*?language plpgsql[\s\S]*?as \$\$([\s\S]*?)\$\$;/gi,
+    ),
+  ];
+
+  for (const match of functions) {
+    const [, functionName, body] = match;
+    const declarationBlock =
+      body.match(/^\s*declare\s+([\s\S]*?)\bbegin\b/i)?.[1] ?? "";
+    const declared = new Set(
+      [...declarationBlock.matchAll(/^\s*([a-z_][a-z0-9_]*)\s+/gim)].map(
+        (declaration) => declaration[1].toLowerCase(),
+      ),
+    );
+    const targets = new Set();
+
+    for (const statement of body.split(";")) {
+      for (const target of statement.matchAll(
+        /\bselect\b[\s\S]*?\binto\s+(?:strict\s+)?([a-z_][a-z0-9_]*)/gi,
+      )) {
+        targets.add(target[1].toLowerCase());
+      }
+      for (const target of statement.matchAll(
+        /\breturning\b[\s\S]*?\binto\s+([a-z_][a-z0-9_]*)/gi,
+      )) {
+        targets.add(target[1].toLowerCase());
+      }
+    }
+
+    for (const target of targets) {
+      if (!declared.has(target)) {
+        undeclared.push(`${functionName}.${target}`);
+      }
+    }
+  }
+
+  return { functionCount: functions.length, undeclared };
+}
+
 describe("health-record database safety", () => {
+  it("declares every PL/pgSQL SELECT/RETURNING INTO target in its function", () => {
+    const declarationAudit = findUndeclaredIntoTargets(migration);
+    expect(declarationAudit.functionCount).toBe(19);
+    expect(declarationAudit.undeclared).toEqual([]);
+    expect(migration).toMatch(
+      /create or replace function public\.health_encounter_create[\s\S]*?declare[\s\S]*?existing_record public\.health_encounters%rowtype;[\s\S]*?begin/i,
+    );
+  });
+
   it("generates immutable encounter numbers atomically", () => {
     expect(migration).toMatch(
       /create sequence public\.health_encounter_number_seq/i,
