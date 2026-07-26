@@ -17,6 +17,10 @@ vi.mock("@/features/appointments/AppointmentActionDialog", () => ({
   AppointmentActionDialog: () => null,
 }));
 
+vi.mock("@/features/health-records/AppointmentEncounterAction", () => ({
+  AppointmentEncounterAction: () => null,
+}));
+
 const appointmentId = "11111111-1111-4111-8111-111111111111";
 const originalAppointmentId = "44444444-4444-4444-8444-444444444444";
 

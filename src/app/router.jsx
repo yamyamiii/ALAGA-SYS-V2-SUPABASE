@@ -32,6 +32,12 @@ const AppointmentCalendarPage = lazy(
 const AppointmentQueuePage = lazy(
   () => import("@/features/appointments/AppointmentQueuePage"),
 );
+const HealthRecordsPage = lazy(
+  () => import("@/features/health-records/HealthRecordsPage"),
+);
+const HealthRecordDetailPage = lazy(
+  () => import("@/features/health-records/HealthRecordDetailPage"),
+);
 const ConfigurationErrorPage = lazy(
   () => import("@/pages/ConfigurationErrorPage"),
 );
@@ -43,7 +49,8 @@ const moduleRoutes = navigationItems.filter(
     item.path !== ROUTES.userManagement &&
     item.path !== ROUTES.households &&
     item.path !== ROUTES.residents &&
-    item.path !== ROUTES.appointments,
+    item.path !== ROUTES.appointments &&
+    item.path !== ROUTES.healthRecords,
 );
 
 function RouteFallback() {
@@ -116,6 +123,22 @@ export function AppRouter() {
               element={
                 <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENTS}>
                   <AppointmentQueuePage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.healthRecords}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_HEALTH_RECORDS}>
+                  <HealthRecordsPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/health-records/:encounterId"
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_HEALTH_RECORDS}>
+                  <HealthRecordDetailPage />
                 </RoleGuard>
               }
             />

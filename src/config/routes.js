@@ -7,6 +7,7 @@ export const ROUTES = Object.freeze({
   appointmentCalendar: "/appointments/calendar",
   appointmentQueue: "/appointments/queue",
   healthRecords: "/health-records",
+  healthRecordDetail: (encounterId) => `/health-records/${encounterId}`,
   maternalChildCare: "/maternal-child-care",
   medicineInventory: "/medicine-inventory",
   announcements: "/announcements",

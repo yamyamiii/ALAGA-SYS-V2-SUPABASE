@@ -271,3 +271,50 @@ indexes are:
 | `audit_logs`   | `audit_logs_actor_created_idx`          | Non-null actor + descending time          |
 | `audit_logs`   | `audit_logs_entity_created_idx`         | Entity type/ID + descending time          |
 | `audit_logs`   | `audit_logs_created_at_idx`             | Descending event time                     |
+
+## Phase 5 clinical tables
+
+### `health_encounters`
+
+| Column                   | Type                      | Rules / meaning                                     |
+| ------------------------ | ------------------------- | --------------------------------------------------- |
+| `id`                     | `uuid`                    | Primary key                                         |
+| `encounter_number`       | `text`                    | Atomic immutable `ENC-YYYY-NNNNNN`                  |
+| `resident_id`            | `uuid`                    | Required FK to resident                             |
+| `appointment_id`         | `uuid`                    | Optional unique primary encounter link              |
+| `encounter_type`         | `health_encounter_type`   | Validated clinical context                          |
+| `encounter_date`         | `date`                    | Clinical encounter business date                    |
+| `attending_staff_id`     | `uuid`                    | Required clinical profile                           |
+| `chief_complaint`        | `text`                    | Clinical, maximum 2,000 characters                  |
+| `subjective_notes`       | `text`                    | Clinical, maximum 10,000 characters                 |
+| `objective_notes`        | `text`                    | Clinical, maximum 10,000 characters                 |
+| `assessment`             | `text`                    | Clinical, maximum 10,000 characters                 |
+| `plan`                   | `text`                    | Clinical, maximum 10,000 characters                 |
+| `diagnosis_text`         | `text`                    | Free text, not automated or coded                   |
+| `treatment_notes`        | `text`                    | Documentation only; no dispensing workflow          |
+| `follow_up_date`         | `date`                    | Optional, not before encounter date                 |
+| `status`                 | `health_encounter_status` | Draft, signed, amended, archived                    |
+| `amends_encounter_id`    | `uuid`                    | Optional unique self-FK preserving correction chain |
+| `amendment_reason`       | `text`                    | Required by the amendment RPC                       |
+| `request_key`            | `uuid`                    | Actor-scoped idempotency key                        |
+| `signed_by`, `signed_at` | `uuid`, `timestamptz`     | Required after signing                              |
+| `version`                | `bigint`                  | Optimistic concurrency counter                      |
+| audit timestamps         | `timestamptz`             | Created, updated, archived                          |
+
+### `vital_signs`
+
+One row per encounter. Measurements are nullable individually, but at least one
+is required. Units are °C, mmHg, bpm, breaths/min, percent, cm, kg, and 0–10.
+BMI is calculated from height and weight and is not a writable column.
+
+### `resident_allergies`
+
+Stores resident, allergen, reaction, severity, clinical item status, author,
+noted/updated timestamps, and archival timestamp. Physical deletion is not a
+normal workflow.
+
+### `resident_medical_history`
+
+Stores resident, condition name, details, optional onset date, clinical item
+status, author, noted/updated timestamps, and archival timestamp. Calculated age
+is not stored.

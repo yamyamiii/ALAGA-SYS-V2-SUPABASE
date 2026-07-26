@@ -89,6 +89,24 @@ describe("role permissions", () => {
       hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.OPERATE_APPOINTMENTS),
     ).toBe(false);
     expect(
+      hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.VIEW_HEALTH_RECORDS),
+    ).toBe(true);
+    expect(
+      hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.DOCUMENT_HEALTH_RECORDS),
+    ).toBe(false);
+    expect(
+      hasPermission(
+        USER_ROLES.BARANGAY_HEALTH_WORKER,
+        PERMISSIONS.RECORD_VITAL_SIGNS,
+      ),
+    ).toBe(true);
+    expect(
+      hasPermission(
+        USER_ROLES.BARANGAY_HEALTH_WORKER,
+        PERMISSIONS.DOCUMENT_HEALTH_RECORDS,
+      ),
+    ).toBe(false);
+    expect(
       hasPermission(
         USER_ROLES.BARANGAY_HEALTH_WORKER,
         PERMISSIONS.LINK_RESIDENT_ACCOUNTS,

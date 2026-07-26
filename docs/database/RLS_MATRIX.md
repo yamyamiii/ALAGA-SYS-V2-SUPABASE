@@ -1,5 +1,36 @@
 # Row Level Security matrix
 
+## Phase 5 clinical records
+
+Clinical table access is deliberately stricter than registry and appointment
+access. **M** means metadata through a trusted RPC, not direct narrative-table
+access.
+
+| Resource/action                | Admin | BHW                          | Nurse                | Midwife                       | Resident                | Anonymous |
+| ------------------------------ | ----- | ---------------------------- | -------------------- | ----------------------------- | ----------------------- | --------- |
+| Encounter list/detail metadata | M     | M                            | Yes                  | Maternal/child only           | Own signed/amended only | No        |
+| Clinical narratives            | No    | No                           | Current authorized   | Maternal/child only           | Own signed/amended only | No        |
+| Create encounter               | No    | No                           | Assigned/current     | Assigned maternal/child       | No                      | No        |
+| Edit/sign draft                | No    | No                           | Own attending draft  | Own maternal/child draft      | No                      | No        |
+| Create amendment               | No    | No                           | Signed current       | Signed maternal/child         | No                      | No        |
+| Archive signed/amended         | RPC   | No                           | No                   | No                            | No                      | No        |
+| Read vital signs               | No    | Eligible draft through RPC   | Authorized encounter | Authorized maternal/child     | Own signed/amended only | No        |
+| Record/update vital signs      | No    | Checked-in linked draft only | Own attending draft  | Own maternal/child draft      | No                      | No        |
+| Allergies and medical history  | No    | No                           | Current authorized   | Maternal/child resident scope | Own current entries     | No        |
+| Direct clinical mutation       | No    | No                           | No                   | No                            | No                      | No        |
+| Physical delete                | No    | No                           | No                   | No                            | No                      | No        |
+
+All four clinical tables have RLS enabled. `authenticated` receives SELECT only;
+policies omit admin and BHW access to the narrative-bearing encounter table.
+Metadata and masked-detail RPCs have explicit active-role checks and an empty
+fixed search path. Every mutation RPC locks relevant rows and independently
+re-authorizes the caller.
+
+The resident encounter policy requires both `resident_id =
+current_resident_id()` and status `signed` or `amended`; drafts and archived
+records are invisible. Midwife policies and RPCs are limited to
+`maternal_care` and `child_health`.
+
 ## Phase 3B storage and linking additions
 
 | Resource/action                             | Admin                    | BHW                      | Nurse                    | Midwife                  | Resident        | Anonymous |

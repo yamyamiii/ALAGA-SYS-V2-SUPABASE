@@ -24,6 +24,7 @@ const expectedMigrations = [
   "20260720001700_reconcile_bagongpook_reference.sql",
   "20260720001800_appointment_workflows.sql",
   "20260720001900_fix_appointment_rpc_contracts.sql",
+  "20260720002000_health_records_foundation.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -62,16 +63,22 @@ const completedMigrationHashes = {
     "9556cf24c8cfd21571e067b2937146b17df1e34102af1af09eaa5ffa03dbf27a",
   "20260720001800_appointment_workflows.sql":
     "48ae971ab31b2f60ab9134aa82a6e6951b9a329e2615ceba1beede422f6a12e4",
+  "20260720001900_fix_appointment_rpc_contracts.sql":
+    "c6893be3aa0c072a6e924a6229c052cca3ed7e002e4eca0b352b2cb1155fb55c",
 };
 const expectedTables = [
   "admin_action_rate_limits",
   "appointments",
   "audit_logs",
   "barangays",
+  "health_encounters",
   "households",
   "profiles",
   "puroks",
+  "resident_allergies",
+  "resident_medical_history",
   "residents",
+  "vital_signs",
 ];
 
 const failures = [];
@@ -89,7 +96,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly nineteen expected migrations exist in lexical order",
+  "Exactly twenty expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -121,7 +128,7 @@ const createdTables = [
   .sort();
 check(
   JSON.stringify(createdTables) === JSON.stringify(expectedTables),
-  "Only the seven Phase 1 tables and one Phase 2B operational table are created",
+  "Only the expected foundation, operational, registry, and clinical tables are created",
 );
 
 const rlsTables = [
@@ -389,6 +396,121 @@ check(
     appointmentContractFix,
   ),
   "The RPC contract fix does not restore direct appointment mutation grants",
+);
+
+const healthRecordsMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("health_records_foundation"),
+  )?.sql ?? "";
+check(
+  /nextval\('public\.health_encounter_number_seq'\)/i.test(
+    healthRecordsMigration,
+  ) &&
+    /encounter_number is database-generated and immutable/i.test(
+      healthRecordsMigration,
+    ),
+  "Encounter numbers are atomic and immutable",
+);
+check(
+  /health_encounters_appointment_unique/i.test(healthRecordsMigration) &&
+    /for update[\s\S]*appointment and encounter resident do not match/i.test(
+      healthRecordsMigration,
+    ) &&
+    /request_key/i.test(healthRecordsMigration) &&
+    /pg_advisory_xact_lock/i.test(healthRecordsMigration) &&
+    /encounter request key was reused with different data/i.test(
+      healthRecordsMigration,
+    ),
+  "Appointment encounter creation is transactional, resident-consistent, and idempotent",
+);
+check(
+  /current_record\.version <> p_expected_version/i.test(
+    healthRecordsMigration,
+  ) &&
+    /signed health encounters are immutable/i.test(healthRecordsMigration) &&
+    /health_encounter_amend/i.test(healthRecordsMigration),
+  "Clinical edits use optimistic concurrency, signed immutability, and amendments",
+);
+const residentEncounterPolicy = healthRecordsMigration.slice(
+  healthRecordsMigration.indexOf(
+    "create policy health_encounters_select_resident_signed",
+  ),
+  healthRecordsMigration.indexOf("create policy vital_signs_select_clinical"),
+);
+check(
+  /status in \([\s\S]*'signed'[\s\S]*'amended'/i.test(
+    residentEncounterPolicy,
+  ) && !/'draft'/i.test(residentEncounterPolicy),
+  "Residents can read only their own signed or amended encounters",
+);
+check(
+  /revoke all on table public\.health_encounters from public, anon, authenticated/i.test(
+    healthRecordsMigration,
+  ) &&
+    /grant select on table public\.health_encounters to authenticated/i.test(
+      healthRecordsMigration,
+    ) &&
+    !/grant (?:insert|update)[^;]*health_encounters[^;]*authenticated/i.test(
+      healthRecordsMigration,
+    ),
+  "Clinical table mutations are unavailable to browser roles",
+);
+check(
+  !/create policy health_encounters_select_(?:admin|bhw)/i.test(
+    healthRecordsMigration,
+  ) &&
+    /clinical narrative restricted/i.test(
+      fs.readFileSync(
+        path.join(
+          root,
+          "src",
+          "features",
+          "health-records",
+          "HealthRecordDetailPage.jsx",
+        ),
+        "utf8",
+      ),
+    ),
+  "Administrators and BHWs have no direct narrative-table policy",
+);
+const vitalSignsTable = healthRecordsMigration.slice(
+  healthRecordsMigration.indexOf("create table public.vital_signs"),
+  healthRecordsMigration.indexOf("create table public.resident_allergies"),
+);
+check(
+  /create table public\.vital_signs/i.test(vitalSignsTable) &&
+    !/\bbmi\s+(?:numeric|decimal|real|double)/i.test(vitalSignsTable) &&
+    /v\.weight_kg \/ power\(v\.height_cm \/ 100, 2\)/i.test(
+      healthRecordsMigration,
+    ),
+  "BMI is calculated consistently and is not a writable stored field",
+);
+const clinicalAudit = healthRecordsMigration.slice(
+  healthRecordsMigration.indexOf(
+    "create or replace function public.audit_clinical_change",
+  ),
+  healthRecordsMigration.indexOf(
+    "revoke all on function public.health_record_list",
+  ),
+);
+check(
+  /encounter\.created/i.test(clinicalAudit) &&
+    /encounter\.signed/i.test(clinicalAudit) &&
+    /vital_signs\.updated/i.test(clinicalAudit) &&
+    /allergy\.archived/i.test(clinicalAudit) &&
+    /medical_history\.archived/i.test(clinicalAudit) &&
+    !/new\.(?:chief_complaint|subjective_notes|objective_notes|assessment|plan|diagnosis_text|treatment_notes|allergen|reaction|condition_name|details)/i.test(
+      clinicalAudit,
+    ),
+  "Clinical audits are semantic and exclude narrative values",
+);
+check(
+  /health_record_list[\s\S]*returns table[\s\S]*total_count bigint/i.test(
+    healthRecordsMigration,
+  ) &&
+    /p_limit integer default 20/i.test(healthRecordsMigration) &&
+    /p_offset integer default 0/i.test(healthRecordsMigration),
+  "Health-record search and filters are server-paginated",
 );
 
 const functionBlocks = [

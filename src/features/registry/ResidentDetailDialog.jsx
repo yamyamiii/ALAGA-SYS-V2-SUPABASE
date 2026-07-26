@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ResidentAppointmentHistory } from "@/features/appointments/ResidentAppointmentHistory";
+import { ResidentClinicalSummary } from "@/features/health-records/ResidentClinicalSummary";
 import {
   Dialog,
   DialogContent,
@@ -210,6 +211,7 @@ export function ResidentDetailDialog({
             </DetailSection>
 
             <ResidentAppointmentHistory residentId={record.id} />
+            <ResidentClinicalSummary resident={record} />
 
             {canManage ? (
               <div className="flex flex-wrap gap-2 border-t pt-5">

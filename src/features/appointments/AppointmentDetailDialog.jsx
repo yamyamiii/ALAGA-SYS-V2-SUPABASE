@@ -29,6 +29,7 @@ import {
   formatManilaTimestamp,
 } from "@/features/appointments/timezone";
 import { useAuth } from "@/features/auth/authContext";
+import { AppointmentEncounterAction } from "@/features/health-records/AppointmentEncounterAction";
 import { formatPersonName } from "@/features/registry/formatters";
 
 function Value({ label, children, wide = false }) {
@@ -115,6 +116,17 @@ export function AppointmentDetailDialog({
                       status={APPOINTMENT_STATUS_LABELS[appointment.status]}
                     />
                   </div>
+                </div>
+              </section>
+
+              <section className="rounded-xl border p-4">
+                <h3 className="font-heading font-semibold">Health Record</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Clinical documentation remains separate from operational
+                  appointment notes.
+                </p>
+                <div className="mt-4">
+                  <AppointmentEncounterAction appointment={appointment} />
                 </div>
               </section>
 

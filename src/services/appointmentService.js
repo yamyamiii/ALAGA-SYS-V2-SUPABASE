@@ -173,7 +173,7 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
       const { data, error } = await supabase
         .from("appointments")
         .select(
-          "id, appointment_number, resident_id, assigned_staff_id, appointment_type, service_type, scheduled_date, start_time, end_time, priority, status, reason, operational_notes, cancellation_reason, rescheduled_from_id, checked_in_at, started_at, completed_at, cancelled_at, created_at, updated_at, archived_at, version, resident:residents(id,resident_number,first_name,middle_name,last_name,suffix,date_of_birth,purok:puroks(name)), staff:profiles!appointments_assigned_staff_id_fkey(id,first_name,middle_name,last_name,suffix,role)",
+          "id, appointment_number, resident_id, assigned_staff_id, appointment_type, service_type, scheduled_date, start_time, end_time, priority, status, reason, operational_notes, cancellation_reason, rescheduled_from_id, checked_in_at, started_at, completed_at, cancelled_at, created_at, updated_at, archived_at, version, resident:residents(id,resident_number,first_name,middle_name,last_name,suffix,date_of_birth,status,archived_at,purok:puroks(name)), staff:profiles!appointments_assigned_staff_id_fkey(id,first_name,middle_name,last_name,suffix,role)",
         )
         .eq("id", id)
         .maybeSingle();

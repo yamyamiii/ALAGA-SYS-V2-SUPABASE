@@ -7,9 +7,12 @@ deny-by-default Row Level Security, Phase 2 authentication and trusted user
 management, and the Phase 3 household/resident registry and production
 hardening. Phase 4 adds operational appointment scheduling, a daily queue, a
 calendar, resident appointment history, and appointment dashboard summaries.
+Phase 5 adds the secure Electronic Health Records foundation: clinical
+encounters, vital signs, allergies, medical history, signatures, amendments,
+and resident clinical timelines.
 
-Clinical records, diagnoses, prescriptions, notifications, inventory, maternal
-care workflows, reports, and AI are not implemented in this phase.
+Inventory, prescription dispensing, laboratory integrations, maternal-care
+module workflows, reports, notifications, and AI are not implemented.
 
 ## Technology stack
 
@@ -93,7 +96,8 @@ Vite prints the local URL. Guests enter at `/login`; authenticated users enter
 the dashboard at `/`. Households are available at `/households`, residents at
 `/residents`, and appointments at `/appointments`, `/appointments/calendar`,
 and `/appointments/queue`. Unfinished healthcare module routes remain shared
-placeholders.
+placeholders. Authorized accounts access clinical encounters at
+`/health-records` and `/health-records/:encounterId`.
 
 ## Quality commands
 
@@ -109,23 +113,27 @@ npm run preview
 
 ## Current phase
 
-Phase 4 provides trusted appointment creation and lifecycle RPCs, optimistic
-concurrency, serialized staff schedule-conflict checks, idempotent create and
-reschedule operations, RLS-preserving paginated reads, and data-minimized audit
-events. Appointment business time is consistently interpreted as Asia/Manila.
+Phase 5 provides trusted encounter, vital-sign, allergy, and medical-history
+RPCs; immutable signed records; amendment lineage; optimistic concurrency;
+idempotent appointment linkage; role-shaped clinical reads; and data-minimized
+audit events. Appointment business time remains consistently interpreted as
+Asia/Manila.
 Registry locality remains Brgy. Bagongpook with Purok 1 through Purok 7.
 Household latitude/longitude columns remain in the database for compatibility
 but are not selected, collected, submitted, or displayed by the frontend.
 
 ## Deployment note
 
-The forward-only Phase 4 migration is not applied by application startup.
+The forward-only Phase 5 migration is not applied by application startup.
 Review and apply it manually through the Supabase CLI before deploying the
-Phase 4 frontend.
+Phase 5 frontend.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),
 [Appointment workflow](docs/workflows/APPOINTMENT_WORKFLOW.md),
+[Health Records architecture](docs/architecture/HEALTH_RECORDS.md),
+[Clinical encounter workflow](docs/workflows/CLINICAL_ENCOUNTER.md),
+[Vital Signs workflow](docs/workflows/VITAL_SIGNS.md),
 [Daily queue](docs/workflows/DAILY_QUEUE.md),
 [Private photo storage](docs/architecture/STORAGE.md),
 [Resident account linking](docs/workflows/RESIDENT_ACCOUNT_LINKING.md),

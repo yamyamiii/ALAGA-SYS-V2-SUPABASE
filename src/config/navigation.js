@@ -45,7 +45,7 @@ export const navigationItems = [
     label: "Health Records",
     path: ROUTES.healthRecords,
     icon: HeartPulse,
-    permission: PERMISSIONS.MANAGE_CONSULTATIONS,
+    permission: PERMISSIONS.VIEW_HEALTH_RECORDS,
   },
   {
     label: "Maternal and Child Care",
