@@ -70,6 +70,8 @@ RLS-filtered appointment totals and a five-row queue preview.
 
 ## Deployment
 
-Migration `20260720001800_appointment_workflows.sql` is forward-only and must be
-reviewed before it is applied. The frontend can be deployed only after the
-migration is present; no Edge Function is required by this phase.
+Migration `20260720001800_appointment_workflows.sql` installs Phase 4. The
+forward-only `20260720001900_fix_appointment_rpc_contracts.sql` explicitly casts
+the database `varchar(100)` service label to the stable public `text` contract
+and keeps staff-search validation inside its RLS-preserving RPC. Migration 19
+must be reviewed and applied after Migration 18. No Edge Function is required.

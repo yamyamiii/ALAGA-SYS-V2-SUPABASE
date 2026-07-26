@@ -23,6 +23,7 @@ const expectedMigrations = [
   "20260720001600_registry_hardening.sql",
   "20260720001700_reconcile_bagongpook_reference.sql",
   "20260720001800_appointment_workflows.sql",
+  "20260720001900_fix_appointment_rpc_contracts.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -59,6 +60,8 @@ const completedMigrationHashes = {
     "43b4a14947d3c19e77fb3ad42699a0879333671268fcaf7d7f6f57d1b58358c0",
   "20260720001700_reconcile_bagongpook_reference.sql":
     "9556cf24c8cfd21571e067b2937146b17df1e34102af1af09eaa5ffa03dbf27a",
+  "20260720001800_appointment_workflows.sql":
+    "48ae971ab31b2f60ab9134aa82a6e6951b9a329e2615ceba1beede422f6a12e4",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -86,7 +89,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly eighteen expected migrations exist in lexical order",
+  "Exactly nineteen expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -340,6 +343,52 @@ check(
     allSql,
   ),
   "Midwife appointment access remains limited to assigned maternal and child services",
+);
+const appointmentContractFix =
+  migrationEntries.find(({ file }) =>
+    file.includes("fix_appointment_rpc_contracts"),
+  )?.sql ?? "";
+check(
+  /appointment_list[\s\S]*a\.service_type::text/i.test(
+    appointmentContractFix,
+  ) &&
+    /appointment_daily_queue[\s\S]*q\.service_type::text/i.test(
+      appointmentContractFix,
+    ),
+  "Appointment list and queue service types explicitly match their text contracts",
+);
+check(
+  /appointment_calendar[\s\S]*a\.service_type::text/i.test(
+    appointmentContractFix,
+  ) &&
+    /appointment_resident_history[\s\S]*a\.service_type::text/i.test(
+      appointmentContractFix,
+    ),
+  "Calendar and resident-history service types use the same text contract",
+);
+check(
+  /appointment_search_staff[\s\S]*p_service_type not in \(/i.test(
+    appointmentContractFix,
+  ) &&
+    !/appointment_search_staff[\s\S]*appointment_service_type_valid\(p_service_type\)/i.test(
+      appointmentContractFix,
+    ),
+  "Staff search validates its allowlist without calling the private helper",
+);
+check(
+  /revoke all on function public\.appointment_service_type_valid\(text\)[\s\S]*from public, anon, authenticated/i.test(
+    appointmentContractFix,
+  ) &&
+    !/grant execute on function public\.appointment_service_type_valid\(text\)[^;]*authenticated/i.test(
+      appointmentContractFix,
+    ),
+  "The appointment service-type helper remains private",
+);
+check(
+  !/grant\s+(?:select,\s*)?(?:insert|update)|grant\s+[^;]*(?:insert|update)[^;]*appointments/i.test(
+    appointmentContractFix,
+  ),
+  "The RPC contract fix does not restore direct appointment mutation grants",
 );
 
 const functionBlocks = [

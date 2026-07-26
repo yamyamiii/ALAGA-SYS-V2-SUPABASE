@@ -6,6 +6,10 @@ const migration = fs.readFileSync(
   "supabase/migrations/20260720001800_appointment_workflows.sql",
   "utf8",
 );
+const contractFix = fs.readFileSync(
+  "supabase/migrations/20260720001900_fix_appointment_rpc_contracts.sql",
+  "utf8",
+);
 
 describe("appointment database safety", () => {
   it("uses version checks and serialized staff-date overlap checks", () => {
@@ -97,5 +101,88 @@ describe("appointment database safety", () => {
       /public\.audit_safe_snapshot\('appointments', old_row\)/i,
     );
     expect(migration).toMatch(/'changed_fields'/i);
+  });
+
+  it("casts appointment_list column 10 to its declared text contract", () => {
+    const listFunction = contractFix.slice(
+      contractFix.indexOf("create or replace function public.appointment_list"),
+      contractFix.indexOf(
+        "create or replace function public.appointment_daily_queue",
+      ),
+    );
+    expect(listFunction).toMatch(
+      /p\.role, a\.appointment_type, a\.service_type::text, a\.scheduled_date/i,
+    );
+    expect(listFunction).toMatch(
+      /appointment_type public\.appointment_type, service_type text, scheduled_date date/i,
+    );
+  });
+
+  it("casts appointment_daily_queue column 8 to its declared text contract", () => {
+    const queueFunction = contractFix.slice(
+      contractFix.indexOf(
+        "create or replace function public.appointment_daily_queue",
+      ),
+      contractFix.indexOf(
+        "create or replace function public.appointment_calendar",
+      ),
+    );
+    expect(queueFunction).toMatch(
+      /q\.resident_name, q\.appointment_type,\s*q\.service_type::text, q\.scheduled_date/i,
+    );
+    expect(queueFunction).toMatch(
+      /appointment_type public\.appointment_type,\s*service_type text, scheduled_date date/i,
+    );
+  });
+
+  it("uses the same explicit text contract for calendar and resident history", () => {
+    expect(contractFix).toMatch(
+      /appointment_calendar[\s\S]*a\.service_type::text/i,
+    );
+    expect(contractFix).toMatch(
+      /appointment_resident_history[\s\S]*a\.service_type::text/i,
+    );
+  });
+
+  it("keeps staff search callable under caller RLS without exposing the helper", () => {
+    const staffSearch = contractFix.slice(
+      contractFix.indexOf(
+        "create or replace function public.appointment_search_staff",
+      ),
+      contractFix.indexOf("-- CREATE OR REPLACE preserves ownership"),
+    );
+    expect(staffSearch).toMatch(/security invoker/i);
+    expect(staffSearch).toMatch(/p_service_type not in \(/i);
+    expect(staffSearch).not.toMatch(
+      /appointment_service_type_valid\(p_service_type\)/i,
+    );
+    expect(contractFix).toMatch(
+      /grant execute on function public\.appointment_search_staff\(text, text, integer, integer\) to authenticated, service_role/i,
+    );
+    expect(contractFix).toMatch(
+      /revoke all on function public\.appointment_search_staff\(text, text, integer, integer\) from public, anon/i,
+    );
+  });
+
+  it("keeps unauthorized roles RLS-restricted and the validator private", () => {
+    expect(contractFix).toMatch(
+      /from public\.profiles as p[\s\S]*p\.account_status = 'active'[\s\S]*p\.role in \('barangay_health_worker', 'nurse', 'midwife'\)/i,
+    );
+    expect(contractFix).toMatch(
+      /revoke all on function public\.appointment_service_type_valid\(text\)[\s\S]*from public, anon, authenticated/i,
+    );
+    expect(contractFix).not.toMatch(
+      /grant execute on function public\.appointment_service_type_valid\(text\)[^;]*authenticated/i,
+    );
+  });
+
+  it("does not restore direct appointment mutations or mutation-RPC grants", () => {
+    expect(contractFix).not.toMatch(
+      /grant\s+(?:select,\s*)?(?:insert|update)|grant\s+[^;]*(?:insert|update)[^;]*appointments/i,
+    );
+    expect(contractFix).not.toMatch(
+      /grant execute on function public\.appointment_(create|update_schedule|transition|reschedule|set_archive_state)/i,
+    );
+    expect(contractFix).not.toMatch(/security definer/i);
   });
 });
