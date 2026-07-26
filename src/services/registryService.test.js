@@ -180,8 +180,6 @@ describe("registry service", () => {
       barangay_id: "browser-supplied-value",
       purok_id: deploymentRows[0].purok_id,
       address_line: "Sitio Test",
-      latitude: "",
-      longitude: "",
       status: "active",
     });
 
@@ -191,6 +189,8 @@ describe("registry service", () => {
         purok_id: deploymentRows[0].purok_id,
       }),
     );
+    expect(insert.mock.calls[0][0]).not.toHaveProperty("latitude");
+    expect(insert.mock.calls[0][0]).not.toHaveProperty("longitude");
   });
 
   it("loads one resident by UUID through the unambiguous household relationship", async () => {

@@ -4,6 +4,7 @@ import { ErrorState, LoadingState } from "@/components/common/StateDisplay";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ResidentAppointmentHistory } from "@/features/appointments/ResidentAppointmentHistory";
 import {
   Dialog,
   DialogContent,
@@ -207,6 +208,8 @@ export function ResidentDetailDialog({
                 {record.linked_profile_id ? "Linked" : "Not linked"}
               </Value>
             </DetailSection>
+
+            <ResidentAppointmentHistory residentId={record.id} />
 
             {canManage ? (
               <div className="flex flex-wrap gap-2 border-t pt-5">

@@ -108,8 +108,8 @@ Physical household and locality assignment.
 | `barangay_id`      | `uuid`             | Not null                    | FK to `barangays.id`                         |
 | `purok_id`         | `uuid`             | Not null                    | Composite FK with barangay to `puroks`       |
 | `address_line`     | `text`             | Not null                    | Address description, 1–500 characters        |
-| `latitude`         | `numeric(9,6)`     | Nullable                    | Latitude from −90 to 90                      |
-| `longitude`        | `numeric(10,6)`    | Nullable                    | Longitude from −180 to 180                   |
+| `latitude`         | `numeric(9,6)`     | Nullable                    | Future compatibility; not used by frontend   |
+| `longitude`        | `numeric(10,6)`    | Nullable                    | Future compatibility; not used by frontend   |
 | `head_resident_id` | `uuid`             | Nullable                    | Household-member FK added after residents    |
 | `status`           | `household_status` | Not null; `active`          | Household lifecycle state                    |
 | `created_at`       | `timestamptz`      | Not null; `now()`           | Creation timestamp                           |
@@ -196,11 +196,13 @@ Operational scheduling only; it must not contain diagnoses or clinical notes.
 | `created_at`          | `timestamptz`          | Not null; `now()`           | Creation timestamp                                      |
 | `updated_at`          | `timestamptz`          | Not null; `now()`           | Trigger-maintained update timestamp                     |
 | `archived_at`         | `timestamptz`          | Nullable                    | Soft archival timestamp                                 |
+| `version`             | `bigint`               | Not null; `1`               | Optimistic concurrency version, bumped on every update  |
+| `request_key`         | `uuid`                 | Nullable; unique when set   | Idempotency key for trusted create/reschedule RPCs      |
 
 Resident names/contact details are not copied. Schedule-conflict handling and
-state-transition APIs are intentionally deferred. Assignment is limited to an
-active staff profile, and a direct authenticated update cannot replace
-`resident_id` after creation.
+state-transition APIs are implemented by trusted Phase 4 RPCs. Assignment is
+limited to an active eligible staff profile; overlapping staff intervals are
+serialized by staff/date, and direct authenticated inserts/updates are denied.
 
 ## `admin_action_rate_limits`
 

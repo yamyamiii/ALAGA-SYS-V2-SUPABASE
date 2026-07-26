@@ -23,6 +23,15 @@ const HouseholdRegistryPage = lazy(
 const ResidentRegistryPage = lazy(
   () => import("@/features/registry/ResidentRegistryPage"),
 );
+const AppointmentListPage = lazy(
+  () => import("@/features/appointments/AppointmentListPage"),
+);
+const AppointmentCalendarPage = lazy(
+  () => import("@/features/appointments/AppointmentCalendarPage"),
+);
+const AppointmentQueuePage = lazy(
+  () => import("@/features/appointments/AppointmentQueuePage"),
+);
 const ConfigurationErrorPage = lazy(
   () => import("@/pages/ConfigurationErrorPage"),
 );
@@ -33,7 +42,8 @@ const moduleRoutes = navigationItems.filter(
     item.path !== ROUTES.dashboard &&
     item.path !== ROUTES.userManagement &&
     item.path !== ROUTES.households &&
-    item.path !== ROUTES.residents,
+    item.path !== ROUTES.residents &&
+    item.path !== ROUTES.appointments,
 );
 
 function RouteFallback() {
@@ -82,6 +92,30 @@ export function AppRouter() {
               element={
                 <RoleGuard permission={PERMISSIONS.MANAGE_USERS}>
                   <UserManagementPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.appointments}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENTS}>
+                  <AppointmentListPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.appointmentCalendar}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENTS}>
+                  <AppointmentCalendarPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.appointmentQueue}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENTS}>
+                  <AppointmentQueuePage />
                 </RoleGuard>
               }
             />

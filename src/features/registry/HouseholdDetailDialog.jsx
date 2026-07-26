@@ -149,14 +149,6 @@ export function HouseholdDetailDialog({
                     <dd className="mt-1 font-medium">{record.purok?.name}</dd>
                   </div>
                   <div>
-                    <dt className="text-muted-foreground">Coordinates</dt>
-                    <dd className="mt-1 font-medium">
-                      {record.latitude && record.longitude
-                        ? `${record.latitude}, ${record.longitude}`
-                        : "Not provided"}
-                    </dd>
-                  </div>
-                  <div>
                     <dt className="text-muted-foreground">Created</dt>
                     <dd className="mt-1 font-medium">
                       {formatDate(record.created_at)}

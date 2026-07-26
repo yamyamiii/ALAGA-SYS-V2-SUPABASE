@@ -27,6 +27,14 @@ const accountDialog = fs.readFileSync(
   "src/features/registry/ResidentAccountDialog.jsx",
   "utf8",
 );
+const householdDetail = fs.readFileSync(
+  "src/features/registry/HouseholdDetailDialog.jsx",
+  "utf8",
+);
+const registryService = fs.readFileSync(
+  "src/services/registryService.js",
+  "utf8",
+);
 
 describe("registry UI boundaries", () => {
   it.each([
@@ -70,6 +78,17 @@ describe("registry UI boundaries", () => {
       /Select barangay|All barangays|resident-barangay|household-barangay|Filter .* by barangay/i,
     );
     expect(source).toMatch(/DeploymentBarangayContext/);
+  });
+
+  it("does not collect, display, select, or submit household coordinates", () => {
+    expect(householdForm).not.toMatch(/latitude|longitude|coordinates/i);
+    expect(householdDetail).not.toMatch(/latitude|longitude|coordinates/i);
+    expect(registryService).not.toMatch(
+      /HOUSEHOLD_WRITE_FIELDS[\s\S]*latitude|HOUSEHOLD_WRITE_FIELDS[\s\S]*longitude/i,
+    );
+    expect(registryService).not.toMatch(
+      /from\("households"\)[\s\S]{0,180}\.select\([^)]*latitude/i,
+    );
   });
 
   it("passes the resident UUID rather than resident_number to the detail dialog", () => {

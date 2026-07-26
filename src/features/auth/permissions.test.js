@@ -55,8 +55,20 @@ describe("role permissions", () => {
     expect(
       hasPermission(USER_ROLES.NURSE, PERMISSIONS.MANAGE_CONSULTATIONS),
     ).toBe(true);
+    expect(hasPermission(USER_ROLES.NURSE, PERMISSIONS.VIEW_APPOINTMENTS)).toBe(
+      true,
+    );
+    expect(
+      hasPermission(USER_ROLES.NURSE, PERMISSIONS.OPERATE_APPOINTMENTS),
+    ).toBe(true);
+    expect(
+      hasPermission(USER_ROLES.NURSE, PERMISSIONS.SCHEDULE_APPOINTMENTS),
+    ).toBe(false);
     expect(
       hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.MANAGE_MATERNAL_CARE),
+    ).toBe(true);
+    expect(
+      hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.VIEW_APPOINTMENTS),
     ).toBe(true);
     expect(
       hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.MANAGE_RESIDENT_PHOTOS),
@@ -70,6 +82,12 @@ describe("role permissions", () => {
     expect(
       hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.VIEW_RESIDENT_PHOTOS),
     ).toBe(true);
+    expect(
+      hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.VIEW_APPOINTMENTS),
+    ).toBe(true);
+    expect(
+      hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.OPERATE_APPOINTMENTS),
+    ).toBe(false);
     expect(
       hasPermission(
         USER_ROLES.BARANGAY_HEALTH_WORKER,

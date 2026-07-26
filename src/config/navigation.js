@@ -1,5 +1,4 @@
 import {
-  BellRing,
   CalendarDays,
   ClipboardList,
   FileBarChart,
@@ -40,7 +39,7 @@ export const navigationItems = [
     label: "Appointments",
     path: ROUTES.appointments,
     icon: CalendarDays,
-    permission: PERMISSIONS.MANAGE_APPOINTMENTS,
+    permission: PERMISSIONS.VIEW_APPOINTMENTS,
   },
   {
     label: "Health Records",
@@ -90,10 +89,4 @@ export const navigationItems = [
     icon: Settings,
     permission: PERMISSIONS.MANAGE_SETTINGS,
   },
-];
-
-export const quickActionPreviews = [
-  { label: "New resident", icon: UsersRound },
-  { label: "Schedule appointment", icon: CalendarDays },
-  { label: "Post announcement", icon: BellRing },
 ];

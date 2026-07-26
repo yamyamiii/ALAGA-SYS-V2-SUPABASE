@@ -54,13 +54,11 @@ describe("registry schemas", () => {
     );
   });
 
-  it("validates household coordinates and required address", () => {
+  it("validates household locality and required address without coordinates", () => {
     expect(
       householdSchema.safeParse({
         purok_id: purokId,
         address_line: "Sitio Mabuhay",
-        latitude: "14.6",
-        longitude: "121.0",
         status: "active",
       }).success,
     ).toBe(true);
@@ -68,8 +66,6 @@ describe("registry schemas", () => {
       householdSchema.safeParse({
         purok_id: purokId,
         address_line: "",
-        latitude: "",
-        longitude: "",
         status: "active",
       }).success,
     ).toBe(false);

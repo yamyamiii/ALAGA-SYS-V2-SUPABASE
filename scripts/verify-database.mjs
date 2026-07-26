@@ -22,6 +22,7 @@ const expectedMigrations = [
   "20260720001500_bagongpook_deployment.sql",
   "20260720001600_registry_hardening.sql",
   "20260720001700_reconcile_bagongpook_reference.sql",
+  "20260720001800_appointment_workflows.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -56,6 +57,8 @@ const completedMigrationHashes = {
     "e1a300fc175030195caafbac612a7581b68f53b4d990802aaa1a5d78da534b3b",
   "20260720001600_registry_hardening.sql":
     "43b4a14947d3c19e77fb3ad42699a0879333671268fcaf7d7f6f57d1b58358c0",
+  "20260720001700_reconcile_bagongpook_reference.sql":
+    "9556cf24c8cfd21571e067b2937146b17df1e34102af1af09eaa5ffa03dbf27a",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -83,7 +86,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly seventeen expected migrations exist in lexical order",
+  "Exactly eighteen expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -296,6 +299,47 @@ check(
     /admin_link_resident_profile[\s\S]*to service_role/i.test(allSql) &&
     !/admin_link_resident_profile[^;]*to authenticated/i.test(allSql),
   "Resident profile linking is restricted to the trusted service-role workflow",
+);
+check(
+  /revoke insert, update on table public\.appointments from authenticated/i.test(
+    allSql,
+  ),
+  "Direct authenticated appointment writes are retired",
+);
+check(
+  /appointment_assert_slot_available[\s\S]*pg_advisory_xact_lock[\s\S]*a\.start_time < p_end_time[\s\S]*a\.end_time > p_start_time/i.test(
+    allSql,
+  ),
+  "Appointment conflicts use serialized interval-overlap validation",
+);
+check(
+  /add column version bigint not null default 1/i.test(allSql) &&
+    /current_record\.version <> p_expected_version/i.test(allSql),
+  "Appointment mutations use optimistic concurrency versions",
+);
+check(
+  /appointments_request_key_unique/i.test(allSql) &&
+    /appointments_single_replacement_unique/i.test(allSql),
+  "Appointment creation and rescheduling have database idempotency guards",
+);
+check(
+  /appointment_daily_queue[\s\S]*row_number\(\) over[\s\S]*status_group[\s\S]*priority_group/i.test(
+    allSql,
+  ),
+  "Daily queue ordering is computed deterministically by the database",
+);
+check(
+  /appointment\.created/i.test(allSql) &&
+    /appointment\.checked_in/i.test(allSql) &&
+    /appointment\.rescheduled/i.test(allSql) &&
+    /audit_safe_snapshot\('appointments'/i.test(allSql),
+  "Appointment lifecycle changes receive semantic data-minimized audits",
+);
+check(
+  /current_profile_role\(\) = 'midwife'[\s\S]*service_type in \('Maternal Care', 'Child Health'\)/i.test(
+    allSql,
+  ),
+  "Midwife appointment access remains limited to assigned maternal and child services",
 );
 
 const functionBlocks = [

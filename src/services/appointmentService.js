@@ -1,0 +1,392 @@
+import { getSupabaseClient } from "@/lib/supabase/client";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export class AppointmentServiceError extends Error {
+  constructor(code, message, options = {}) {
+    super(message, { cause: options.cause });
+    this.name = "AppointmentServiceError";
+    this.code = code;
+  }
+}
+
+function nullable(value) {
+  return value === "" || value === undefined ? null : value;
+}
+
+function mapError(error, fallback) {
+  const message = error?.message ?? "";
+  if (/changed by another user|could not serialize|concurrent/i.test(message)) {
+    return new AppointmentServiceError(
+      "stale_appointment",
+      "This appointment changed in another session. Reload it and try again.",
+      { cause: error },
+    );
+  }
+  if (/schedule conflicts/i.test(message) || error?.code === "23P01") {
+    return new AppointmentServiceError(
+      "schedule_conflict",
+      message ||
+        "The selected staff member already has an overlapping appointment.",
+      { cause: error },
+    );
+  }
+  if (
+    /permission|authorized|requires an administrator|requires authorized/i.test(
+      message,
+    )
+  ) {
+    return new AppointmentServiceError(
+      "permission_denied",
+      "You do not have permission to complete this appointment action.",
+      { cause: error },
+    );
+  }
+  if (/appointment not found/i.test(message) || error?.code === "P0002") {
+    return new AppointmentServiceError(
+      "appointment_not_found",
+      "The appointment was not found or is no longer available.",
+      { cause: error },
+    );
+  }
+  if (/resident must be active/i.test(message)) {
+    return new AppointmentServiceError(
+      "resident_unavailable",
+      "The selected resident is no longer active or available for scheduling.",
+      { cause: error },
+    );
+  }
+  if (/assigned staff|midwives may be assigned/i.test(message)) {
+    return new AppointmentServiceError("staff_unavailable", message, {
+      cause: error,
+    });
+  }
+  if (
+    /past|current Manila date|start time must be in the future/i.test(message)
+  ) {
+    return new AppointmentServiceError("invalid_schedule_time", message, {
+      cause: error,
+    });
+  }
+  if (
+    /invalid appointment status transition|only .* appointments/i.test(message)
+  ) {
+    return new AppointmentServiceError(
+      "invalid_transition",
+      "This appointment can no longer move to the selected status.",
+      { cause: error },
+    );
+  }
+  if (/fetch|network|timeout|connection|aborted/i.test(message)) {
+    return new AppointmentServiceError(
+      "network_error",
+      "The appointment service could not be reached. Check your connection and try again.",
+      { cause: error },
+    );
+  }
+  return new AppointmentServiceError("appointment_request_failed", fallback, {
+    cause: error,
+  });
+}
+
+function diagnostic(operation, error, code) {
+  if (import.meta.env.DEV && import.meta.env.MODE !== "test") {
+    console.warn("[ALAGA-SYS appointment diagnostic]", {
+      operation,
+      providerCode: error?.code ?? "none",
+      mappedCode: code,
+    });
+  }
+}
+
+async function rpc(client, name, parameters, fallback) {
+  const { data, error } = await client.rpc(name, parameters);
+  if (error) {
+    const mapped = mapError(error, fallback);
+    diagnostic(name, error, mapped.code);
+    throw mapped;
+  }
+  return data;
+}
+
+function firstRow(data, fallback) {
+  if (!Array.isArray(data) || !data[0]) {
+    throw new AppointmentServiceError("invalid_response", fallback);
+  }
+  return data[0];
+}
+
+function pageResult(data, page, pageSize) {
+  return {
+    items: data ?? [],
+    total: Number(data?.[0]?.total_count ?? 0),
+    page,
+    page_size: pageSize,
+  };
+}
+
+export function buildAppointmentListParameters(filters) {
+  const page = filters.page ?? 1;
+  const pageSize = filters.page_size ?? 20;
+  return {
+    p_search: nullable(filters.search?.trim()),
+    p_date_from: nullable(filters.date_from),
+    p_date_to: nullable(filters.date_to),
+    p_status: nullable(filters.status),
+    p_appointment_type: nullable(filters.appointment_type),
+    p_service_type: nullable(filters.service_type),
+    p_priority: nullable(filters.priority),
+    p_assigned_staff_id: nullable(filters.assigned_staff_id),
+    p_include_archived: Boolean(filters.include_archived),
+    p_sort: filters.sort ?? "scheduled_at",
+    p_direction: filters.direction ?? "asc",
+    p_limit: pageSize,
+    p_offset: (page - 1) * pageSize,
+  };
+}
+
+export function createAppointmentService(clientProvider = getSupabaseClient) {
+  function client() {
+    return clientProvider();
+  }
+
+  return {
+    async listAppointments(filters) {
+      const data = await rpc(
+        client(),
+        "appointment_list",
+        buildAppointmentListParameters(filters),
+        "Appointments could not be loaded.",
+      );
+      return pageResult(data, filters.page ?? 1, filters.page_size ?? 20);
+    },
+
+    async getAppointment(id) {
+      if (!UUID_PATTERN.test(id ?? "")) {
+        throw new AppointmentServiceError(
+          "invalid_appointment_id",
+          "The appointment reference is invalid.",
+        );
+      }
+      const { data, error } = await client()
+        .from("appointments")
+        .select(
+          "id, appointment_number, resident_id, assigned_staff_id, appointment_type, service_type, scheduled_date, start_time, end_time, priority, status, reason, operational_notes, cancellation_reason, rescheduled_from_id, checked_in_at, started_at, completed_at, cancelled_at, created_at, updated_at, archived_at, version, resident:residents(id,resident_number,first_name,middle_name,last_name,suffix,date_of_birth,purok:puroks(name)), staff:profiles!appointments_assigned_staff_id_fkey(id,first_name,middle_name,last_name,suffix,role), rescheduled_from:appointments!appointments_rescheduled_from_id_fkey(id,appointment_number)",
+        )
+        .eq("id", id)
+        .maybeSingle();
+      if (error) {
+        const mapped = mapError(error, "The appointment could not be loaded.");
+        diagnostic("appointment_detail", error, mapped.code);
+        throw mapped;
+      }
+      if (!data) {
+        throw new AppointmentServiceError(
+          "appointment_not_found",
+          "The appointment was not found or is not available to your account.",
+        );
+      }
+      return data;
+    },
+
+    async listQueue({
+      date,
+      status = "",
+      priority = "",
+      page = 1,
+      pageSize = 100,
+    }) {
+      const data = await rpc(
+        client(),
+        "appointment_daily_queue",
+        {
+          p_date: date,
+          p_status: nullable(status),
+          p_priority: nullable(priority),
+          p_limit: pageSize,
+          p_offset: (page - 1) * pageSize,
+        },
+        "The daily queue could not be loaded.",
+      );
+      return pageResult(data, page, pageSize);
+    },
+
+    async listCalendar({ dateFrom, dateTo }) {
+      return (
+        (await rpc(
+          client(),
+          "appointment_calendar",
+          { p_date_from: dateFrom, p_date_to: dateTo },
+          "The appointment calendar could not be loaded.",
+        )) ?? []
+      );
+    },
+
+    async searchResidents({ search = "", page = 1, pageSize = 10 }) {
+      const data = await rpc(
+        client(),
+        "appointment_search_residents",
+        {
+          p_search: nullable(search.trim()),
+          p_limit: pageSize,
+          p_offset: (page - 1) * pageSize,
+        },
+        "Residents could not be searched.",
+      );
+      return pageResult(data, page, pageSize);
+    },
+
+    async searchStaff({
+      search = "",
+      serviceType = "",
+      page = 1,
+      pageSize = 10,
+    }) {
+      const data = await rpc(
+        client(),
+        "appointment_search_staff",
+        {
+          p_search: nullable(search.trim()),
+          p_service_type: nullable(serviceType),
+          p_limit: pageSize,
+          p_offset: (page - 1) * pageSize,
+        },
+        "Staff members could not be searched.",
+      );
+      return pageResult(data, page, pageSize);
+    },
+
+    async listResidentHistory(residentId, page = 1, pageSize = 5) {
+      const data = await rpc(
+        client(),
+        "appointment_resident_history",
+        {
+          p_resident_id: residentId,
+          p_limit: pageSize,
+          p_offset: (page - 1) * pageSize,
+        },
+        "Appointment history could not be loaded.",
+      );
+      return pageResult(data, page, pageSize);
+    },
+
+    async getDashboardSummary() {
+      const data = await rpc(
+        client(),
+        "appointment_dashboard_summary",
+        {},
+        "Appointment totals could not be loaded.",
+      );
+      return firstRow(data, "The appointment totals response was invalid.");
+    },
+
+    async createAppointment(values, requestKey = crypto.randomUUID()) {
+      const data = await rpc(
+        client(),
+        "appointment_create",
+        {
+          p_resident_id: values.resident_id,
+          p_appointment_type: values.appointment_type,
+          p_service_type: values.service_type,
+          p_scheduled_date: values.scheduled_date,
+          p_start_time: values.start_time,
+          p_end_time: values.end_time,
+          p_priority: values.priority,
+          p_assigned_staff_id: nullable(values.assigned_staff_id),
+          p_reason: nullable(values.reason),
+          p_operational_notes: nullable(values.operational_notes),
+          p_request_key: requestKey,
+        },
+        "The appointment could not be created.",
+      );
+      return firstRow(data, "The appointment creation response was invalid.");
+    },
+
+    async updateAppointment(appointment, values) {
+      const data = await rpc(
+        client(),
+        "appointment_update_schedule",
+        {
+          p_appointment_id: appointment.id,
+          p_expected_version: appointment.version,
+          p_appointment_type: values.appointment_type,
+          p_service_type: values.service_type,
+          p_scheduled_date: values.scheduled_date,
+          p_start_time: values.start_time,
+          p_end_time: values.end_time,
+          p_priority: values.priority,
+          p_assigned_staff_id: nullable(values.assigned_staff_id),
+          p_reason: nullable(values.reason),
+          p_operational_notes: nullable(values.operational_notes),
+        },
+        "The appointment changes could not be saved.",
+      );
+      return firstRow(data, "The appointment update response was invalid.");
+    },
+
+    async transition(appointment, targetStatus, options = {}) {
+      const data = await rpc(
+        client(),
+        "appointment_transition",
+        {
+          p_appointment_id: appointment.id,
+          p_expected_version: appointment.version,
+          p_target_status: targetStatus,
+          p_cancellation_reason: nullable(options.cancellation_reason),
+          p_operational_notes: nullable(options.operational_notes),
+        },
+        "The appointment status could not be changed.",
+      );
+      return firstRow(data, "The appointment transition response was invalid.");
+    },
+
+    async updateOperationalNotes(appointment, operationalNotes) {
+      const data = await rpc(
+        client(),
+        "appointment_update_operational_notes",
+        {
+          p_appointment_id: appointment.id,
+          p_expected_version: appointment.version,
+          p_operational_notes: operationalNotes,
+        },
+        "Operational notes could not be saved.",
+      );
+      return firstRow(data, "The operational-notes response was invalid.");
+    },
+
+    async reschedule(appointment, values, requestKey = crypto.randomUUID()) {
+      const data = await rpc(
+        client(),
+        "appointment_reschedule",
+        {
+          p_appointment_id: appointment.id,
+          p_expected_version: appointment.version,
+          p_scheduled_date: values.scheduled_date,
+          p_start_time: values.start_time,
+          p_end_time: values.end_time,
+          p_assigned_staff_id: nullable(values.assigned_staff_id),
+          p_request_key: requestKey,
+        },
+        "The appointment could not be rescheduled.",
+      );
+      return firstRow(data, "The reschedule response was invalid.");
+    },
+
+    async setArchived(appointment, archived) {
+      const data = await rpc(
+        client(),
+        "appointment_set_archive_state",
+        {
+          p_appointment_id: appointment.id,
+          p_expected_version: appointment.version,
+          p_archived: archived,
+        },
+        `The appointment could not be ${archived ? "archived" : "restored"}.`,
+      );
+      return firstRow(data, "The archive response was invalid.");
+    },
+  };
+}
+
+export const appointmentService = createAppointmentService();

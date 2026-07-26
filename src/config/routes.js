@@ -4,6 +4,8 @@ export const ROUTES = Object.freeze({
   households: "/households",
   residents: "/residents",
   appointments: "/appointments",
+  appointmentCalendar: "/appointments/calendar",
+  appointmentQueue: "/appointments/queue",
   healthRecords: "/health-records",
   maternalChildCare: "/maternal-child-care",
   medicineInventory: "/medicine-inventory",

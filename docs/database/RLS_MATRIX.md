@@ -38,22 +38,22 @@ personal fields before the Phase 2 invitation workflow is built.
 
 Legend: **R** read, **C** create, **U** update, **—** denied.
 
-| Table/scope                          | Admin | BHW    | Nurse      | Midwife    | Resident               |
-| ------------------------------------ | ----- | ------ | ---------- | ---------- | ---------------------- |
-| Own profile                          | R/U¹  | R/U¹   | R/U¹       | R/U¹       | R/U¹                   |
-| Other profiles                       | R/U²  | R      | R          | R          | —                      |
-| Active barangays/puroks              | R/C/U | R      | R          | R          | R                      |
-| Inactive barangays/puroks            | R/C/U | —      | —          | —          | —                      |
-| Non-archived households              | R/C/U | R/C/U² | R          | R          | Own linked household R |
-| Archived households                  | R/U   | —      | —          | —          | —                      |
-| Non-archived residents               | R/C/U | R/C/U² | R          | R          | Own linked record R    |
-| Archived residents                   | R/U   | —      | —          | —          | —                      |
-| Non-archived appointments            | R/C/U | R/C/U² | Assigned R | Assigned R | Own R                  |
-| Archived appointments                | R/U   | —      | —          | —          | —                      |
-| Audit logs                           | R     | —      | —          | —          | —                      |
-| Internal admin rate-limit rows       | —     | —      | —          | —          | —                      |
-| Physical delete on any managed table | —³    | —      | —          | —          | —                      |
-| Direct audit insert/update/delete    | —     | —      | —          | —          | —                      |
+| Table/scope                          | Admin | BHW    | Nurse          | Midwife                       | Resident               |
+| ------------------------------------ | ----- | ------ | -------------- | ----------------------------- | ---------------------- |
+| Own profile                          | R/U¹  | R/U¹   | R/U¹           | R/U¹                          | R/U¹                   |
+| Other profiles                       | R/U²  | R      | R              | R                             | —                      |
+| Active barangays/puroks              | R/C/U | R      | R              | R                             | R                      |
+| Inactive barangays/puroks            | R/C/U | —      | —              | —                             | —                      |
+| Non-archived households              | R/C/U | R/C/U² | R              | R                             | Own linked household R |
+| Archived households                  | R/U   | —      | —              | —                             | —                      |
+| Non-archived residents               | R/C/U | R/C/U² | R              | R                             | Own linked record R    |
+| Archived residents                   | R/U   | —      | —              | —                             | —                      |
+| Non-archived appointments            | R/RPC | R/RPC  | Assigned R/RPC | Assigned maternal/child R/RPC | Own R                  |
+| Archived appointments                | R/U   | —      | —              | —                             | —                      |
+| Audit logs                           | R     | —      | —              | —                             | —                      |
+| Internal admin rate-limit rows       | —     | —      | —              | —                             | —                      |
+| Physical delete on any managed table | —³    | —      | —              | —                             | —                      |
+| Direct audit insert/update/delete    | —     | —      | —              | —                             | —                      |
 
 1. The profile-protection trigger restricts self-update to names, suffix, phone,
    and avatar. A user cannot change their own role, account status,
@@ -106,12 +106,23 @@ clinical data exists in profiles.
 
 ### `appointments`
 
-- Admin reads all and creates/updates.
-- BHW reads non-archived appointments and creates/updates from active rows.
-- Nurse and midwife read only non-archived appointments assigned to their own
-  profile and cannot update status in Phase 1.
+- Admin reads all and may call every trusted appointment workflow.
+- BHW reads non-archived appointments and may schedule, edit
+  pending/confirmed appointments, reschedule, confirm, check in, cancel before
+  in-progress, and update operational notes.
+- Nurses read assigned non-archived appointments and may perform state-valid
+  check-in, no-show, start, complete, and operational-note actions.
+- Midwives have the same assigned-clinician access only for Maternal Care and
+  Child Health services.
 - Residents read only appointments belonging to their linked resident row.
-- Resident self-booking and physical deletion are disabled.
+- Direct authenticated INSERT/UPDATE grants and policies are retired. Every
+  browser mutation uses an independently authorized security-definer RPC.
+- Resident self-booking and physical deletion remain disabled.
+
+Appointment list, daily queue, calendar, resident/staff search, resident
+history, and dashboard aggregation run with caller RLS. Full reasons and
+operational notes are excluded from overview RPCs. Mutations require an expected
+row version; staff overlap checks use a transaction advisory lock by staff/date.
 
 ### `audit_logs`
 
@@ -134,20 +145,20 @@ recursively invoke those same policies. They are schema-qualified, expose only
 an enum/UUID/boolean, use `search_path = ''`, and are executable only by
 `authenticated` plus database-owner roles.
 
-## Restrictive Phase 2 placeholders
+## Retained restrictions
 
-Phase 1 deliberately chooses stricter behavior where workflow rules are not yet
-implemented:
+Phase 4 keeps these deny-by-default boundaries:
 
 - New Auth users are invited residents, never staff.
 - There is no browser role-assignment or account-activation endpoint.
-- Nurse/midwife appointment updates are denied, even for assigned appointments.
-- Appointment assignment does not itself prove the profile has a clinical role;
-  the database requires active staff, while a future trusted scheduling action
-  must validate service-specific eligibility.
+- Direct nurse/midwife table updates remain denied; narrowly scoped assigned
+  lifecycle RPCs authorize each action.
+- Appointment assignment does not itself prove eligibility. Trusted scheduling
+  validates an active BHW/nurse/midwife profile and restricts midwives to
+  Maternal Care or Child Health.
 - BHW demographic writes cannot create or change a resident/profile link.
 - Direct authenticated appointment updates cannot replace the resident owner.
-- Appointment state transitions are not exposed as broad client updates.
+- Appointment state transitions are exposed only as bounded RPC operations.
 - Resident self-booking is denied.
 - Archived data is admin-only.
 

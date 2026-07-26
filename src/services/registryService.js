@@ -31,8 +31,6 @@ const RESIDENT_WRITE_FIELDS = Object.freeze([
 const HOUSEHOLD_WRITE_FIELDS = Object.freeze([
   "purok_id",
   "address_line",
-  "latitude",
-  "longitude",
   "status",
 ]);
 
@@ -362,7 +360,7 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
         client()
           .from("households")
           .select(
-            "id, household_number, barangay_id, purok_id, address_line, latitude, longitude, head_resident_id, status, created_at, updated_at, archived_at, barangay:barangays(id,name,city_or_municipality,province), purok:puroks(id,name,code)",
+            "id, household_number, barangay_id, purok_id, address_line, head_resident_id, status, created_at, updated_at, archived_at, barangay:barangays(id,name,city_or_municipality,province), purok:puroks(id,name,code)",
           )
           .eq("id", id)
           .single(),

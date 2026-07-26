@@ -14,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { HOUSEHOLD_STATUS_LABELS } from "@/features/registry/constants";
 import { DeploymentBarangayContext } from "@/features/registry/DeploymentBarangayContext";
@@ -29,8 +28,6 @@ import { registryService } from "@/services/registryService";
 const defaults = {
   purok_id: "",
   address_line: "",
-  latitude: "",
-  longitude: "",
   status: "active",
 };
 
@@ -71,8 +68,6 @@ export function HouseholdFormDialog({
         ? {
             purok_id: household.purok_id,
             address_line: household.address_line,
-            latitude: household.latitude ?? "",
-            longitude: household.longitude ?? "",
             status:
               household.status === "archived" ? "active" : household.status,
           }
@@ -141,26 +136,6 @@ export function HouseholdFormDialog({
               className="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <FieldError error={errors.address_line} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="household-latitude">Latitude (optional)</Label>
-            <Input
-              id="household-latitude"
-              type="number"
-              step="0.000001"
-              {...register("latitude")}
-            />
-            <FieldError error={errors.latitude} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="household-longitude">Longitude (optional)</Label>
-            <Input
-              id="household-longitude"
-              type="number"
-              step="0.000001"
-              {...register("longitude")}
-            />
-            <FieldError error={errors.longitude} />
           </div>
           {editing ? (
             <div className="space-y-2 sm:col-span-2">

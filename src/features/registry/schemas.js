@@ -25,14 +25,6 @@ const optionalUuid = z.union([
   z.string().uuid("Select a valid record."),
 ]);
 
-const optionalCoordinate = (minimum, maximum, label) =>
-  z
-    .union([z.literal(""), z.coerce.number().min(minimum).max(maximum)])
-    .refine(
-      (value) => value === "" || Number.isFinite(value),
-      `${label} must be a valid number.`,
-    );
-
 const optionalPhone = z
   .string()
   .transform(normalizeWhitespace)
@@ -64,8 +56,6 @@ export const householdSchema = z.object({
     .transform(normalizeWhitespace)
     .refine((value) => value.length > 0, "Address is required.")
     .refine((value) => value.length <= 500, "Address is too long."),
-  latitude: optionalCoordinate(-90, 90, "Latitude"),
-  longitude: optionalCoordinate(-180, 180, "Longitude"),
   status: z.enum(HOUSEHOLD_STATUSES),
 });
 

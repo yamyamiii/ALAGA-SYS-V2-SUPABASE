@@ -3,8 +3,9 @@
 ## Create
 
 1. An administrator or BHW opens `/households` and selects **Add household**.
-2. Confirm the read-only Bagongpook context, select Purok 1–7, enter an address,
-   and optionally enter valid latitude/longitude.
+2. Confirm the read-only Bagongpook context, select Purok 1–7, and enter an
+   address. Geographic coordinates remain future-compatible database columns
+   but are not collected or displayed by the frontend.
 3. Save. The database generates the immutable household number and audit event.
 4. A head is intentionally optional during creation.
 

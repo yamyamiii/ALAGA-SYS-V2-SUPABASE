@@ -2,15 +2,14 @@
 
 **Automated Local Appointment and General Assistance System** is a planned
 barangay healthcare management system. This repository currently contains the
-Phase 0 application foundation, the Phase 1 normalized PostgreSQL schema and
-deny-by-default Row Level Security, the Phase 2A Supabase Auth foundation, and
-the Phase 2B trusted administrator/user-management workflow, and the Phase 3A
-household and resident demographic registry. Phase 3B adds private resident
-photos, trusted resident-account linking, scalable household selection, and
-RLS-safe duplicate review. Phase 3C adds production QA, responsive and
-accessibility hardening, bounded network requests, and bundle optimization.
+Phase 0 application foundation, Phase 1 normalized PostgreSQL schema and
+deny-by-default Row Level Security, Phase 2 authentication and trusted user
+management, and the Phase 3 household/resident registry and production
+hardening. Phase 4 adds operational appointment scheduling, a daily queue, a
+calendar, resident appointment history, and appointment dashboard summaries.
 
-No appointment or clinical healthcare workflow is implemented in this phase.
+Clinical records, diagnoses, prescriptions, notifications, inventory, maternal
+care workflows, reports, and AI are not implemented in this phase.
 
 ## Technology stack
 
@@ -92,7 +91,9 @@ npm run dev
 
 Vite prints the local URL. Guests enter at `/login`; authenticated users enter
 the dashboard at `/`. Households are available at `/households`, residents at
-`/residents`, and unfinished healthcare module routes remain shared placeholders.
+`/residents`, and appointments at `/appointments`, `/appointments/calendar`,
+and `/appointments/queue`. Unfinished healthcare module routes remain shared
+placeholders.
 
 ## Quality commands
 
@@ -108,28 +109,24 @@ npm run preview
 
 ## Current phase
 
-Phase 3C reviews and hardens the completed authentication, user-management, and
-registry workflows without adding a healthcare module. Phase 3B provides
-household and resident listing, creation, editing, details,
-relationship management, archival/restoration, server paging/search, safe audit
-events, and RLS-aligned route permissions. Resident images use a private,
-resident-authorized bucket and short-lived signed URLs. Account linking remains
-administrator-only behind the trusted Edge Function. Household selection is
-debounced/server-paginated, and probable duplicates require an explicit audited
-override. Registry locality is configured for
-Brgy. Bagongpook with Purok 1 through Purok 7; barangay UUID resolution remains
-database-backed. A pending forward-only reconciliation preserves legacy
-household/resident references while normalizing the deployment locality to Lipa
-City, Batangas. Public registration, physical deletion, and password reset remain
-unavailable.
+Phase 4 provides trusted appointment creation and lifecycle RPCs, optimistic
+concurrency, serialized staff schedule-conflict checks, idempotent create and
+reschedule operations, RLS-preserving paginated reads, and data-minimized audit
+events. Appointment business time is consistently interpreted as Asia/Manila.
+Registry locality remains Brgy. Bagongpook with Purok 1 through Purok 7.
+Household latitude/longitude columns remain in the database for compatibility
+but are not selected, collected, submitted, or displayed by the frontend.
 
-## Next phase
+## Deployment note
 
-Phase 4 may implement appointment scheduling after its capacity, conflict,
-authorization, notification, and audit rules are reviewed. It must not weaken
-database policies or place secret credentials in the frontend.
+The forward-only Phase 4 migration is not applied by application startup.
+Review and apply it manually through the Supabase CLI before deploying the
+Phase 4 frontend.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
+[Appointment architecture](docs/architecture/APPOINTMENTS.md),
+[Appointment workflow](docs/workflows/APPOINTMENT_WORKFLOW.md),
+[Daily queue](docs/workflows/DAILY_QUEUE.md),
 [Private photo storage](docs/architecture/STORAGE.md),
 [Resident account linking](docs/workflows/RESIDENT_ACCOUNT_LINKING.md),
 [Storage deployment](docs/deployment/SUPABASE_STORAGE.md),
