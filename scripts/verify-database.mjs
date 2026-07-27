@@ -786,6 +786,20 @@ check(
   "Maternal and child creation is duplicate-safe, idempotent, and versioned",
 );
 check(
+  /create table public\.child_immunizations[\s\S]*?\n\s+request_key uuid,[\s\S]*?create unique index child_immunization_request_unique[\s\S]*?\(recorded_by,\s*request_key\)[\s\S]*?where request_key is not null/i.test(
+    maternalChildMigration,
+  ) &&
+    /where i\.recorded_by=actor_id and i\.request_key=p_request_key[\s\S]*?insert into public\.child_immunizations\([\s\S]*?recorded_by,request_key[\s\S]*?actor_id,p_request_key/i.test(
+      maternalChildMigration,
+    ),
+  "Child immunization request keys are nullable storage values enforced and reused by the trusted create RPC",
+);
+check(
+  /r\.linked_profile_id=auth\.uid\(\)/i.test(maternalChildMigration) &&
+    !/\br\.profile_id\b/i.test(maternalChildMigration),
+  "Maternal-child resident ownership uses the deployed linked_profile_id column",
+);
+check(
   /revoke all on table public\.maternal_pregnancies[\s\S]*authenticated/i.test(
     maternalChildMigration,
   ) &&

@@ -302,6 +302,7 @@ create table public.child_immunizations (
   lot_number text,
   notes text,
   recorded_by uuid not null references public.profiles(id) on delete restrict,
+  request_key uuid,
   version bigint not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -1481,7 +1482,8 @@ begin
   ) events
   where actor_role in ('admin','barangay_health_worker','midwife')
     or (actor_role='resident' and exists(
-      select 1 from public.residents r where r.id=events.resident_id and r.profile_id=auth.uid()
+      select 1 from public.residents r
+      where r.id=events.resident_id and r.linked_profile_id=auth.uid()
     ))
     or (actor_role='nurse' and public.maternal_child_can_access(events.resident_id));
 end;
