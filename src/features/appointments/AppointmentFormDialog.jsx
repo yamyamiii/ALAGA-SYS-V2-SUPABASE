@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarPlus, LoaderCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -33,6 +33,7 @@ import {
   manilaDateKey,
   manilaTimeKey,
 } from "@/features/appointments/timezone";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { appointmentService } from "@/services/appointmentService";
 
 function FieldError({ error }) {
@@ -89,31 +90,34 @@ export function AppointmentFormDialog({
   });
   const serviceType = watch("service_type");
 
-  useEffect(() => {
-    if (!open) return;
-    requestKey.current = crypto.randomUUID();
-    mutation.reset();
-    if (appointment) {
-      reset({
-        resident_id: appointment.resident_id,
-        appointment_type: appointment.appointment_type,
-        service_type: appointment.service_type,
-        scheduled_date: appointment.scheduled_date,
-        start_time: appointment.start_time?.slice(0, 5),
-        end_time: appointment.end_time?.slice(0, 5),
-        priority: appointment.priority,
-        assigned_staff_id: appointment.assigned_staff_id ?? "",
-        reason: appointment.reason ?? "",
-        operational_notes: appointment.operational_notes ?? "",
-      });
-      setSelectedResident(appointment.resident);
-      setSelectedStaff(appointment.staff);
-    } else {
-      reset(defaults(walkIn));
-      setSelectedResident(null);
-      setSelectedStaff(null);
-    }
-  }, [open, appointment, reset, walkIn]); // eslint-disable-line react-hooks/exhaustive-deps
+  useDialogDraftLifecycle({
+    open,
+    draftKey: `${appointment?.id ?? "new"}:${walkIn ? "walk-in" : "scheduled"}`,
+    resetDraft: () => {
+      requestKey.current = crypto.randomUUID();
+      mutation.reset();
+      if (appointment) {
+        reset({
+          resident_id: appointment.resident_id,
+          appointment_type: appointment.appointment_type,
+          service_type: appointment.service_type,
+          scheduled_date: appointment.scheduled_date,
+          start_time: appointment.start_time?.slice(0, 5),
+          end_time: appointment.end_time?.slice(0, 5),
+          priority: appointment.priority,
+          assigned_staff_id: appointment.assigned_staff_id ?? "",
+          reason: appointment.reason ?? "",
+          operational_notes: appointment.operational_notes ?? "",
+        });
+        setSelectedResident(appointment.resident);
+        setSelectedStaff(appointment.staff);
+      } else {
+        reset(defaults(walkIn));
+        setSelectedResident(null);
+        setSelectedStaff(null);
+      }
+    },
+  });
 
   function selectResident(resident) {
     setSelectedResident(resident);

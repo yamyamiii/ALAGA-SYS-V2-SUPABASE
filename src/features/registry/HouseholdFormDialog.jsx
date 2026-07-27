@@ -1,6 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle, Save } from "lucide-react";
-import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -23,6 +22,7 @@ import {
   useRegistryMutation,
 } from "@/features/registry/hooks";
 import { householdSchema } from "@/features/registry/schemas";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { registryService } from "@/services/registryService";
 
 const defaults = {
@@ -61,20 +61,23 @@ export function HouseholdFormDialog({
       : registryService.createHousehold(values),
   );
 
-  useEffect(() => {
-    if (!open) return;
-    reset(
-      household
-        ? {
-            purok_id: household.purok_id,
-            address_line: household.address_line,
-            status:
-              household.status === "archived" ? "active" : household.status,
-          }
-        : defaults,
-    );
-    mutation.reset();
-  }, [household, open, reset]); // eslint-disable-line react-hooks/exhaustive-deps
+  useDialogDraftLifecycle({
+    open,
+    draftKey: household?.id ?? "new",
+    resetDraft: () => {
+      reset(
+        household
+          ? {
+              purok_id: household.purok_id,
+              address_line: household.address_line,
+              status:
+                household.status === "archived" ? "active" : household.status,
+            }
+          : defaults,
+      );
+      mutation.reset();
+    },
+  });
 
   async function submit(values) {
     await mutation.mutateAsync(values);

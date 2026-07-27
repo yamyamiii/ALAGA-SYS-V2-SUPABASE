@@ -34,6 +34,18 @@ export function AuthProvider({ children }) {
       });
     } catch (error) {
       if (currentRequest !== requestId.current) return;
+      if (silent && error instanceof AuthServiceError && error.recoverable) {
+        setState((current) =>
+          current.status === "authenticated"
+            ? { ...current, error }
+            : {
+                status: "error",
+                profile: null,
+                error,
+              },
+        );
+        return;
+      }
       const configurationError =
         error instanceof AuthServiceError &&
         error.code === AUTH_ERROR_CODES.CONFIGURATION;
@@ -76,7 +88,7 @@ export function AuthProvider({ children }) {
       }
       if (["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event)) {
         window.setTimeout(() => {
-          if (active) recover();
+          if (active) recover({ silent: true });
         }, 0);
       }
     });

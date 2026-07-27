@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { AppointmentResidentField } from "@/features/appointments/AppointmentResidentField";
 import { useMaternalChildMutation } from "@/features/maternal-child-care/hooks";
 import { validateMaternalChildForm } from "@/features/maternal-child-care/schemas";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { maternalChildService } from "@/services/maternalChildService";
 
 const pregnancyDefaults = Object.freeze({
@@ -92,15 +93,16 @@ export function MaternalChildFormDialog({
       ? maternalChildService.savePregnancy(payload, record)
       : maternalChildService.saveChildProfile(payload, record),
   );
-  const resetMutation = mutation.reset;
-
-  useEffect(() => {
-    if (!open) return;
-    setValues(createMaternalChildFormValues(kind, record));
-    setSelectedResident(null);
-    setError("");
-    resetMutation();
-  }, [kind, open, record, resetMutation]);
+  useDialogDraftLifecycle({
+    open,
+    draftKey: `${kind}:${record?.id ?? "new"}`,
+    resetDraft: () => {
+      setValues(createMaternalChildFormValues(kind, record));
+      setSelectedResident(null);
+      setError("");
+      mutation.reset();
+    },
+  });
 
   function update(name, value) {
     setValues((current) => ({ ...current, [name]: value }));

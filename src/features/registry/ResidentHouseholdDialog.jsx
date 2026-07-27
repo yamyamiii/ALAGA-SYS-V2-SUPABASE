@@ -1,5 +1,5 @@
 import { LoaderCircle, UsersRound } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,6 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { HouseholdSearchField } from "@/features/registry/HouseholdSearchField";
 import { useRegistryMutation } from "@/features/registry/hooks";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { registryService } from "@/services/registryService";
 
 export function ResidentHouseholdDialog({
@@ -31,8 +32,10 @@ export function ResidentHouseholdDialog({
     return registryService.assignResidentToHousehold(resident.id, household);
   });
 
-  useEffect(() => {
-    if (open) {
+  useDialogDraftLifecycle({
+    open,
+    draftKey: resident?.id ?? "none",
+    resetDraft: () => {
       setSelectedHousehold(
         resident?.household_id && resident?.household
           ? {
@@ -44,8 +47,8 @@ export function ResidentHouseholdDialog({
           : null,
       );
       mutation.reset();
-    }
-  }, [open, resident]); // eslint-disable-line react-hooks/exhaustive-deps
+    },
+  });
 
   async function save() {
     await mutation.mutateAsync(selectedHousehold);

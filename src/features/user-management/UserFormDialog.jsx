@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, LoaderCircle, MailPlus, UserPlus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -21,6 +21,7 @@ import {
   createUserSchema,
   inviteUserSchema,
 } from "@/features/user-management/schemas";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { userManagementService } from "@/services/userManagementService";
 
 const defaults = {
@@ -52,14 +53,16 @@ export function UserFormDialog({ open, onOpenChange, onSuccess }) {
     formState: { errors, isSubmitting },
   } = useForm({ resolver: zodResolver(schema), defaultValues: defaults });
 
-  useEffect(() => {
-    if (open) {
+  useDialogDraftLifecycle({
+    open,
+    draftKey: "trusted-user",
+    resetDraft: () => {
       reset(defaults);
       setMode("invite");
       setServiceError(null);
       setShowPassword(false);
-    }
-  }, [open, reset]);
+    },
+  });
 
   function changeMode(nextMode) {
     setMode(nextMode);

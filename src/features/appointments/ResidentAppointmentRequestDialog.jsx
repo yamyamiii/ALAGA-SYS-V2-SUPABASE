@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarPlus, LoaderCircle } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -23,6 +23,7 @@ import {
   addDaysToDateKey,
   manilaDateKey,
 } from "@/features/appointments/timezone";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { appointmentService } from "@/services/appointmentService";
 
 function defaults() {
@@ -59,12 +60,15 @@ export function ResidentAppointmentRequestDialog({
     defaultValues: defaults(),
   });
 
-  useEffect(() => {
-    if (!open) return;
-    requestKey.current = crypto.randomUUID();
-    mutation.reset();
-    reset(defaults());
-  }, [open, reset]); // eslint-disable-line react-hooks/exhaustive-deps
+  useDialogDraftLifecycle({
+    open,
+    draftKey: "resident-appointment-request",
+    resetDraft: () => {
+      requestKey.current = crypto.randomUUID();
+      mutation.reset();
+      reset(defaults());
+    },
+  });
 
   async function submit(values) {
     const result = await mutation.mutateAsync(values);

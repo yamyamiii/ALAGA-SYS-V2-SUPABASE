@@ -155,6 +155,52 @@ describe("MaternalChildFormDialog pregnancy dates", () => {
     );
   });
 
+  it("does not reset an active edit when query data is refetched", async () => {
+    const record = {
+      id: "22222222-2222-4222-8222-222222222222",
+      version: 3,
+      resident_id: "11111111-1111-4111-8111-111111111111",
+      last_menstrual_period: "2026-06-15",
+      estimated_delivery_date: "2027-03-22",
+      gravida: 2,
+      para: 1,
+      term_births: 1,
+      preterm_births: 0,
+      abortions: 0,
+      living_children: 1,
+      pregnancy_risk_level: "low",
+      risk_notes: "",
+    };
+    const { rerender } = render(
+      <MaternalChildFormDialog
+        open
+        onOpenChange={vi.fn()}
+        kind="pregnancy"
+        record={record}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Estimated delivery date"), {
+      target: { value: "2027-04-01" },
+    });
+
+    rerender(
+      <MaternalChildFormDialog
+        open
+        onOpenChange={vi.fn()}
+        kind="pregnancy"
+        record={{
+          ...record,
+          version: 4,
+          estimated_delivery_date: "2027-03-29",
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText("Estimated delivery date")).toHaveValue(
+      "2027-04-01",
+    );
+  });
+
   it("rejects same-day LMP and EDD before invoking the mutation", async () => {
     const user = userEvent.setup();
     render(

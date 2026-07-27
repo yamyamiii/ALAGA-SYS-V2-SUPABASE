@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useMaternalChildMutation } from "@/features/maternal-child-care/hooks";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { maternalChildService } from "@/services/maternalChildService";
 
 const labels = {
@@ -114,6 +115,16 @@ export function MaternalChildEventDialog({
       return maternalChildService.saveMaternalVisit(type, parentId, payload);
     }
     return maternalChildService.saveChildEvent(type, parentId, payload);
+  });
+
+  useDialogDraftLifecycle({
+    open,
+    draftKey: `${type}:${parentId ?? "none"}`,
+    resetDraft: () => {
+      setValues(defaults(type));
+      setError("");
+      mutation.reset();
+    },
   });
 
   function update(name, value) {

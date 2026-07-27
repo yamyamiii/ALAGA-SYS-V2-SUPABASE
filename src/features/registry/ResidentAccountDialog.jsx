@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2, LoaderCircle, MailPlus, Search, Unlink } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatPersonName } from "@/features/registry/formatters";
 import { useDebouncedValue } from "@/features/registry/useDebouncedValue";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { userManagementService } from "@/services/userManagementService";
 
 function accountName(account) {
@@ -48,14 +49,6 @@ export function ResidentAccountDialog({ open, onOpenChange, resident }) {
     enabled:
       open && Boolean(residentId) && accountQuery.data === null && !archived,
   });
-
-  useEffect(() => {
-    if (open) {
-      setEmail(resident?.email ?? "");
-      setSearch("");
-      setConfirmUnlink(false);
-    }
-  }, [open, resident]);
 
   const mutation = useMutation({
     mutationFn: async ({ action, profileId }) => {
@@ -92,6 +85,17 @@ export function ResidentAccountDialog({ open, onOpenChange, resident }) {
             ? "Invitation sent and account linked"
             : "Resident account linked",
       );
+    },
+  });
+
+  useDialogDraftLifecycle({
+    open,
+    draftKey: resident?.id ?? "none",
+    resetDraft: () => {
+      setEmail(resident?.email ?? "");
+      setSearch("");
+      setConfirmUnlink(false);
+      mutation.reset();
     },
   });
 

@@ -1,5 +1,4 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -16,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useHealthRecordMutation } from "@/features/health-records/hooks";
 import { encounterClinicalSchema } from "@/features/health-records/schemas";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { healthRecordService } from "@/services/healthRecordService";
 
 const fields = [
@@ -47,19 +47,23 @@ export function EncounterClinicalFormDialog({
     defaultValues: {},
   });
 
-  useEffect(() => {
-    if (!open) return;
-    reset({
-      chief_complaint: encounter?.clinical?.chief_complaint ?? "",
-      subjective_notes: encounter?.clinical?.subjective_notes ?? "",
-      objective_notes: encounter?.clinical?.objective_notes ?? "",
-      assessment: encounter?.clinical?.assessment ?? "",
-      diagnosis_text: encounter?.clinical?.diagnosis_text ?? "",
-      plan: encounter?.clinical?.plan ?? "",
-      treatment_notes: encounter?.clinical?.treatment_notes ?? "",
-      follow_up_date: encounter?.clinical?.follow_up_date ?? "",
-    });
-  }, [encounter, open, reset]);
+  useDialogDraftLifecycle({
+    open,
+    draftKey: encounter?.id ?? "none",
+    resetDraft: () => {
+      mutation.reset();
+      reset({
+        chief_complaint: encounter?.clinical?.chief_complaint ?? "",
+        subjective_notes: encounter?.clinical?.subjective_notes ?? "",
+        objective_notes: encounter?.clinical?.objective_notes ?? "",
+        assessment: encounter?.clinical?.assessment ?? "",
+        diagnosis_text: encounter?.clinical?.diagnosis_text ?? "",
+        plan: encounter?.clinical?.plan ?? "",
+        treatment_notes: encounter?.clinical?.treatment_notes ?? "",
+        follow_up_date: encounter?.clinical?.follow_up_date ?? "",
+      });
+    },
+  });
 
   const submit = handleSubmit(async (values) => {
     try {

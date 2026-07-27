@@ -44,6 +44,7 @@ import {
   residentSchema,
   validateLocalityConsistency,
 } from "@/features/registry/schemas";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import {
   registryService,
   validateResidentPhoto,
@@ -171,36 +172,39 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
     return saved;
   });
 
-  useEffect(() => {
-    if (!open) return;
-    const source = resident ?? defaults;
-    reset(
-      Object.fromEntries(
-        Object.keys(defaults).map((field) => [
-          field,
-          source[field] ?? defaults[field],
-        ]),
-      ),
-    );
-    setLocalityError("");
-    setSelectedHousehold(
-      source.household_id && source.household
-        ? {
-            ...source.household,
-            id: source.household_id,
-            barangay_id: source.barangay_id,
-            purok_id: source.purok_id,
-          }
-        : null,
-    );
-    setPhotoFile(null);
-    setPhotoPreview(null);
-    setRemovePhoto(false);
-    setPhotoError("");
-    setUploadProgress(null);
-    setDuplicateReview(null);
-    mutation.reset();
-  }, [open, resident, reset]); // eslint-disable-line react-hooks/exhaustive-deps
+  useDialogDraftLifecycle({
+    open,
+    draftKey: resident?.id ?? "new",
+    resetDraft: () => {
+      const source = resident ?? defaults;
+      reset(
+        Object.fromEntries(
+          Object.keys(defaults).map((field) => [
+            field,
+            source[field] ?? defaults[field],
+          ]),
+        ),
+      );
+      setLocalityError("");
+      setSelectedHousehold(
+        source.household_id && source.household
+          ? {
+              ...source.household,
+              id: source.household_id,
+              barangay_id: source.barangay_id,
+              purok_id: source.purok_id,
+            }
+          : null,
+      );
+      setPhotoFile(null);
+      setPhotoPreview(null);
+      setRemovePhoto(false);
+      setPhotoError("");
+      setUploadProgress(null);
+      setDuplicateReview(null);
+      mutation.reset();
+    },
+  });
 
   useEffect(() => {
     if (!photoFile) {

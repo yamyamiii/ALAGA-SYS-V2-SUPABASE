@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -63,5 +64,52 @@ describe("ResidentAppointmentRequestDialog", () => {
       ),
     );
     expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty("end_time");
+  });
+
+  it("preserves an open request through blur and focus", async () => {
+    const user = userEvent.setup();
+    render(<ResidentAppointmentRequestDialog open onOpenChange={vi.fn()} />);
+    const reason = screen.getByLabelText("Reason for visit");
+    await user.type(reason, "Keep this unsaved request");
+
+    fireEvent.blur(window);
+    fireEvent.focus(window);
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(reason).toHaveValue("Keep this unsaved request");
+  });
+
+  it.each([
+    ["successful save", "Submit request"],
+    ["explicit cancel", "Back"],
+  ])("closes and clears after %s", async (_, actionName) => {
+    const user = userEvent.setup();
+
+    function ControlledDialog() {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Reopen
+          </button>
+          <ResidentAppointmentRequestDialog
+            open={open}
+            onOpenChange={setOpen}
+          />
+        </>
+      );
+    }
+
+    render(<ControlledDialog />);
+    await user.type(
+      screen.getByLabelText("Reason for visit"),
+      "Discard this draft",
+    );
+    await user.click(screen.getByRole("button", { name: actionName }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole("button", { name: "Reopen" }));
+    expect(await screen.findByLabelText("Reason for visit")).toHaveValue("");
   });
 });

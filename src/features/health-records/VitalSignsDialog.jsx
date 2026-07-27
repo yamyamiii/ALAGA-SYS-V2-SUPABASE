@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -22,6 +22,7 @@ import {
   getVitalWarnings,
   vitalSignsSchema,
 } from "@/features/health-records/schemas";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { healthRecordService } from "@/services/healthRecordService";
 
 const fields = [
@@ -54,14 +55,18 @@ export function VitalSignsDialog({ encounter, open, onOpenChange, onSaved }) {
   const warnings = useMemo(() => getVitalWarnings(values ?? {}), [values]);
   const bmi = calculateBmi(values?.height_cm, values?.weight_kg);
 
-  useEffect(() => {
-    if (!open) return;
-    reset(
-      Object.fromEntries(
-        fields.map(([name]) => [name, encounter?.vital_signs?.[name] ?? ""]),
-      ),
-    );
-  }, [encounter, open, reset]);
+  useDialogDraftLifecycle({
+    open,
+    draftKey: encounter?.id ?? "none",
+    resetDraft: () => {
+      mutation.reset();
+      reset(
+        Object.fromEntries(
+          fields.map(([name]) => [name, encounter?.vital_signs?.[name] ?? ""]),
+        ),
+      );
+    },
+  });
 
   const submit = handleSubmit(async (formValues) => {
     try {

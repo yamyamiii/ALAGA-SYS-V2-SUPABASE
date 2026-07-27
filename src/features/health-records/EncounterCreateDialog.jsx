@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -22,6 +22,7 @@ import {
 } from "@/features/health-records/constants";
 import { useHealthRecordMutation } from "@/features/health-records/hooks";
 import { encounterCreateSchema } from "@/features/health-records/schemas";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { healthRecordService } from "@/services/healthRecordService";
 
 function currentManilaDate() {
@@ -75,17 +76,21 @@ export function EncounterCreateDialog({
     },
   });
 
-  useEffect(() => {
-    if (!open) return;
-    const resident = appointment?.resident ?? null;
-    setSelectedResident(resident);
-    reset({
-      resident_id: appointment?.resident_id ?? "",
-      appointment_id: appointment?.id ?? "",
-      encounter_type: defaultEncounterType(appointment, profile.role),
-      encounter_date: appointment?.scheduled_date ?? currentManilaDate(),
-    });
-  }, [appointment, open, profile.role, reset]);
+  useDialogDraftLifecycle({
+    open,
+    draftKey: `${appointment?.id ?? "new"}:${profile.role}`,
+    resetDraft: () => {
+      const resident = appointment?.resident ?? null;
+      setSelectedResident(resident);
+      mutation.reset();
+      reset({
+        resident_id: appointment?.resident_id ?? "",
+        appointment_id: appointment?.id ?? "",
+        encounter_type: defaultEncounterType(appointment, profile.role),
+        encounter_date: appointment?.scheduled_date ?? currentManilaDate(),
+      });
+    },
+  });
 
   const submit = handleSubmit(async (values) => {
     try {

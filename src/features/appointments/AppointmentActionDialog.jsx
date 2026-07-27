@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -36,6 +36,7 @@ import {
 } from "@/features/appointments/timezone";
 import { useAuth } from "@/features/auth/authContext";
 import { USER_ROLES } from "@/features/auth/permissions";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { appointmentService } from "@/services/appointmentService";
 
 const transitionSchema = z.object({});
@@ -107,20 +108,24 @@ export function AppointmentActionDialog({
     formState: { errors },
   } = useForm({ resolver: zodResolver(schemaFor(action)), defaultValues: {} });
 
-  useEffect(() => {
-    if (!open || !appointment) return;
-    requestKey.current = crypto.randomUUID();
-    mutation.reset();
-    setSelectedStaff(appointment.staff ?? null);
-    reset({
-      cancellation_reason: "",
-      operational_notes: appointment.operational_notes ?? "",
-      scheduled_date: addDaysToDateKey(manilaDateKey(), 1),
-      start_time: appointment.start_time?.slice(0, 5) ?? "08:00",
-      end_time: appointment.end_time?.slice(0, 5) ?? "08:30",
-      assigned_staff_id: appointment.assigned_staff_id ?? "",
-    });
-  }, [open, appointment, action, reset]); // eslint-disable-line react-hooks/exhaustive-deps
+  useDialogDraftLifecycle({
+    open,
+    draftKey: `${appointment?.id ?? "none"}:${action ?? "none"}`,
+    resetDraft: () => {
+      if (!appointment) return;
+      requestKey.current = crypto.randomUUID();
+      mutation.reset();
+      setSelectedStaff(appointment.staff ?? null);
+      reset({
+        cancellation_reason: "",
+        operational_notes: appointment.operational_notes ?? "",
+        scheduled_date: addDaysToDateKey(manilaDateKey(), 1),
+        start_time: appointment.start_time?.slice(0, 5) ?? "08:00",
+        end_time: appointment.end_time?.slice(0, 5) ?? "08:30",
+        assigned_staff_id: appointment.assigned_staff_id ?? "",
+      });
+    },
+  });
 
   if (!appointment || !action) return null;
 

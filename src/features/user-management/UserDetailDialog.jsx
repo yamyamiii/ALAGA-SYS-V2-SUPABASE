@@ -8,7 +8,7 @@ import {
   RefreshCw,
   ShieldAlert,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -28,7 +28,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getRoleLabel } from "@/features/auth/permissions";
 import { profileFieldsSchema } from "@/features/user-management/schemas";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { userManagementService } from "@/services/userManagementService";
+
+const profileDefaults = {
+  first_name: "",
+  middle_name: "",
+  last_name: "",
+  suffix: "",
+  phone_number: "",
+};
 
 function displayDate(value, includeTime = false) {
   if (!value) return "Never";
@@ -56,6 +65,7 @@ export function UserDetailDialog({
   const [editing, setEditing] = useState(false);
   const [serviceError, setServiceError] = useState(null);
   const [resending, setResending] = useState(false);
+  const initializedUserId = useRef(null);
   const query = useQuery({
     queryKey: ["managed-user", userId],
     queryFn: () => userManagementService.getUser(userId),
@@ -68,33 +78,46 @@ export function UserDetailDialog({
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(profileFieldsSchema),
-    defaultValues: {
-      first_name: "",
-      middle_name: "",
-      last_name: "",
-      suffix: "",
-      phone_number: "",
+    defaultValues: profileDefaults,
+  });
+
+  function resetUserForm(user = query.data) {
+    reset(
+      user
+        ? {
+            first_name: user.first_name ?? "",
+            middle_name: user.middle_name ?? "",
+            last_name: user.last_name ?? "",
+            suffix: user.suffix ?? "",
+            phone_number: user.phone_number ?? "",
+          }
+        : profileDefaults,
+    );
+  }
+
+  useDialogDraftLifecycle({
+    open,
+    draftKey: userId ?? "none",
+    resetDraft: () => {
+      initializedUserId.current = null;
+      setEditing(false);
+      setServiceError(null);
+      resetUserForm(null);
     },
   });
 
   useEffect(() => {
-    if (query.data) {
-      reset({
-        first_name: query.data.first_name ?? "",
-        middle_name: query.data.middle_name ?? "",
-        last_name: query.data.last_name ?? "",
-        suffix: query.data.suffix ?? "",
-        phone_number: query.data.phone_number ?? "",
-      });
+    if (
+      !open ||
+      !query.data ||
+      query.data.id !== userId ||
+      initializedUserId.current === userId
+    ) {
+      return;
     }
-  }, [query.data, reset]);
-
-  useEffect(() => {
-    if (!open) {
-      setEditing(false);
-      setServiceError(null);
-    }
-  }, [open]);
+    resetUserForm(query.data);
+    initializedUserId.current = userId;
+  }, [open, query.data, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save(values) {
     setServiceError(null);
@@ -102,6 +125,7 @@ export function UserDetailDialog({
       await userManagementService.updateProfile(userId, values);
       toast.success("Profile updated");
       setEditing(false);
+      reset(values);
       await query.refetch();
       onChanged();
     } catch (error) {
@@ -320,7 +344,10 @@ export function UserDetailDialog({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setEditing(false)}
+                onClick={() => {
+                  resetUserForm();
+                  setEditing(false);
+                }}
                 disabled={isSubmitting}
               >
                 Cancel editing

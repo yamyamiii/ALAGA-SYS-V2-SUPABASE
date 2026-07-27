@@ -1,5 +1,5 @@
 import { LoaderCircle, ShieldAlert } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,6 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { getRoleLabel, USER_ROLES } from "@/features/auth/permissions";
 import { STATUS_TRANSITIONS } from "@/features/user-management/schemas";
+import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { userManagementService } from "@/services/userManagementService";
 
 const statusLabels = {
@@ -43,12 +44,14 @@ export function AccountChangeDialog({
     [roleChange, user?.account_status, user?.role],
   );
 
-  useEffect(() => {
-    if (open) {
+  useDialogDraftLifecycle({
+    open,
+    draftKey: `${user?.id ?? "none"}:${type}`,
+    resetDraft: () => {
       setValue(options[0] ?? "");
       setError(null);
-    }
-  }, [open, options, user?.id, type]);
+    },
+  });
 
   async function confirm() {
     if (!value || !user) return;
