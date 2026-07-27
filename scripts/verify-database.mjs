@@ -29,6 +29,7 @@ const expectedMigrations = [
   "20260720002200_resident_appointment_requests.sql",
   "20260720002300_simplify_resident_request_duration.sql",
   "20260720002400_maternal_child_care.sql",
+  "20260720002500_fix_maternal_child_trigger_columns.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -77,6 +78,8 @@ const completedMigrationHashes = {
     "cb42ae34dc5c6e864428f00e22f1cc3c7b8d81d571e5a214a253929c781d3123",
   "20260720002300_simplify_resident_request_duration.sql":
     "3fed17be6baacbc2b33e74ebc51dbfb06f18f8e1dbe7b6a17ca2484548f672eb",
+  "20260720002400_maternal_child_care.sql":
+    "4434f2a7504204996b795714d69a5be1d8550b771950ae0a625c5478cf3d3cc9",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -158,7 +161,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly twenty-four expected migrations exist in lexical order",
+  "Exactly twenty-five expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -760,6 +763,10 @@ check(
 const maternalChildMigration =
   migrationEntries.find(({ file }) => file.includes("maternal_child_care"))
     ?.sql ?? "";
+const maternalChildTriggerFixMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("fix_maternal_child_trigger_columns"),
+  )?.sql ?? "";
 const maternalChildDeclarationAudit = auditPlpgsqlIntoTargets(
   maternalChildMigration,
 );
@@ -854,6 +861,39 @@ check(
       ),
     ),
   "Maternal and child audits are semantic and exclude clinical narrative values",
+);
+check(
+  /create function public\.set_maternal_pregnancy_number\(\)[\s\S]*new\.pregnancy_number[\s\S]*pregnancy_number is database-generated and immutable/i.test(
+    maternalChildTriggerFixMigration,
+  ) &&
+    /create function public\.set_child_health_profile_number\(\)[\s\S]*new\.child_number[\s\S]*child_number is database-generated and immutable/i.test(
+      maternalChildTriggerFixMigration,
+    ) &&
+    !/set_maternal_pregnancy_number\(\)[\s\S]*?\$\$;[\s\S]*?\bchild_number\b/i.test(
+      maternalChildTriggerFixMigration.slice(
+        maternalChildTriggerFixMigration.indexOf(
+          "create function public.set_maternal_pregnancy_number",
+        ),
+        maternalChildTriggerFixMigration.indexOf(
+          "create function public.set_child_health_profile_number",
+        ),
+      ),
+    ),
+  "Maternal and child immutable numbers use table-specific trigger functions",
+);
+check(
+  /new_row := to_jsonb\(new\)/i.test(maternalChildTriggerFixMigration) &&
+    /to_jsonb\(old\)/i.test(maternalChildTriggerFixMigration) &&
+    /new_row ->> 'pregnancy_number'/i.test(maternalChildTriggerFixMigration) &&
+    /new_row ->> 'child_number'/i.test(maternalChildTriggerFixMigration) &&
+    !/\b(?:new|old)\.(?:pregnancy_number|child_number|status|archived_at)\b/i.test(
+      maternalChildTriggerFixMigration.slice(
+        maternalChildTriggerFixMigration.indexOf(
+          "create or replace function public.audit_maternal_child_change",
+        ),
+      ),
+    ),
+  "Shared maternal-child auditing uses row-type-safe JSONB field access",
 );
 
 const functionBlocks = [

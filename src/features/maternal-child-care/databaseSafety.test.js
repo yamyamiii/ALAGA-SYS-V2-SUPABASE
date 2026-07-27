@@ -7,6 +7,10 @@ const migration = fs.readFileSync(
   "supabase/migrations/20260720002400_maternal_child_care.sql",
   "utf8",
 );
+const triggerFixMigration = fs.readFileSync(
+  "supabase/migrations/20260720002500_fix_maternal_child_trigger_columns.sql",
+  "utf8",
+);
 
 const migrationFiles = fs
   .readdirSync("supabase/migrations")
@@ -101,6 +105,18 @@ function findMissingQualifiedColumns(sql, tables) {
     }
   }
   return missing;
+}
+
+function latestTriggerFunctionBody(sql, functionName) {
+  const definitions = [
+    ...sql.matchAll(
+      new RegExp(
+        `create(?:\\s+or\\s+replace)?\\s+function\\s+public\\.${functionName}\\s*\\([\\s\\S]*?returns\\s+trigger[\\s\\S]*?as\\s+\\$\\$([\\s\\S]*?)\\$\\$;`,
+        "gi",
+      ),
+    ),
+  ];
+  return definitions.at(-1)?.[1] ?? "";
 }
 
 describe("maternal-child database safety", () => {
@@ -215,7 +231,7 @@ describe("maternal-child database safety", () => {
     ).toThrow("event request key is required");
   });
 
-  it("keeps migrations 1 through 23 byte-identical to the verified hash lock", () => {
+  it("keeps migrations 1 through 24 byte-identical to the verified hash lock", () => {
     const verifier = fs.readFileSync("scripts/verify-database.mjs", "utf8");
     const hashEntries = new Map(
       [
@@ -224,8 +240,8 @@ describe("maternal-child database safety", () => {
         ),
       ].map((match) => [match[1], match[2]]),
     );
-    const applied = migrationFiles.slice(0, 23);
-    expect(applied).toHaveLength(23);
+    const applied = migrationFiles.slice(0, 24);
+    expect(applied).toHaveLength(24);
     for (const file of applied) {
       const actual = crypto
         .createHash("sha256")
@@ -293,6 +309,100 @@ describe("maternal-child database safety", () => {
     );
     expect(migration).toMatch(
       /actor_role='resident' and resident_id<>public\.current_resident_id\(\)/i,
+    );
+  });
+
+  it("uses table-specific immutable number triggers", () => {
+    const pregnancyNumberFunction = latestTriggerFunctionBody(
+      allMigrations,
+      "set_maternal_pregnancy_number",
+    );
+    const childNumberFunction = latestTriggerFunctionBody(
+      allMigrations,
+      "set_child_health_profile_number",
+    );
+
+    expect(pregnancyNumberFunction).toMatch(/new\.pregnancy_number/i);
+    expect(pregnancyNumberFunction).not.toMatch(/\bchild_number\b/i);
+    expect(pregnancyNumberFunction).toMatch(
+      /pregnancy_number is database-generated and immutable/i,
+    );
+    expect(childNumberFunction).toMatch(/new\.child_number/i);
+    expect(childNumberFunction).not.toMatch(/\bpregnancy_number\b/i);
+    expect(childNumberFunction).toMatch(
+      /child_number is database-generated and immutable/i,
+    );
+    expect(triggerFixMigration).toMatch(
+      /maternal_pregnancy_set_number[\s\S]*execute function public\.set_maternal_pregnancy_number\(\)/i,
+    );
+    expect(triggerFixMigration).toMatch(
+      /child_profile_set_number[\s\S]*execute function public\.set_child_health_profile_number\(\)/i,
+    );
+  });
+
+  it("keeps every active maternal-child trigger field valid for its target table", () => {
+    const tables = collectTableColumns(allMigrations);
+    const triggerTargets = new Map([
+      ["set_maternal_pregnancy_number", ["maternal_pregnancies"]],
+      ["set_child_health_profile_number", ["child_health_profiles"]],
+      [
+        "protect_maternal_child_row",
+        [
+          "maternal_pregnancies",
+          "maternal_prenatal_visits",
+          "maternal_delivery_outcomes",
+          "maternal_postnatal_visits",
+          "child_health_profiles",
+          "child_growth_measurements",
+          "child_immunizations",
+          "child_health_visits",
+        ],
+      ],
+      [
+        "audit_maternal_child_change",
+        [
+          "maternal_pregnancies",
+          "maternal_prenatal_visits",
+          "maternal_delivery_outcomes",
+          "maternal_postnatal_visits",
+          "child_health_profiles",
+          "child_growth_measurements",
+          "child_immunizations",
+          "child_health_visits",
+        ],
+      ],
+    ]);
+
+    for (const [functionName, targetTables] of triggerTargets) {
+      const body = latestTriggerFunctionBody(allMigrations, functionName);
+      expect(body, functionName).not.toBe("");
+      const directFields = new Set(
+        [...body.matchAll(/\b(?:new|old)\.([a-z_][a-z0-9_]*)/gi)].map((match) =>
+          match[1].toLowerCase(),
+        ),
+      );
+      for (const table of targetTables) {
+        for (const field of directFields) {
+          expect(
+            tables.get(table)?.has(field),
+            `${functionName} references ${field} on ${table}`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("uses JSONB for record-specific fields in the shared audit trigger", () => {
+    const audit = latestTriggerFunctionBody(
+      allMigrations,
+      "audit_maternal_child_change",
+    );
+    expect(audit).toMatch(/new_row := to_jsonb\(new\)/i);
+    expect(audit).toMatch(/to_jsonb\(old\)/i);
+    expect(audit).toMatch(/new_row ->> 'pregnancy_number'/i);
+    expect(audit).toMatch(/new_row ->> 'child_number'/i);
+    expect(audit).not.toMatch(
+      /\b(?:new|old)\.(?:pregnancy_number|child_number|status|archived_at)\b/i,
     );
   });
 });
