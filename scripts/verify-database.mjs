@@ -87,7 +87,9 @@ const completedMigrationHashes = {
 };
 const reviewedPendingMigrationHashes = {
   "20260720002600_reports_analytics.sql":
-    "06b1e0370a2aea8df24fb6f801f2242e2f7738a0134622f60ef5710282fdfb13",
+    "7ed101a662168b37235ff583c1efe4556f147db93f52e93468e8af4962f90ba3",
+  "20260720002700_general_assistance.sql":
+    "dcffe0bf7d90408e198eaa57ac6c237b99f3f20d73617896bc5858a6d41d5bfe",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -967,6 +969,24 @@ check(
     reportsMigration,
   ),
   "Report functions do not select clinical narratives",
+);
+check(
+  /with days\(period_date\) as \([\s\S]*pg_catalog\.generate_series\([\s\S]*\) as generated\(generated_at\)/i.test(
+    reportsMigration,
+  ) &&
+    /group by days\.period_date[\s\S]*order by days\.period_date/i.test(
+      reportsMigration,
+    ) &&
+    !/::date\s+day\b/i.test(reportsMigration),
+  "Report date series uses explicit, parser-safe aliases",
+);
+check(
+  !/\)\s+rows\b/i.test(reportsMigration) &&
+    !/\bgroups\s*\(/i.test(reportsMigration) &&
+    /with ordinality as export_element\(value, position\)/i.test(
+      reportsMigration,
+    ),
+  "Report derived tables and ordinality use unambiguous aliases",
 );
 
 const assistanceMigration =

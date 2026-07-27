@@ -44,6 +44,28 @@ describe("reports database boundary", () => {
     expect(migration).toMatch(/report date range cannot exceed five years/i);
   });
 
+  it("uses an explicitly aliased PostgreSQL date series", () => {
+    expect(migration).toMatch(
+      /with days\(period_date\) as \([\s\S]*from pg_catalog\.generate_series\([\s\S]*\) as generated\(generated_at\)/i,
+    );
+    expect(migration).toMatch(
+      /left join filtered on filtered\.scheduled_date = days\.period_date[\s\S]*group by days\.period_date[\s\S]*order by days\.period_date/i,
+    );
+    expect(migration).not.toMatch(/::date\s+day\b/i);
+    expect(migration).not.toMatch(/\)\s+rows\b/i);
+    expect(migration).not.toMatch(/\bgroups\s*\(/i);
+  });
+
+  it("keeps aggregate filters and export ordinality syntactically explicit", () => {
+    expect(migration).toMatch(
+      /count\(\*\) filter \(where status = 'completed'\)/i,
+    );
+    expect(migration).toMatch(
+      /with ordinality as export_element\(value, position\)/i,
+    );
+    expect(migration).toMatch(/order by 8 desc, 2/i);
+  });
+
   it("caps and minimally audits exports", () => {
     expect(migration).toMatch(/p_limit < 1 or p_limit > 5000/i);
     expect(migration).toMatch(/report\.large_export_requested/i);

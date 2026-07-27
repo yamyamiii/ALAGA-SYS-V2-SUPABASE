@@ -232,7 +232,7 @@ begin
         where h.status = 'active' and h.archived_at is null
           and (p_purok_id is null or h.purok_id = p_purok_id)
         group by h.id
-      ) sizes
+      ) as household_sizes
     ),
     'without_household', (
       select count(*) from public.residents r
@@ -328,15 +328,15 @@ begin
     where r.status = 'active' and r.archived_at is null
       and (p_purok_id is null or r.purok_id = p_purok_id)
   ),
-  groups(label, sort_order) as (
+  age_groups(label, sort_order) as (
     values ('Under 1', 1), ('1–4', 2), ('5–12', 3),
       ('13–17', 4), ('18–59', 5), ('60+', 6)
   )
-  select groups.label, count(categorized.age_label)::bigint
-  from groups
-  left join categorized on categorized.age_label = groups.label
-  group by groups.label, groups.sort_order
-  order by groups.sort_order;
+  select age_groups.label, count(categorized.age_label)::bigint
+  from age_groups
+  left join categorized on categorized.age_label = age_groups.label
+  group by age_groups.label, age_groups.sort_order
+  order by age_groups.sort_order;
 end;
 $$;
 
@@ -389,16 +389,16 @@ begin
     'status_counts', coalesce((
       select jsonb_object_agg(status::text, status_count)
       from (
-        select status, count(*) status_count from filtered
+        select status, count(*) as status_count from filtered
         group by status
-      ) status_rows
+      ) as status_rows
     ), '{}'::jsonb),
     'priority_counts', coalesce((
       select jsonb_object_agg(priority::text, priority_count)
       from (
-        select priority, count(*) priority_count from filtered
+        select priority, count(*) as priority_count from filtered
         group by priority
-      ) priority_rows
+      ) as priority_rows
     ), '{}'::jsonb)
   )
   into result
@@ -427,8 +427,13 @@ begin
     p_service_type, p_staff_id
   );
   return query
-  with days as (
-    select generate_series(p_start_date, p_end_date, interval '1 day')::date day
+  with days(period_date) as (
+    select generated.generated_at::date
+    from pg_catalog.generate_series(
+      p_start_date::timestamp without time zone,
+      p_end_date::timestamp without time zone,
+      interval '1 day'
+    ) as generated(generated_at)
   ),
   filtered as (
     select a.scheduled_date, a.status
@@ -441,14 +446,14 @@ begin
       and (p_status is null or a.status = p_status)
       and (p_staff_id is null or a.assigned_staff_id = p_staff_id)
   )
-  select days.day, count(filtered.scheduled_date)::bigint,
+  select days.period_date, count(filtered.scheduled_date)::bigint,
     count(filtered.scheduled_date) filter (
       where filtered.status = 'completed'
     )::bigint
   from days
-  left join filtered on filtered.scheduled_date = days.day
-  group by days.day
-  order by days.day;
+  left join filtered on filtered.scheduled_date = days.period_date
+  group by days.period_date
+  order by days.period_date;
 end;
 $$;
 
@@ -529,14 +534,18 @@ begin
     ) end,
     'status_counts', coalesce((
       select jsonb_object_agg(status::text, status_count)
-      from (select status, count(*) status_count from filtered group by status) s
+      from (
+        select status, count(*) as status_count
+        from filtered
+        group by status
+      ) as status_rows
     ), '{}'::jsonb),
     'type_counts', coalesce((
       select jsonb_object_agg(encounter_type::text, type_count)
       from (
-        select encounter_type, count(*) type_count
+        select encounter_type, count(*) as type_count
         from filtered group by encounter_type
-      ) t
+      ) as type_rows
     ), '{}'::jsonb)
   )
   into result
@@ -615,17 +624,17 @@ begin
     'status_counts', coalesce((
       select jsonb_object_agg(status::text, status_count)
       from (
-        select p.status, count(*) status_count
+        select p.status, count(*) as status_count
         from public.maternal_pregnancies p
         join public.residents r on r.id = p.resident_id
         where (p_purok_id is null or r.purok_id = p_purok_id)
         group by p.status
-      ) rows
+      ) as pregnancy_status_rows
     ), '{}'::jsonb),
     'outcome_counts', coalesce((
       select jsonb_object_agg(outcome, outcome_count)
       from (
-        select d.outcome, count(*) outcome_count
+        select d.outcome, count(*) as outcome_count
         from public.maternal_delivery_outcomes d
         join public.maternal_pregnancies p on p.id = d.pregnancy_id
         join public.residents r on r.id = p.resident_id
@@ -633,7 +642,7 @@ begin
           and d.archived_at is null
           and (p_purok_id is null or r.purok_id = p_purok_id)
         group by d.outcome
-      ) rows
+      ) as delivery_outcome_rows
     ), '{}'::jsonb)
   );
 end;
@@ -708,14 +717,14 @@ begin
     'immunization_status_counts', coalesce((
       select jsonb_object_agg(status::text, status_count)
       from (
-        select i.status, count(*) status_count
+        select i.status, count(*) as status_count
         from public.child_immunizations i
         join public.child_health_profiles c on c.id = i.child_profile_id
         join public.residents r on r.id = c.child_resident_id
         where i.archived_at is null
           and (p_purok_id is null or r.purok_id = p_purok_id)
         group by i.status
-      ) rows
+      ) as immunization_status_rows
     ), '{}'::jsonb)
   );
 end;
@@ -796,7 +805,7 @@ begin
     and (p_staff_id is null or p.id = p_staff_id)
     and (actor_role = 'admin' or p.id = auth.uid())
   group by p.id, p.first_name, p.middle_name, p.last_name, p.suffix, p.role
-  order by total_volume desc, staff_name;
+  order by 8 desc, 2;
 end;
 $$;
 
@@ -923,7 +932,7 @@ begin
     into rows_data
     from jsonb_each_text(
       public.report_overview_summary(p_start_date, p_end_date)
-    ) metric;
+    ) as metric;
   elsif p_report_type = 'residents' then
     select coalesce(jsonb_agg(jsonb_build_object(
       'metric', report_row.label, 'value', report_row.value
@@ -931,7 +940,7 @@ begin
     into rows_data
     from public.report_residents_by_age_group(
       p_start_date, p_end_date, p_purok_id
-    ) report_row;
+    ) as report_row;
   elsif p_report_type = 'appointments' then
     select coalesce(jsonb_agg(jsonb_build_object(
       'metric', report_row.label, 'value', report_row.value
@@ -939,7 +948,7 @@ begin
     into rows_data
     from public.report_services_distribution(
       p_start_date, p_end_date, p_purok_id, p_status, p_staff_id
-    ) report_row
+    ) as report_row
     where p_service_type is null or report_row.label = p_service_type;
   elsif p_report_type = 'health_records' then
     select coalesce(jsonb_agg(jsonb_build_object(
@@ -951,7 +960,7 @@ begin
       public.report_health_summary(
         p_start_date, p_end_date, p_purok_id, p_staff_id
       )
-    ) report_row
+    ) as report_row
     where report_row.key <> 'status_counts'
       and report_row.key <> 'type_counts';
   elsif p_report_type = 'maternal_care' then
@@ -962,7 +971,7 @@ begin
     into rows_data
     from jsonb_each_text(
       public.report_maternal_summary(p_start_date, p_end_date, p_purok_id)
-    ) report_row
+    ) as report_row
     where report_row.key <> 'status_counts'
       and report_row.key <> 'outcome_counts';
   elsif p_report_type = 'child_care' then
@@ -973,7 +982,7 @@ begin
     into rows_data
     from jsonb_each_text(
       public.report_child_summary(p_start_date, p_end_date, p_purok_id, 180)
-    ) report_row
+    ) as report_row
     where report_row.key <> 'immunization_status_counts';
   else
     select coalesce(jsonb_agg(jsonb_build_object(
@@ -988,7 +997,7 @@ begin
     into rows_data
     from public.report_staff_workload(
       p_start_date, p_end_date, p_service_type, p_staff_id
-    ) report_row;
+    ) as report_row;
   end if;
 
   row_count := jsonb_array_length(rows_data);
@@ -1005,10 +1014,11 @@ begin
   );
 
   return query
-  select element.value, row_count::bigint
-  from jsonb_array_elements(rows_data) with ordinality element(value, position)
-  where element.position > p_offset
-  order by element.position
+  select export_element.value, row_count::bigint
+  from jsonb_array_elements(rows_data)
+    with ordinality as export_element(value, position)
+  where export_element.position > p_offset
+  order by export_element.position
   limit p_limit;
 end;
 $$;
