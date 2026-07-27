@@ -42,6 +42,18 @@ const MaternalChildCarePage = lazy(
   () => import("@/features/maternal-child-care/MaternalChildCarePage"),
 );
 const ReportsPage = lazy(() => import("@/features/reports/ReportsPage"));
+const AnnouncementsPage = lazy(
+  () => import("@/features/assistance/AnnouncementsPage"),
+);
+const NotificationsPage = lazy(
+  () => import("@/features/assistance/NotificationsPage"),
+);
+const ActivityPage = lazy(() => import("@/features/assistance/ActivityPage"));
+const HealthCenterPage = lazy(
+  () => import("@/features/assistance/HealthCenterPage"),
+);
+const FaqPage = lazy(() => import("@/features/assistance/FaqPage"));
+const ContactPage = lazy(() => import("@/features/assistance/ContactPage"));
 const ConfigurationErrorPage = lazy(
   () => import("@/pages/ConfigurationErrorPage"),
 );
@@ -56,7 +68,13 @@ const moduleRoutes = navigationItems.filter(
     item.path !== ROUTES.appointments &&
     item.path !== ROUTES.healthRecords &&
     item.path !== ROUTES.maternalChildCare &&
-    item.path !== ROUTES.reports,
+    item.path !== ROUTES.reports &&
+    item.path !== ROUTES.announcements &&
+    item.path !== ROUTES.notifications &&
+    item.path !== ROUTES.activity &&
+    item.path !== ROUTES.healthCenter &&
+    item.path !== ROUTES.faq &&
+    item.path !== ROUTES.contact,
 );
 
 function RouteFallback() {
@@ -161,6 +179,54 @@ export function AppRouter() {
               element={
                 <RoleGuard permission={PERMISSIONS.VIEW_REPORTS}>
                   <ReportsPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.announcements}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_ANNOUNCEMENTS}>
+                  <AnnouncementsPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.notifications}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_NOTIFICATIONS}>
+                  <NotificationsPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.activity}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_ACTIVITY}>
+                  <ActivityPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.healthCenter}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_HEALTH_CENTER}>
+                  <HealthCenterPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.faq}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_FAQ}>
+                  <FaqPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.contact}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_INQUIRIES}>
+                  <ContactPage />
                 </RoleGuard>
               }
             />

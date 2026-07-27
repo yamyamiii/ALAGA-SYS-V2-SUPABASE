@@ -5,10 +5,19 @@ import { MobileNavigation } from "@/components/layout/MobileNavigation";
 import { Button } from "@/components/ui/button";
 import { navigationItems } from "@/config/navigation";
 import { ROUTES } from "@/config/routes";
+import { useNotifications } from "@/features/assistance/hooks";
+import { useAuth } from "@/features/auth/authContext";
+import { PERMISSIONS } from "@/features/auth/permissions";
 import { UserMenu } from "@/features/auth/UserMenu";
 
 export function Header() {
+  const { can } = useAuth();
   const location = useLocation();
+  const canViewNotifications = can(PERMISSIONS.VIEW_NOTIFICATIONS);
+  const notifications = useNotifications(
+    { unread_only: false, page: 1, page_size: 1 },
+    canViewNotifications,
+  );
   const currentItem = navigationItems.find(
     (item) => item.path === location.pathname,
   );
@@ -41,14 +50,24 @@ export function Header() {
             <span className="truncate">{pageTitle}</span>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Notifications"
-          title="Notifications preview"
-        >
-          <Bell />
-        </Button>
+        {canViewNotifications ? (
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="relative"
+            aria-label={`${notifications.data?.unread ?? 0} unread notifications`}
+          >
+            <Link to={ROUTES.notifications}>
+              <Bell />
+              {(notifications.data?.unread ?? 0) > 0 ? (
+                <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                  {Math.min(notifications.data.unread, 99)}
+                </span>
+              ) : null}
+            </Link>
+          </Button>
+        ) : null}
         <UserMenu />
       </div>
     </header>

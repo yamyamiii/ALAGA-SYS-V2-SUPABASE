@@ -31,6 +31,7 @@ const expectedMigrations = [
   "20260720002400_maternal_child_care.sql",
   "20260720002500_fix_maternal_child_trigger_columns.sql",
   "20260720002600_reports_analytics.sql",
+  "20260720002700_general_assistance.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -84,16 +85,24 @@ const completedMigrationHashes = {
   "20260720002500_fix_maternal_child_trigger_columns.sql":
     "6f19338b1d8b04d0d278b2987cf4e13d427cf758d986efa7ce9c06954f08ff41",
 };
+const reviewedPendingMigrationHashes = {
+  "20260720002600_reports_analytics.sql":
+    "06b1e0370a2aea8df24fb6f801f2242e2f7738a0134622f60ef5710282fdfb13",
+};
 const expectedTables = [
   "admin_action_rate_limits",
+  "announcements",
   "appointment_request_events",
   "appointments",
+  "assistance_notifications",
   "audit_logs",
   "barangays",
   "child_growth_measurements",
   "child_health_profiles",
   "child_health_visits",
   "child_immunizations",
+  "faq_entries",
+  "health_center_information",
   "health_encounters",
   "households",
   "maternal_delivery_outcomes",
@@ -103,6 +112,7 @@ const expectedTables = [
   "profiles",
   "puroks",
   "resident_allergies",
+  "resident_inquiries",
   "resident_medical_history",
   "residents",
   "vital_signs",
@@ -164,7 +174,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly twenty-six expected migrations exist in lexical order",
+  "Exactly twenty-seven expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -179,6 +189,16 @@ for (const [file, expectedHash] of Object.entries(completedMigrationHashes)) {
   check(
     actualHash === expectedHash,
     `${file} remains byte-identical to its completed migration`,
+  );
+}
+for (const [file, expectedHash] of Object.entries(
+  reviewedPendingMigrationHashes,
+)) {
+  const sql = fs.readFileSync(path.join(migrationsDirectory, file));
+  const actualHash = crypto.createHash("sha256").update(sql).digest("hex");
+  check(
+    actualHash === expectedHash,
+    `${file} remains byte-identical to its reviewed pending migration`,
   );
 }
 
@@ -947,6 +967,75 @@ check(
     reportsMigration,
   ),
   "Report functions do not select clinical narratives",
+);
+
+const assistanceMigration =
+  migrationEntries.find(({ file }) => file.includes("general_assistance"))
+    ?.sql ?? "";
+const assistanceDeclarationAudit = auditPlpgsqlIntoTargets(assistanceMigration);
+check(
+  assistanceDeclarationAudit.functionCount === 21 &&
+    assistanceDeclarationAudit.undeclared.length === 0,
+  "Every general-assistance PL/pgSQL SELECT/RETURNING INTO target is declared",
+);
+check(
+  /revoke all on table public\.announcements,[\s\S]*resident_inquiries from public, anon, authenticated/i.test(
+    assistanceMigration,
+  ) &&
+    !/grant\s+(?:select|insert|update|delete)[^;]*public\.(?:announcements|assistance_notifications|health_center_information|faq_entries|resident_inquiries)[^;]*authenticated/i.test(
+      assistanceMigration,
+    ),
+  "General-assistance tables are RLS-enabled RPC-only boundaries",
+);
+check(
+  /a\.publish_at <= now\(\)[\s\S]*a\.expires_at is null or a\.expires_at > now\(\)/i.test(
+    assistanceMigration,
+  ) &&
+    /order by a\.is_pinned desc,a\.publish_at desc,a\.id/i.test(
+      assistanceMigration,
+    ),
+  "Announcement visibility enforces publication, expiry, and pinned ordering",
+);
+check(
+  /n\.recipient_profile_id=auth\.uid\(\)/i.test(assistanceMigration) &&
+    /r\.linked_profile_id=auth\.uid\(\)[\s\S]*a\.entity_type='appointments'/i.test(
+      assistanceMigration,
+    ) &&
+    !/\b(?:chief_complaint|subjective_notes|objective_notes|assessment|diagnosis_text|treatment_notes|risk_notes|developmental_notes)\b/i.test(
+      assistanceMigration,
+    ),
+  "Notifications and resident activity are owner-scoped and narrative-free",
+);
+check(
+  /create trigger appointments_assistance_notifications/i.test(
+    assistanceMigration,
+  ) &&
+    /create trigger health_encounters_assistance_notifications/i.test(
+      assistanceMigration,
+    ) &&
+    /maternal_pregnancies[\s\S]*child_health_visits[\s\S]*assistance_notify_maternal_child/i.test(
+      assistanceMigration,
+    ),
+  "Trusted appointment, health, maternal, and child events create in-app notifications",
+);
+check(
+  /linked_profile_id=auth\.uid\(\)[\s\S]*status='active'[\s\S]*archived_at is null/i.test(
+    assistanceMigration,
+  ) &&
+    /actor_role in \('admin','barangay_health_worker'\)[\s\S]*or i\.resident_profile_id=auth\.uid\(\)/i.test(
+      assistanceMigration,
+    ) &&
+    /closed inquiry cannot be changed/i.test(assistanceMigration),
+  "Inquiry creation derives the linked resident owner and uses a bounded staff workflow",
+);
+check(
+  /announcement\.created/i.test(assistanceMigration) &&
+    /announcement\.updated/i.test(assistanceMigration) &&
+    /announcement\.archived/i.test(assistanceMigration) &&
+    /announcement\.pinned/i.test(assistanceMigration) &&
+    /notification\.read_all/i.test(assistanceMigration) &&
+    /inquiry\.status_changed/i.test(assistanceMigration),
+  "Required assistance actions produce minimized semantic audits",
 );
 
 const functionBlocks = [

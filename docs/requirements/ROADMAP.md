@@ -37,23 +37,18 @@ strict auditing and privacy protections.
 Add program-specific relational records, schedules, and monitoring workflows
 after clinical review.
 
-## Phase 7 — Medicine inventory and dispensing
+## Phase 7 — Reports, analytics, exports, and printing
 
-Track lots, expiries, stock movements, dispensing, reconciliation, and inventory
-alerts with database-enforced integrity.
+Add server-side aggregates, permission-aware reports, bounded exports, and
+printable operational summaries.
 
-## Phase 8 — Announcements and notifications
+## Phase 8 — General assistance
 
-Add targeted announcements, delivery preferences, read state, and safe scheduled
-notification workflows.
+Add announcements, in-app notification read state, activity timelines,
+health-center information, FAQs, and resident inquiry tickets.
 
-## Phase 9 — Reports and dashboards
+## Future phases
 
-Add server-side aggregates, permission-aware reports, filters, exports, and
-performance-tested dashboard queries.
-
-## Phase 10 — Audit logs, testing, hardening, and deployment
-
-Complete audit review tools, automated test coverage, accessibility and security
-testing, backups, operational monitoring, incident procedures, and production
-deployment.
+Medicine inventory, dispensing, laboratory integrations, external notification
+delivery, backup/restore operations, AI assistance, and final deployment
+hardening remain explicitly out of scope until separately approved.

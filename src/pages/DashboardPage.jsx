@@ -11,7 +11,11 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { EmptyState } from "@/components/common/StateDisplay";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+} from "@/components/common/StateDisplay";
 import { PageHeading } from "@/components/common/PageHeading";
 import { SectionHeading } from "@/components/common/SectionHeading";
 import { StatCard } from "@/components/common/StatCard";
@@ -19,6 +23,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ROUTES } from "@/config/routes";
+import {
+  useAnnouncements,
+  useNotifications,
+} from "@/features/assistance/hooks";
 import {
   APPOINTMENT_STATUS_LABELS,
   PRIORITY_LABELS,
@@ -36,10 +44,7 @@ import { hasPermission, PERMISSIONS } from "@/features/auth/permissions";
 import { useMaternalChildDashboard } from "@/features/maternal-child-care/hooks";
 import { useReport } from "@/features/reports/hooks";
 
-const unavailableActions = [
-  { label: "New resident", icon: UsersRound },
-  { label: "Post announcement", icon: BellRing },
-];
+const unavailableActions = [{ label: "New resident", icon: UsersRound }];
 
 export default function DashboardPage() {
   const { profile } = useAuth();
@@ -75,6 +80,22 @@ export default function DashboardPage() {
     profile.role,
     PERMISSIONS.SCHEDULE_APPOINTMENTS,
   );
+  const canManageAnnouncements = hasPermission(
+    profile.role,
+    PERMISSIONS.MANAGE_ANNOUNCEMENTS,
+  );
+  const latestAnnouncement = useAnnouncements({
+    search: "",
+    category: "",
+    include_archived: false,
+    page: 1,
+    page_size: 10,
+  });
+  const notifications = useNotifications({
+    unread_only: false,
+    page: 1,
+    page_size: 10,
+  });
   const appointmentStats = [
     {
       label: "Today's appointments",
@@ -291,6 +312,90 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <SectionHeading
+              title="Latest announcement"
+              description="Current health center and barangay advisory"
+              action={
+                <Button asChild size="sm" variant="outline">
+                  <Link to={ROUTES.announcements}>View all</Link>
+                </Button>
+              }
+            />
+          </CardHeader>
+          <CardContent>
+            {latestAnnouncement.isLoading ? (
+              <LoadingState compact title="Loading latest announcement" />
+            ) : latestAnnouncement.isError ? (
+              <ErrorState
+                compact
+                title="Announcement unavailable"
+                description={latestAnnouncement.error.message}
+                actionLabel="Try again"
+                onAction={() => latestAnnouncement.refetch()}
+              />
+            ) : latestAnnouncement.data?.items?.[0] ? (
+              <div className="rounded-xl border p-4">
+                <p className="font-semibold">
+                  {latestAnnouncement.data.items[0].title}
+                </p>
+                <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
+                  {latestAnnouncement.data.items[0].content}
+                </p>
+              </div>
+            ) : (
+              <EmptyState
+                compact
+                title="No current announcements"
+                description="Published community updates will appear here."
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <SectionHeading
+              title="Notification center"
+              description={`${notifications.data?.unread ?? 0} unread in-app updates`}
+              action={
+                <Button asChild size="sm" variant="outline">
+                  <Link to={ROUTES.notifications}>Open notifications</Link>
+                </Button>
+              }
+            />
+          </CardHeader>
+          <CardContent>
+            {notifications.isLoading ? (
+              <LoadingState compact title="Loading notifications" />
+            ) : notifications.isError ? (
+              <ErrorState
+                compact
+                title="Notifications unavailable"
+                description={notifications.error.message}
+                actionLabel="Try again"
+                onAction={() => notifications.refetch()}
+              />
+            ) : notifications.data?.items?.[0] ? (
+              <div className="rounded-xl border p-4">
+                <p className="font-semibold">
+                  {notifications.data.items[0].title}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {notifications.data.items[0].summary}
+                </p>
+              </div>
+            ) : (
+              <EmptyState
+                compact
+                title="No notifications"
+                description="Relevant updates will appear here."
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <SectionHeading
               title="Quick actions"
               description="Available actions follow your role permissions"
             />
@@ -305,6 +410,18 @@ export default function DashboardPage() {
                 <Link to={ROUTES.appointments}>
                   <CalendarCheck />
                   Schedule appointment
+                </Link>
+              </Button>
+            ) : null}
+            {canManageAnnouncements ? (
+              <Button
+                asChild
+                variant="outline"
+                className="h-12 w-full justify-start font-medium"
+              >
+                <Link to={ROUTES.announcements}>
+                  <BellRing />
+                  Post announcement
                 </Link>
               </Button>
             ) : null}

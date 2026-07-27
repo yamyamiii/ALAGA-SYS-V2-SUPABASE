@@ -150,4 +150,37 @@ describe("role permissions", () => {
       "Barangay Health Worker",
     );
   });
+
+  it("enforces general assistance role permissions", () => {
+    expect(
+      hasPermission(
+        USER_ROLES.BARANGAY_HEALTH_WORKER,
+        PERMISSIONS.MANAGE_ANNOUNCEMENTS,
+      ),
+    ).toBe(true);
+    expect(
+      hasPermission(
+        USER_ROLES.BARANGAY_HEALTH_WORKER,
+        PERMISSIONS.MANAGE_INQUIRIES,
+      ),
+    ).toBe(true);
+    expect(
+      hasPermission(USER_ROLES.NURSE, PERMISSIONS.VIEW_NOTIFICATIONS),
+    ).toBe(true);
+    expect(
+      hasPermission(USER_ROLES.NURSE, PERMISSIONS.MANAGE_ANNOUNCEMENTS),
+    ).toBe(false);
+    expect(
+      hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.VIEW_NOTIFICATIONS),
+    ).toBe(true);
+    expect(hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.SUBMIT_INQUIRY)).toBe(
+      true,
+    );
+    expect(hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.VIEW_ACTIVITY)).toBe(
+      true,
+    );
+    expect(hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.MANAGE_FAQ)).toBe(
+      false,
+    );
+  });
 });

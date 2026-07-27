@@ -14,9 +14,12 @@ Phase 5.5 allows a linked active resident to submit an own pending appointment
 request for staff review and cancel it only while still pending.
 Phase 6 adds secure pregnancy, prenatal, delivery, postnatal, child profile,
 growth, immunization, and developmental-visit foundations.
+Phase 7 adds privacy-safe aggregate reports, bounded exports, and printing.
+Phase 8 adds announcements, in-app notifications, resident/admin activity,
+health-center information, FAQs, and resident inquiry tickets.
 
 Inventory, prescription dispensing, laboratory integrations, birth
-registration, reports, notification delivery, and AI are not implemented.
+registration, external notification delivery, and AI are not implemented.
 
 ## Technology stack
 
@@ -103,6 +106,8 @@ and `/appointments/queue`. Unfinished healthcare module routes remain shared
 placeholders. Authorized accounts access clinical encounters at
 `/health-records` and `/health-records/:encounterId`. Authorized staff access
 aggregate reports and exports at `/reports`.
+General assistance is available at `/announcements`, `/notifications`,
+`/activity`, `/health-center`, `/faq`, and `/contact`, subject to role access.
 
 ## Quality commands
 
@@ -118,11 +123,11 @@ npm run preview
 
 ## Current phase
 
-Phase 7 provides role-aware, database-aggregated reports for registry,
-appointments, health records, maternal care, child care, and operational staff
-workload. It adds bounded CSV/Excel-compatible export and browser PDF/printing
-with formula-injection protection and minimized export audits. Report pages do
-not receive clinical narratives or direct resident identifiers.
+Phase 8 provides role-aware announcements, own/relevant in-app notifications,
+privacy-minimized activity timelines, public health-center information,
+searchable FAQs, and a simple resident inquiry workflow. All data access is
+through trusted RPCs; notification and timeline summaries exclude clinical
+narratives.
 Registry locality remains Brgy. Bagongpook with Purok 1 through Purok 7.
 Household latitude/longitude columns remain in the database for compatibility
 but are not selected, collected, submitted, or displayed by the frontend.
@@ -132,9 +137,10 @@ delivery is implemented.
 
 ## Deployment note
 
-Migrations 1–25 are the completed remote baseline. Forward-only Migration 26 is
-not applied by application startup. Review it and apply it manually through the
-Supabase CLI before enabling the Reports route in production.
+Migrations 1–25 are the completed remote baseline. Forward-only Migrations 26
+and 27 are not applied by application startup. Review and apply them manually
+in sequence through the Supabase CLI before enabling Reports and General
+Assistance in production.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),
@@ -143,6 +149,9 @@ See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Health Records architecture](docs/architecture/HEALTH_RECORDS.md),
 [Clinical encounter workflow](docs/workflows/CLINICAL_ENCOUNTER.md),
 [Reports architecture](docs/architecture/REPORTS_ANALYTICS.md),
+[General assistance architecture](docs/architecture/GENERAL_ASSISTANCE.md),
+[Announcements and notifications](docs/workflows/ANNOUNCEMENTS_NOTIFICATIONS.md),
+[Resident inquiries](docs/workflows/RESIDENT_INQUIRIES.md),
 [Report exports](docs/workflows/REPORT_EXPORTS.md),
 [Report privacy](docs/workflows/REPORT_PRIVACY.md),
 [Vital Signs workflow](docs/workflows/VITAL_SIGNS.md),

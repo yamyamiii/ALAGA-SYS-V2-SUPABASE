@@ -1,5 +1,26 @@
 # Row Level Security matrix
 
+## Phase 8 general assistance
+
+All Phase 8 tables are RPC-only: RLS is enabled and direct `anon` and
+`authenticated` table grants are revoked.
+
+| Resource/action            | Admin       | BHW         | Nurse | Midwife | Resident        | Anonymous |
+| -------------------------- | ----------- | ----------- | ----- | ------- | --------------- | --------- |
+| Current announcements      | Read/manage | Read/manage | Read  | Read    | Read            | No        |
+| Own/relevant notifications | Own         | Own         | Own   | Own     | Own             | No        |
+| Activity timeline          | Operational | No          | No    | No      | Own safe events | No        |
+| Health-center information  | Read/manage | Read        | Read  | Read    | Read            | No        |
+| FAQ                        | Read/manage | Read        | Read  | Read    | Read            | No        |
+| Resident inquiries         | Read/manage | Read/manage | No    | No      | Own/submit      | No        |
+
+Notification and resident-timeline RPCs derive ownership from `auth.uid()` and
+linked database relationships. Notification summaries and timeline rows exclude
+diagnoses, treatment plans, notes, reasons, contact details, and addresses.
+Announcement expiry and publication visibility are enforced in PostgreSQL.
+Inquiry submission requires an active linked resident record; a browser cannot
+choose the inquiry owner.
+
 ## Phase 6 maternal and child care
 
 | Resource/action        | Admin        | BHW                    | Nurse        | Midwife        | Resident         | Anonymous |
