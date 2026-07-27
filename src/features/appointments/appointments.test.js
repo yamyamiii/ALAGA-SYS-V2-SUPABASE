@@ -5,7 +5,10 @@ import {
   SERVICE_TYPES,
 } from "@/features/appointments/constants";
 import { getAppointmentActions } from "@/features/appointments/permissions";
-import { appointmentSchema } from "@/features/appointments/schemas";
+import {
+  appointmentSchema,
+  residentAppointmentRequestSchema,
+} from "@/features/appointments/schemas";
 import {
   addDaysToDateKey,
   formatManilaTimestamp,
@@ -62,6 +65,31 @@ describe("appointment foundations", () => {
     ).toBe(false);
   });
 
+  it("validates the resident-friendly request fields only", () => {
+    const request = {
+      service_type: "General Consultation",
+      scheduled_date: "2026-08-01",
+      start_time: "08:00",
+      end_time: "08:30",
+      reason: "Routine visit",
+    };
+    expect(residentAppointmentRequestSchema.safeParse(request).success).toBe(
+      true,
+    );
+    expect(
+      residentAppointmentRequestSchema.safeParse({
+        ...request,
+        reason: "",
+      }).success,
+    ).toBe(false);
+    expect(
+      residentAppointmentRequestSchema.safeParse({
+        ...request,
+        end_time: "07:59",
+      }).success,
+    ).toBe(false);
+  });
+
   it("calculates date-only values without browser timezone drift", () => {
     expect(addDaysToDateKey("2026-01-31", 1)).toBe("2026-02-01");
     expect(monthGridRange("2026-08")).toEqual({
@@ -100,6 +128,16 @@ describe("appointment foundations", () => {
     expect(
       getAppointmentActions(USER_ROLES.RESIDENT, confirmed, profileId),
     ).toEqual([]);
+    expect(
+      getAppointmentActions(
+        USER_ROLES.RESIDENT,
+        {
+          ...pending,
+          request_source: "resident",
+        },
+        profileId,
+      ),
+    ).toEqual(["cancel"]);
     expect(
       getAppointmentActions(USER_ROLES.MIDWIFE, confirmed, profileId),
     ).toEqual([]);

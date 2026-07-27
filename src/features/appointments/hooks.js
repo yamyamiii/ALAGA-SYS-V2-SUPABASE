@@ -5,13 +5,14 @@ import { appointmentService } from "@/services/appointmentService";
 export const appointmentKeys = Object.freeze({
   all: ["appointments"],
   list: (filters) => ["appointments", "list", filters],
-  detail: (id) => ["appointments", "detail", id],
+  detail: (id, audience = "staff") => ["appointments", "detail", audience, id],
   queue: (parameters) => ["appointments", "queue", parameters],
   calendar: (parameters) => ["appointments", "calendar", parameters],
   residents: (parameters) => ["appointments", "resident-search", parameters],
   staff: (parameters) => ["appointments", "staff-search", parameters],
   history: (residentId, page) => ["appointments", "history", residentId, page],
   dashboard: ["appointments", "dashboard"],
+  residentRequests: ["appointments", "resident-requests"],
 });
 
 export function useAppointments(filters) {
@@ -22,10 +23,14 @@ export function useAppointments(filters) {
   });
 }
 
-export function useAppointment(id, enabled = true) {
+export function useAppointment(id, enabled = true, options = {}) {
+  const audience = options.resident ? "resident" : "staff";
   return useQuery({
-    queryKey: appointmentKeys.detail(id),
-    queryFn: () => appointmentService.getAppointment(id),
+    queryKey: appointmentKeys.detail(id, audience),
+    queryFn: () =>
+      appointmentService.getAppointment(id, {
+        resident: options.resident,
+      }),
     enabled: enabled && Boolean(id),
   });
 }
@@ -81,6 +86,15 @@ export function useAppointmentDashboard() {
     queryKey: appointmentKeys.dashboard,
     queryFn: () => appointmentService.getDashboardSummary(),
     staleTime: 60_000,
+  });
+}
+
+export function useIncomingResidentAppointmentRequests(enabled = true) {
+  return useQuery({
+    queryKey: appointmentKeys.residentRequests,
+    queryFn: () => appointmentService.listResidentAppointmentRequests(),
+    enabled,
+    staleTime: 30_000,
   });
 }
 

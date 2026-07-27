@@ -10,9 +10,11 @@ calendar, resident appointment history, and appointment dashboard summaries.
 Phase 5 adds the secure Electronic Health Records foundation: clinical
 encounters, vital signs, allergies, medical history, signatures, amendments,
 and resident clinical timelines.
+Phase 5.5 allows a linked active resident to submit an own pending appointment
+request for staff review and cancel it only while still pending.
 
 Inventory, prescription dispensing, laboratory integrations, maternal-care
-module workflows, reports, notifications, and AI are not implemented.
+module workflows, reports, notification delivery, and AI are not implemented.
 
 ## Technology stack
 
@@ -121,16 +123,20 @@ Asia/Manila.
 Registry locality remains Brgy. Bagongpook with Purok 1 through Purok 7.
 Household latitude/longitude columns remain in the database for compatibility
 but are not selected, collected, submitted, or displayed by the frontend.
+Phase 5.5 adds RPC-only resident appointment requests. Requested times are
+preferences until staff assignment and confirmation; no SMS, email, or push
+delivery is implemented.
 
 ## Deployment note
 
-The forward-only Phase 5 migration is not applied by application startup.
-Review and apply it manually through the Supabase CLI before deploying the
-Phase 5 frontend.
+Migrations 1–21 are the completed remote baseline. Forward-only Migration 22 is
+not applied by application startup. Review and apply it manually through the
+Supabase CLI before deploying the Phase 5.5 frontend.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),
 [Appointment workflow](docs/workflows/APPOINTMENT_WORKFLOW.md),
+[Resident appointment request](docs/workflows/RESIDENT_APPOINTMENT_REQUEST.md),
 [Health Records architecture](docs/architecture/HEALTH_RECORDS.md),
 [Clinical encounter workflow](docs/workflows/CLINICAL_ENCOUNTER.md),
 [Vital Signs workflow](docs/workflows/VITAL_SIGNS.md),

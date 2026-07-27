@@ -36,6 +36,22 @@ function renderWithAuth(auth, initialPath = "/residents") {
                 </RoleGuard>
               }
             />
+            <Route
+              path="/appointments/queue"
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENT_QUEUE}>
+                  <div>Daily queue route</div>
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/appointments/calendar"
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENT_CALENDAR}>
+                  <div>Appointment calendar route</div>
+                </RoleGuard>
+              }
+            />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -105,5 +121,20 @@ describe("authentication route guards", () => {
       "/user-management",
     );
     expect(screen.getByText("User Management route")).toBeInTheDocument();
+  });
+
+  it("denies residents direct queue and calendar navigation", () => {
+    const residentAuth = {
+      ...baseAuth,
+      status: "authenticated",
+      isAuthenticated: true,
+      profile: { role: "resident" },
+    };
+    const queue = renderWithAuth(residentAuth, "/appointments/queue");
+    expect(screen.getByText("Access denied")).toBeInTheDocument();
+    queue.unmount();
+
+    renderWithAuth(residentAuth, "/appointments/calendar");
+    expect(screen.getByText("Access denied")).toBeInTheDocument();
   });
 });

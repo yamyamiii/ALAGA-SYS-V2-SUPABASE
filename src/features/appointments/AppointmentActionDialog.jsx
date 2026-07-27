@@ -34,6 +34,8 @@ import {
   addDaysToDateKey,
   manilaDateKey,
 } from "@/features/appointments/timezone";
+import { useAuth } from "@/features/auth/authContext";
+import { USER_ROLES } from "@/features/auth/permissions";
 import { appointmentService } from "@/services/appointmentService";
 
 const transitionSchema = z.object({});
@@ -58,9 +60,19 @@ export function AppointmentActionDialog({
   appointment,
   onSuccess,
 }) {
+  const { profile } = useAuth();
   const [selectedStaff, setSelectedStaff] = useState(null);
   const requestKey = useRef(crypto.randomUUID());
   const mutation = useAppointmentMutation(async (values) => {
+    if (
+      action === APPOINTMENT_ACTIONS.CANCEL &&
+      profile.role === USER_ROLES.RESIDENT
+    ) {
+      return appointmentService.cancelResidentAppointment(
+        appointment,
+        values.cancellation_reason,
+      );
+    }
     if (action === APPOINTMENT_ACTIONS.RESCHEDULE) {
       return appointmentService.reschedule(
         appointment,

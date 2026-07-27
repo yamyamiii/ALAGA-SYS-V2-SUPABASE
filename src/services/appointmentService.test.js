@@ -196,6 +196,145 @@ describe("appointment service", () => {
     );
   });
 
+  it("submits a resident request without browser-supplied ownership or staff fields", async () => {
+    const client = rpcClient({
+      data: [
+        {
+          id: appointmentId,
+          appointment_number: "APT-2026-000002",
+          status: "pending",
+          version: 1,
+        },
+      ],
+      error: null,
+    });
+    const service = createAppointmentService(() => client);
+
+    await expect(
+      service.requestResidentAppointment(
+        {
+          service_type: "General Consultation",
+          scheduled_date: "2026-08-01",
+          start_time: "08:00",
+          end_time: "08:30",
+          reason: " Routine visit ",
+        },
+        requestKey,
+      ),
+    ).resolves.toMatchObject({
+      appointment_number: "APT-2026-000002",
+      status: "pending",
+    });
+
+    expect(client.rpc).toHaveBeenCalledWith("resident_appointment_request", {
+      p_service_type: "General Consultation",
+      p_scheduled_date: "2026-08-01",
+      p_start_time: "08:00",
+      p_end_time: "08:30",
+      p_reason: "Routine visit",
+      p_request_key: requestKey,
+    });
+    const payload = client.rpc.mock.calls[0][1];
+    expect(payload).not.toHaveProperty("p_resident_id");
+    expect(payload).not.toHaveProperty("p_assigned_staff_id");
+    expect(payload).not.toHaveProperty("p_status");
+    expect(payload).not.toHaveProperty("p_appointment_type");
+    expect(payload).not.toHaveProperty("p_priority");
+  });
+
+  it("fails safely while offline without sending a resident request", async () => {
+    const online = vi
+      .spyOn(window.navigator, "onLine", "get")
+      .mockReturnValue(false);
+    const client = rpcClient({ data: [], error: null });
+    const service = createAppointmentService(() => client);
+
+    await expect(
+      service.requestResidentAppointment(
+        {
+          service_type: "General Consultation",
+          scheduled_date: "2026-08-01",
+          start_time: "08:00",
+          end_time: "08:30",
+          reason: "Routine visit",
+        },
+        requestKey,
+      ),
+    ).rejects.toEqual(expect.objectContaining({ code: "offline" }));
+    expect(client.rpc).not.toHaveBeenCalled();
+    online.mockRestore();
+  });
+
+  it("cancels a resident request through its narrow versioned RPC", async () => {
+    const client = rpcClient({
+      data: [
+        {
+          id: appointmentId,
+          appointment_number: "APT-2026-000002",
+          status: "cancelled",
+          version: 2,
+        },
+      ],
+      error: null,
+    });
+    const service = createAppointmentService(() => client);
+
+    await service.cancelResidentAppointment(
+      { id: appointmentId, version: 1 },
+      " Unable to attend ",
+    );
+
+    expect(client.rpc).toHaveBeenCalledWith("resident_appointment_cancel", {
+      p_appointment_id: appointmentId,
+      p_expected_version: 1,
+      p_cancellation_reason: "Unable to attend",
+    });
+  });
+
+  it("loads resident-safe appointment details through the dedicated RPC", async () => {
+    const client = rpcClient({
+      data: {
+        id: appointmentId,
+        appointment_number: "APT-2026-000002",
+        status: "pending",
+      },
+      error: null,
+    });
+    const service = createAppointmentService(() => client);
+
+    await expect(
+      service.getAppointment(appointmentId, { resident: true }),
+    ).resolves.toMatchObject({ appointment_number: "APT-2026-000002" });
+    expect(client.rpc).toHaveBeenCalledWith("resident_appointment_detail", {
+      p_appointment_id: appointmentId,
+    });
+  });
+
+  it("loads only the staff-review resident request overview", async () => {
+    const client = rpcClient({
+      data: [
+        {
+          id: appointmentId,
+          appointment_number: "APT-2026-000002",
+          total_count: 1,
+        },
+      ],
+      error: null,
+    });
+    const service = createAppointmentService(() => client);
+
+    await expect(
+      service.listResidentAppointmentRequests(),
+    ).resolves.toMatchObject({ total: 1, page: 1, page_size: 5 });
+    expect(client.rpc).toHaveBeenCalledWith(
+      "appointment_resident_request_list",
+      {
+        p_limit: 5,
+        p_offset: 0,
+      },
+    );
+  });
+
   it("maps conflict and permission failures to safe actionable errors", async () => {
     const conflict = createAppointmentService(() =>
       rpcClient({

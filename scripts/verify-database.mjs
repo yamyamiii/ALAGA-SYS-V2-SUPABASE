@@ -26,6 +26,7 @@ const expectedMigrations = [
   "20260720001900_fix_appointment_rpc_contracts.sql",
   "20260720002000_health_records_foundation.sql",
   "20260720002100_fix_clinical_manila_dates.sql",
+  "20260720002200_resident_appointment_requests.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -68,9 +69,12 @@ const completedMigrationHashes = {
     "c6893be3aa0c072a6e924a6229c052cca3ed7e002e4eca0b352b2cb1155fb55c",
   "20260720002000_health_records_foundation.sql":
     "384c8eb23e083f90df91900b5e9b35d60e32abb85b2a3e210ea77d0eb6ebae54",
+  "20260720002100_fix_clinical_manila_dates.sql":
+    "e332e611c0f3da60a61851bb72595534d73d51186afa3f717edce8be0a92092f",
 };
 const expectedTables = [
   "admin_action_rate_limits",
+  "appointment_request_events",
   "appointments",
   "audit_logs",
   "barangays",
@@ -140,7 +144,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly twenty-one expected migrations exist in lexical order",
+  "Exactly twenty-two expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -440,6 +444,79 @@ check(
     appointmentContractFix,
   ),
   "The RPC contract fix does not restore direct appointment mutation grants",
+);
+
+const residentAppointmentRequestsMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("resident_appointment_requests"),
+  )?.sql ?? "";
+const residentAppointmentDeclarationAudit = auditPlpgsqlIntoTargets(
+  residentAppointmentRequestsMigration,
+);
+check(
+  residentAppointmentDeclarationAudit.functionCount === 8 &&
+    residentAppointmentDeclarationAudit.undeclared.length === 0,
+  "Every resident-request PL/pgSQL INTO target is declared",
+);
+check(
+  /resident_appointment_request[\s\S]*linked_profile_id = actor_id[\s\S]*resident_record\.status <> 'active'[\s\S]*resident_record\.archived_at is not null/i.test(
+    residentAppointmentRequestsMigration,
+  ) &&
+    /'scheduled'::public\.appointment_type[\s\S]*'normal'::public\.appointment_priority[\s\S]*'pending'::public\.appointment_status/i.test(
+      residentAppointmentRequestsMigration,
+    ),
+  "Resident appointment requests derive an active owner and force safe initial state",
+);
+check(
+  /resident_appointment_request[\s\S]*pg_advisory_xact_lock[\s\S]*appointment request key was reused with different data[\s\S]*matching pending resident request already exists/i.test(
+    residentAppointmentRequestsMigration,
+  ),
+  "Resident appointment requests serialize idempotency and duplicate protection",
+);
+check(
+  /resident_appointment_cancel[\s\S]*appointment_record\.resident_id is distinct from resident_record\.id[\s\S]*only an own pending resident request can be cancelled/i.test(
+    residentAppointmentRequestsMigration,
+  ) &&
+    /appointment_record\.version <> p_expected_version/i.test(
+      residentAppointmentRequestsMigration,
+    ),
+  "Resident cancellation is own-pending-only and version protected",
+);
+check(
+  /appointment_daily_queue[\s\S]*current_profile_role\(\) = 'resident'[\s\S]*residents cannot access the daily appointment queue/i.test(
+    residentAppointmentRequestsMigration,
+  ),
+  "Residents are denied access to the operational daily queue",
+);
+check(
+  /appointment\.resident_requested/i.test(
+    residentAppointmentRequestsMigration,
+  ) &&
+    /appointment\.resident_cancelled/i.test(
+      residentAppointmentRequestsMigration,
+    ) &&
+    /appointment\.request_confirmed/i.test(
+      residentAppointmentRequestsMigration,
+    ) &&
+    /appointment\.request_schedule_adjusted/i.test(
+      residentAppointmentRequestsMigration,
+    ) &&
+    /appointment\.request_rejected/i.test(
+      residentAppointmentRequestsMigration,
+    ) &&
+    /appointment_request_events[\s\S]*enable row level security/i.test(
+      residentAppointmentRequestsMigration,
+    ),
+  "Resident request audits and the private notification event boundary are installed",
+);
+check(
+  !/grant\s+(?:insert|update)[^;]*public\.appointments/i.test(
+    residentAppointmentRequestsMigration,
+  ) &&
+    /revoke all on table public\.appointment_request_events[\s\S]*authenticated/i.test(
+      residentAppointmentRequestsMigration,
+    ),
+  "Resident request workflows do not restore direct writes or expose event rows",
 );
 
 const healthRecordsMigration =

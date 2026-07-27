@@ -17,6 +17,14 @@ export function getAppointmentActions(role, appointment, profileId) {
     role !== USER_ROLES.MIDWIFE ||
     ["Maternal Care", "Child Health"].includes(appointment.service_type);
 
+  if (role === USER_ROLES.RESIDENT) {
+    return !archived &&
+      appointment.request_source === "resident" &&
+      status === "pending"
+      ? [APPOINTMENT_ACTIONS.CANCEL]
+      : [];
+  }
+
   if (role === USER_ROLES.ADMINISTRATOR) {
     if (archived) return [APPOINTMENT_ACTIONS.RESTORE];
     const actions = [APPOINTMENT_ACTIONS.NOTES];

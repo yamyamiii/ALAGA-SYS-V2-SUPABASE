@@ -113,7 +113,7 @@ export function AppRouter() {
             <Route
               path={ROUTES.appointmentCalendar}
               element={
-                <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENTS}>
+                <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENT_CALENDAR}>
                   <AppointmentCalendarPage />
                 </RoleGuard>
               }
@@ -121,7 +121,7 @@ export function AppRouter() {
             <Route
               path={ROUTES.appointmentQueue}
               element={
-                <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENTS}>
+                <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENT_QUEUE}>
                   <AppointmentQueuePage />
                 </RoleGuard>
               }

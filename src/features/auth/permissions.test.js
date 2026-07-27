@@ -89,6 +89,18 @@ describe("role permissions", () => {
       hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.OPERATE_APPOINTMENTS),
     ).toBe(false);
     expect(
+      hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.REQUEST_OWN_APPOINTMENT),
+    ).toBe(true);
+    expect(
+      hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.CANCEL_OWN_APPOINTMENT),
+    ).toBe(true);
+    expect(
+      hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.VIEW_APPOINTMENT_QUEUE),
+    ).toBe(false);
+    expect(
+      hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.VIEW_APPOINTMENT_CALENDAR),
+    ).toBe(false);
+    expect(
       hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.VIEW_HEALTH_RECORDS),
     ).toBe(true);
     expect(

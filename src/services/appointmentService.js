@@ -21,6 +21,34 @@ function nullable(value) {
 
 function mapError(error, fallback) {
   const message = error?.message ?? "";
+  if (/not linked to a resident record/i.test(message)) {
+    return new AppointmentServiceError(
+      "resident_link_required",
+      "Your account is not linked to an active resident record. Contact the health center for assistance.",
+      { cause: error },
+    );
+  }
+  if (/linked resident record must be active/i.test(message)) {
+    return new AppointmentServiceError(
+      "resident_inactive",
+      "Your linked resident record is not active. Contact the health center before requesting an appointment.",
+      { cause: error },
+    );
+  }
+  if (/matching pending resident request already exists/i.test(message)) {
+    return new AppointmentServiceError(
+      "duplicate_resident_request",
+      "A matching pending appointment request already exists.",
+      { cause: error },
+    );
+  }
+  if (/only an own pending resident request can be cancelled/i.test(message)) {
+    return new AppointmentServiceError(
+      "resident_cancellation_unavailable",
+      "Only your own pending appointment request can be cancelled.",
+      { cause: error },
+    );
+  }
   if (/changed by another user|could not serialize|concurrent/i.test(message)) {
     return new AppointmentServiceError(
       "stale_appointment",
@@ -104,7 +132,17 @@ function diagnostic(operation, error, code) {
   }
 }
 
+function ensureOnline() {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    throw new AppointmentServiceError(
+      "offline",
+      "You are offline. Reconnect before accessing appointments.",
+    );
+  }
+}
+
 async function rpc(client, name, parameters, fallback) {
+  ensureOnline();
   const { data, error } = await client.rpc(name, parameters);
   if (error) {
     const mapped = mapError(error, fallback);
@@ -198,7 +236,7 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
       return pageResult(data, filters.page ?? 1, filters.page_size ?? 20);
     },
 
-    async getAppointment(id) {
+    async getAppointment(id, options = {}) {
       if (!UUID_PATTERN.test(id ?? "")) {
         throw new AppointmentServiceError(
           "invalid_appointment_id",
@@ -206,10 +244,26 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
         );
       }
       const supabase = client();
+      if (options.resident) {
+        const data = await rpc(
+          supabase,
+          "resident_appointment_detail",
+          { p_appointment_id: id },
+          "The appointment could not be loaded.",
+        );
+        if (!data || typeof data !== "object" || Array.isArray(data)) {
+          throw new AppointmentServiceError(
+            "invalid_response",
+            "The appointment details response was invalid.",
+          );
+        }
+        return data;
+      }
+
       const { data, error } = await supabase
         .from("appointments")
         .select(
-          "id, appointment_number, resident_id, assigned_staff_id, appointment_type, service_type, scheduled_date, start_time, end_time, priority, status, reason, operational_notes, cancellation_reason, rescheduled_from_id, checked_in_at, started_at, completed_at, cancelled_at, created_at, updated_at, archived_at, version, resident:residents(id,resident_number,first_name,middle_name,last_name,suffix,date_of_birth,status,archived_at,purok:puroks(name)), staff:profiles!appointments_assigned_staff_id_fkey(id,first_name,middle_name,last_name,suffix,role)",
+          "id, appointment_number, resident_id, assigned_staff_id, appointment_type, service_type, scheduled_date, start_time, end_time, priority, status, reason, operational_notes, cancellation_reason, rescheduled_from_id, request_source, requested_date, requested_start_time, requested_end_time, resident_requested_at, checked_in_at, started_at, completed_at, cancelled_at, created_at, updated_at, archived_at, version, resident:residents(id,resident_number,first_name,middle_name,last_name,suffix,date_of_birth,status,archived_at,purok:puroks(name)), staff:profiles!appointments_assigned_staff_id_fkey(id,first_name,middle_name,last_name,suffix,role)",
         )
         .eq("id", id)
         .maybeSingle();
@@ -338,6 +392,19 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
       return firstRow(data, "The appointment totals response was invalid.");
     },
 
+    async listResidentAppointmentRequests(page = 1, pageSize = 5) {
+      const data = await rpc(
+        client(),
+        "appointment_resident_request_list",
+        {
+          p_limit: pageSize,
+          p_offset: (page - 1) * pageSize,
+        },
+        "Incoming resident appointment requests could not be loaded.",
+      );
+      return pageResult(data, page, pageSize);
+    },
+
     async createAppointment(values, requestKey = crypto.randomUUID()) {
       const data = await rpc(
         client(),
@@ -358,6 +425,37 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
         "The appointment could not be created.",
       );
       return firstRow(data, "The appointment creation response was invalid.");
+    },
+
+    async requestResidentAppointment(values, requestKey = crypto.randomUUID()) {
+      const data = await rpc(
+        client(),
+        "resident_appointment_request",
+        {
+          p_service_type: values.service_type,
+          p_scheduled_date: values.scheduled_date,
+          p_start_time: values.start_time,
+          p_end_time: values.end_time,
+          p_reason: values.reason.trim(),
+          p_request_key: requestKey,
+        },
+        "Your appointment request could not be submitted.",
+      );
+      return firstRow(data, "The appointment request response was invalid.");
+    },
+
+    async cancelResidentAppointment(appointment, cancellationReason) {
+      const data = await rpc(
+        client(),
+        "resident_appointment_cancel",
+        {
+          p_appointment_id: appointment.id,
+          p_expected_version: appointment.version,
+          p_cancellation_reason: cancellationReason.trim(),
+        },
+        "Your appointment request could not be cancelled.",
+      );
+      return firstRow(data, "The resident cancellation response was invalid.");
     },
 
     async updateAppointment(appointment, values) {

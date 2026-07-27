@@ -1,5 +1,28 @@
 # Row Level Security matrix
 
+## Phase 5.5 resident appointment requests
+
+| Resource/action                     | Admin          | BHW            | Nurse  | Midwife | Resident        | Anonymous |
+| ----------------------------------- | -------------- | -------------- | ------ | ------- | --------------- | --------- |
+| Own appointment list/detail         | Yes            | Yes            | Scoped | Scoped  | Own only        | No        |
+| Submit resident appointment request | No             | Review         | No     | No      | Own trusted RPC | No        |
+| Cancel pending resident request     | Staff workflow | Staff workflow | No     | No      | Own trusted RPC | No        |
+| Incoming resident request review    | Yes            | Yes            | No     | No      | No              | No        |
+| Appointment calendar                | Yes            | Yes            | Scoped | Scoped  | No              | No        |
+| Daily operational queue             | Yes            | Yes            | Scoped | Scoped  | No              | No        |
+| Request event outbox                | No             | No             | No     | No      | No              | No        |
+
+Resident request and cancellation RPCs are security-definer functions with an
+empty fixed search path. They require an active resident profile and linked
+active resident record, derive ownership from `auth.uid()`, and never accept a
+resident, assignment, priority, status, appointment type, or actor ID from the
+browser. Direct authenticated appointment `INSERT` and `UPDATE` remain revoked.
+
+`appointment_request_events` has RLS enabled with no `anon` or `authenticated`
+policy or grant. Only `service_role` can read its privacy-minimized request
+events for a future trusted notification worker. It has no delivery status and
+stores no reason text, contact details, tokens, or message bodies.
+
 ## Phase 5 clinical records
 
 Clinical table access is deliberately stricter than registry and appointment
@@ -146,6 +169,10 @@ clinical data exists in profiles.
 - Midwives have the same assigned-clinician access only for Maternal Care and
   Child Health services.
 - Residents read only appointments belonging to their linked resident row.
+- Linked active residents may create an own pending request and cancel only
+  that own resident-originated request while pending through narrow RPCs.
+- Calendar and queue routes are staff-only. The queue RPC independently rejects
+  resident callers.
 - Direct authenticated INSERT/UPDATE grants and policies are retired. Every
   browser mutation uses an independently authorized security-definer RPC.
 - Resident self-booking and physical deletion remain disabled.
@@ -190,7 +217,8 @@ Phase 4 keeps these deny-by-default boundaries:
 - BHW demographic writes cannot create or change a resident/profile link.
 - Direct authenticated appointment updates cannot replace the resident owner.
 - Appointment state transitions are exposed only as bounded RPC operations.
-- Resident self-booking is denied.
+- Resident self-confirmation, staff assignment, walk-ins, rescheduling, and
+  direct appointment writes remain denied.
 - Archived data is admin-only.
 
 ## Safe live verification

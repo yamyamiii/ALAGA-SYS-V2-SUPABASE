@@ -1,7 +1,11 @@
 import { CalendarPlus, Eye, Search, UserRoundPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { EmptyState, ErrorState } from "@/components/common/StateDisplay";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+} from "@/components/common/StateDisplay";
 import { PageHeading } from "@/components/common/PageHeading";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +27,11 @@ import { AppointmentDetailDialog } from "@/features/appointments/AppointmentDeta
 import { AppointmentFormDialog } from "@/features/appointments/AppointmentFormDialog";
 import { AppointmentStaffField } from "@/features/appointments/AppointmentStaffField";
 import { AppointmentTabs } from "@/features/appointments/AppointmentTabs";
-import { useAppointments } from "@/features/appointments/hooks";
+import {
+  useAppointments,
+  useIncomingResidentAppointmentRequests,
+} from "@/features/appointments/hooks";
+import { ResidentAppointmentsPage } from "@/features/appointments/ResidentAppointmentsPage";
 import {
   formatManilaDate,
   formatManilaTime,
@@ -40,6 +48,15 @@ import { useDebouncedValue } from "@/features/registry/useDebouncedValue";
 
 export default function AppointmentListPage() {
   const { profile } = useAuth();
+
+  if (profile.role === USER_ROLES.RESIDENT) {
+    return <ResidentAppointmentsPage />;
+  }
+
+  return <StaffAppointmentListPage profile={profile} />;
+}
+
+function StaffAppointmentListPage({ profile }) {
   const canSchedule = hasPermission(
     profile.role,
     PERMISSIONS.SCHEDULE_APPOINTMENTS,
@@ -53,6 +70,7 @@ export default function AppointmentListPage() {
     [debouncedSearch, filters],
   );
   const query = useAppointments(effectiveFilters);
+  const incomingQuery = useIncomingResidentAppointmentRequests(canSchedule);
   const [form, setForm] = useState({
     open: false,
     appointment: null,
@@ -112,6 +130,66 @@ export default function AppointmentListPage() {
         }
       />
       <AppointmentTabs />
+
+      {canSchedule ? (
+        <Card>
+          <CardContent className="space-y-4 p-4 sm:p-6">
+            <div>
+              <h2 className="font-heading text-lg font-semibold">
+                Incoming resident requests
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Review pending preferred schedules, assign eligible staff, then
+                confirm or reject with a reason.
+              </p>
+            </div>
+            {incomingQuery.isLoading ? (
+              <LoadingState compact title="Loading resident requests" />
+            ) : incomingQuery.isError ? (
+              <ErrorState
+                compact
+                title="Resident requests could not be loaded"
+                description={incomingQuery.error.message}
+                actionLabel="Try again"
+                onAction={() => incomingQuery.refetch()}
+              />
+            ) : (incomingQuery.data?.items ?? []).length === 0 ? (
+              <EmptyState
+                compact
+                title="No pending resident requests"
+                description="New online requests will appear here for review."
+              />
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {incomingQuery.data.items.map((request) => (
+                  <button
+                    key={request.id}
+                    type="button"
+                    onClick={() => setDetailId(request.id)}
+                    className="rounded-xl border p-4 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">
+                          {request.appointment_number}
+                        </p>
+                        <p className="mt-1 text-sm">{request.resident_name}</p>
+                      </div>
+                      <Badge variant="secondary">Resident request</Badge>
+                    </div>
+                    <p className="mt-3 text-sm">{request.service_type}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatManilaDate(request.scheduled_date)} ·{" "}
+                      {formatManilaTime(request.start_time)}–
+                      {formatManilaTime(request.end_time)}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardContent className="space-y-5 p-4 sm:p-6">

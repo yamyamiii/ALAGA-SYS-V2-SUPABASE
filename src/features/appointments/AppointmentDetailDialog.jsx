@@ -29,6 +29,7 @@ import {
   formatManilaTimestamp,
 } from "@/features/appointments/timezone";
 import { useAuth } from "@/features/auth/authContext";
+import { USER_ROLES } from "@/features/auth/permissions";
 import { AppointmentEncounterAction } from "@/features/health-records/AppointmentEncounterAction";
 import { formatPersonName } from "@/features/registry/formatters";
 
@@ -52,7 +53,10 @@ export function AppointmentDetailDialog({
   onEdit,
 }) {
   const { profile } = useAuth();
-  const query = useAppointment(appointmentId, open);
+  const residentView = profile.role === USER_ROLES.RESIDENT;
+  const query = useAppointment(appointmentId, open, {
+    resident: residentView,
+  });
   const [action, setAction] = useState(null);
   const appointment = query.data;
   const actions = getAppointmentActions(profile.role, appointment, profile.id);
@@ -101,17 +105,19 @@ export function AppointmentDetailDialog({
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge
-                      variant={
-                        appointment.priority === "urgent"
-                          ? "destructive"
-                          : appointment.priority === "priority"
-                            ? "warning"
-                            : "secondary"
-                      }
-                    >
-                      {PRIORITY_LABELS[appointment.priority]}
-                    </Badge>
+                    {!residentView ? (
+                      <Badge
+                        variant={
+                          appointment.priority === "urgent"
+                            ? "destructive"
+                            : appointment.priority === "priority"
+                              ? "warning"
+                              : "secondary"
+                        }
+                      >
+                        {PRIORITY_LABELS[appointment.priority]}
+                      </Badge>
+                    ) : null}
                     <StatusBadge
                       status={APPOINTMENT_STATUS_LABELS[appointment.status]}
                     />
@@ -133,15 +139,19 @@ export function AppointmentDetailDialog({
               <section className="rounded-xl border p-4">
                 <h3 className="font-heading font-semibold">Schedule</h3>
                 <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <Value label="Resident">
-                    {formatPersonName(appointment.resident)}
-                  </Value>
-                  <Value label="Resident number">
-                    {appointment.resident?.resident_number}
-                  </Value>
-                  <Value label="Purok">
-                    {appointment.resident?.purok?.name}
-                  </Value>
+                  {!residentView ? (
+                    <>
+                      <Value label="Resident">
+                        {formatPersonName(appointment.resident)}
+                      </Value>
+                      <Value label="Resident number">
+                        {appointment.resident?.resident_number}
+                      </Value>
+                      <Value label="Purok">
+                        {appointment.resident?.purok?.name}
+                      </Value>
+                    </>
+                  ) : null}
                   <Value label="Type">
                     {APPOINTMENT_TYPE_LABELS[appointment.appointment_type]}
                   </Value>
@@ -152,9 +162,11 @@ export function AppointmentDetailDialog({
                   <Value label="Reason" wide>
                     {appointment.reason}
                   </Value>
-                  <Value label="Operational notes" wide>
-                    {appointment.operational_notes}
-                  </Value>
+                  {!residentView ? (
+                    <Value label="Operational notes" wide>
+                      {appointment.operational_notes}
+                    </Value>
+                  ) : null}
                   {appointment.cancellation_reason ? (
                     <Value label="Cancellation reason" wide>
                       {appointment.cancellation_reason}
@@ -168,20 +180,50 @@ export function AppointmentDetailDialog({
                 </dl>
               </section>
 
+              {appointment.request_source === "resident" ? (
+                <section className="rounded-xl border p-4">
+                  <h3 className="font-heading font-semibold">
+                    Resident request
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    The original preferred schedule remains recorded even when
+                    staff adjust the operational schedule.
+                  </p>
+                  <dl className="mt-4 grid gap-4 sm:grid-cols-3">
+                    <Value label="Preferred date">
+                      {formatManilaDate(appointment.requested_date)}
+                    </Value>
+                    <Value label="Preferred start">
+                      {formatManilaTime(appointment.requested_start_time)}
+                    </Value>
+                    <Value label="Preferred end">
+                      {formatManilaTime(appointment.requested_end_time)}
+                    </Value>
+                    <Value label="Requested">
+                      {formatManilaTimestamp(appointment.resident_requested_at)}
+                    </Value>
+                  </dl>
+                </section>
+              ) : null}
+
               <section className="rounded-xl border p-4">
                 <h3 className="font-heading font-semibold">
                   Operational timeline
                 </h3>
                 <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <Value label="Checked in">
-                    {formatManilaTimestamp(appointment.checked_in_at)}
-                  </Value>
-                  <Value label="Started">
-                    {formatManilaTimestamp(appointment.started_at)}
-                  </Value>
-                  <Value label="Completed">
-                    {formatManilaTimestamp(appointment.completed_at)}
-                  </Value>
+                  {!residentView ? (
+                    <>
+                      <Value label="Checked in">
+                        {formatManilaTimestamp(appointment.checked_in_at)}
+                      </Value>
+                      <Value label="Started">
+                        {formatManilaTimestamp(appointment.started_at)}
+                      </Value>
+                      <Value label="Completed">
+                        {formatManilaTimestamp(appointment.completed_at)}
+                      </Value>
+                    </>
+                  ) : null}
                   <Value label="Cancelled">
                     {formatManilaTimestamp(appointment.cancelled_at)}
                   </Value>

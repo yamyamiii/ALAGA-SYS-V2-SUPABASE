@@ -11,21 +11,42 @@ const pages = [
 ].map((name) => fs.readFileSync(`src/features/appointments/${name}`, "utf8"));
 const calendar = pages[1];
 const queue = pages[2];
+const residentPage = fs.readFileSync(
+  "src/features/appointments/ResidentAppointmentsPage.jsx",
+  "utf8",
+);
+const residentDialog = fs.readFileSync(
+  "src/features/appointments/ResidentAppointmentRequestDialog.jsx",
+  "utf8",
+);
+const tabs = fs.readFileSync(
+  "src/features/appointments/AppointmentTabs.jsx",
+  "utf8",
+);
 
 describe("appointment UI boundaries", () => {
-  it("protects all appointment routes with one centralized permission", () => {
-    for (const route of [
-      "appointments",
-      "appointmentCalendar",
-      "appointmentQueue",
-    ]) {
-      expect(router).toMatch(
-        new RegExp(
-          `ROUTES\\.${route}[\\s\\S]*PERMISSIONS\\.VIEW_APPOINTMENTS`,
-          "i",
-        ),
-      );
-    }
+  it("uses separate route permissions for resident-safe and staff-only views", () => {
+    expect(router).toMatch(
+      /ROUTES\.appointments[\s\S]*PERMISSIONS\.VIEW_APPOINTMENTS/i,
+    );
+    expect(router).toMatch(
+      /ROUTES\.appointmentCalendar[\s\S]*PERMISSIONS\.VIEW_APPOINTMENT_CALENDAR/i,
+    );
+    expect(router).toMatch(
+      /ROUTES\.appointmentQueue[\s\S]*PERMISSIONS\.VIEW_APPOINTMENT_QUEUE/i,
+    );
+    expect(tabs).toMatch(/visibleTabs[\s\S]*can\(permission\)/i);
+  });
+
+  it("keeps the resident request form free of staff-controlled fields", () => {
+    expect(residentDialog).toMatch(/Request appointment/i);
+    expect(residentDialog).toMatch(/preferred schedule/i);
+    expect(residentDialog).not.toMatch(
+      /AppointmentResidentField|AppointmentStaffField|priority|operational_notes|resident_id/i,
+    );
+    expect(residentPage).toMatch(/Pending = awaiting confirmation/i);
+    expect(residentPage).toMatch(/ErrorState[\s\S]*refetch/i);
+    expect(residentPage).not.toMatch(/Register walk-in|Daily queue/i);
   });
 
   it("keeps Supabase calls outside route pages", () => {

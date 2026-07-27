@@ -87,7 +87,9 @@ describe("AppointmentDetailDialog rescheduling lineage", () => {
 
     renderDialog();
 
-    expect(useAppointment).toHaveBeenCalledWith(appointmentId, true);
+    expect(useAppointment).toHaveBeenCalledWith(appointmentId, true, {
+      resident: true,
+    });
     expect(
       screen.getByRole("heading", { name: "Appointment details" }),
     ).toBeInTheDocument();

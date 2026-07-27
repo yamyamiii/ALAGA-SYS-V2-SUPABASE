@@ -12,6 +12,24 @@ The database generates an immutable `APT-YYYY-NNNNNN` number. A repeated request
 with the same request key returns the original result rather than creating a
 duplicate.
 
+## Resident online request
+
+A linked active resident submits only service, preferred Manila date/time, and
+reason. The database derives resident ownership and forces a scheduled,
+pending, normal-priority, unassigned appointment. Pending means awaiting
+health-center confirmation; the preferred time is not a reserved slot.
+
+Administrators and BHWs review incoming requests, adjust the schedule through
+the existing controlled edit/reschedule workflow, assign eligible staff, and
+confirm or reject. Nurses and midwives retain only their existing assigned,
+service-scoped operations.
+
+A resident-originated request cannot be confirmed while unassigned.
+
+A resident can cancel only an own resident-originated pending request and must
+provide a reason. Confirmation ends resident cancellation access. See
+[Resident online appointment request](RESIDENT_APPOINTMENT_REQUEST.md).
+
 ## State machine
 
 ```text
@@ -51,6 +69,8 @@ records without physical deletion.
 - Assigned midwife: the same assigned-clinician operations only for Maternal
   Care and Child Health.
 - Resident: read only appointments linked to their own resident record.
+- Resident: request an own appointment and cancel only an own pending online
+  request; no staff assignment, walk-in registration, calendar, or queue.
 
 The database loads every role from `profiles`; frontend role values cannot grant
 access.
@@ -76,3 +96,8 @@ retrying.
    resident accounts each see only their authorized actions and rows.
 7. Archive a terminal appointment as administrator, include it in list results,
    restore it, and verify no row was deleted.
+8. Submit and retry a resident request, then confirm idempotency and duplicate
+   protection.
+9. Adjust and confirm a resident request and verify its original preference is
+   preserved.
+10. Verify resident cancellation succeeds only before confirmation.
