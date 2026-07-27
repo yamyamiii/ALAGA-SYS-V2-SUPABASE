@@ -1,4 +1,4 @@
-export const MANILA_TIME_ZONE = "Asia/Manila";
+export { MANILA_TIME_ZONE } from "@/lib/dateTime";
 export const STAFF_SEARCH_DEFAULT_PAGE_SIZE = 10;
 export const STAFF_SEARCH_MAX_PAGE_SIZE = 25;
 

@@ -1,4 +1,4 @@
-import { MANILA_TIME_ZONE } from "@/features/appointments/constants";
+import { formatManilaDateTime, MANILA_TIME_ZONE } from "@/lib/dateTime";
 
 function partsFor(date, options) {
   return Object.fromEntries(
@@ -61,16 +61,15 @@ export function formatManilaTime(value) {
 
 export function formatManilaTimestamp(value) {
   if (!value) return "Not available";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "Not available";
-  return new Intl.DateTimeFormat("en-PH", {
-    timeZone: MANILA_TIME_ZONE,
+  return formatManilaDateTime(value, {
+    dateStyle: undefined,
+    timeStyle: undefined,
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(parsed);
+  });
 }
 
 export function addDaysToDateKey(value, days) {

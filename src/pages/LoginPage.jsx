@@ -11,6 +11,7 @@ import { useForm } from "react-hook-form";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
+import { OfficialLogo } from "@/components/common/OfficialLogo";
 import { Brand } from "@/components/layout/Brand";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -103,14 +104,14 @@ export default function LoginPage() {
           <div className="mb-8 flex items-center justify-between gap-4 lg:hidden">
             <Brand />
           </div>
-          <div className="mb-7 flex items-center gap-4 rounded-xl border border-dashed bg-muted/25 p-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border bg-background text-xs font-semibold text-muted-foreground">
-              LOGO
-            </div>
-            <div>
-              <p className="text-sm font-semibold">Official barangay logo</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Reserved for the approved government seal
+          <div className="mb-7 flex items-center gap-4 rounded-xl border bg-card p-4 shadow-sm">
+            <OfficialLogo className="h-20 w-20 shrink-0 rounded-xl bg-white" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold tracking-wide">
+                BARANGAY HEALTHCARE
+              </p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Secure community health services for Brgy. Bagongpook
               </p>
             </div>
           </div>

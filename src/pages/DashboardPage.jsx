@@ -1,4 +1,3 @@
-import { format } from "date-fns";
 import {
   BellRing,
   Baby,
@@ -16,6 +15,7 @@ import {
   ErrorState,
   LoadingState,
 } from "@/components/common/StateDisplay";
+import { LiveManilaClock } from "@/components/common/LiveManilaClock";
 import { PageHeading } from "@/components/common/PageHeading";
 import { SectionHeading } from "@/components/common/SectionHeading";
 import { StatCard } from "@/components/common/StatCard";
@@ -135,15 +135,7 @@ export default function DashboardPage() {
         eyebrow="Operations overview"
         title="Good day, Barangay Health Team"
         description="Appointment totals and queue entries reflect only records authorized for your account."
-        actions={
-          <div className="rounded-lg border bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
-            <span className="font-medium text-foreground">
-              {format(new Date(), "EEEE")}
-            </span>
-            <span className="mx-2 text-border">•</span>
-            {format(new Date(), "MMMM d, yyyy")}
-          </div>
-        }
+        actions={<LiveManilaClock />}
       />
 
       <section

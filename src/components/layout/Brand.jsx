@@ -1,20 +1,15 @@
-import { HeartPulse } from "lucide-react";
-
+import { OfficialLogo } from "@/components/common/OfficialLogo";
 import { cn } from "@/lib/utils";
 
 export function Brand({ compact = false, inverse = false }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <div
+      <OfficialLogo
         className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-          inverse
-            ? "bg-white text-primary"
-            : "bg-primary text-primary-foreground",
+          "h-11 w-11 shrink-0 rounded-xl bg-white p-0.5",
+          inverse && "ring-1 ring-white/25",
         )}
-      >
-        <HeartPulse className="h-5 w-5" aria-hidden="true" />
-      </div>
+      />
       {!compact ? (
         <div className="min-w-0">
           <p
@@ -31,7 +26,7 @@ export function Brand({ compact = false, inverse = false }) {
               inverse && "text-blue-100",
             )}
           >
-            Barangay Healthcare
+            BARANGAY HEALTHCARE
           </p>
         </div>
       ) : null}

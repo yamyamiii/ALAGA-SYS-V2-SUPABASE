@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { OfficialLogo } from "@/components/common/OfficialLogo";
 import {
   ErrorState,
   LoadingState,
@@ -32,6 +33,7 @@ import {
 } from "@/features/reports/schemas";
 import { useReport } from "@/features/reports/hooks";
 import { reportService } from "@/services/reportService";
+import { formatManilaDateTime } from "@/lib/dateTime";
 import { cn } from "@/lib/utils";
 
 const iconByCategory = {
@@ -255,8 +257,14 @@ export default function ReportsPage() {
     <div className="report-print space-y-6">
       <PageHeading
         eyebrow="Decision support"
-        title="Reports and analytics"
+        title={
+          <span className="flex min-w-0 items-center gap-3">
+            <OfficialLogo className="h-11 w-11 shrink-0 rounded-lg bg-white" />
+            <span>Reports and analytics</span>
+          </span>
+        }
         description="Privacy-safe aggregate views from authorized database records. Filters use the Asia/Manila business date."
+        className="print-hidden"
         actions={
           <div className="print-hidden flex flex-wrap gap-2">
             {REPORT_FORMATS.map(([format, label]) => (
@@ -280,20 +288,24 @@ export default function ReportsPage() {
         }
       />
 
-      <div className="print-only hidden text-sm">
-        <p className="font-semibold">ALAGA-SYS · Brgy. Bagongpook</p>
-        <p>Report: {categoryLabel}</p>
-        <p>
-          Reporting period: {filters.start_date} to {filters.end_date}
-        </p>
-        <p>
-          Generated in Asia/Manila:{" "}
-          {new Intl.DateTimeFormat("en-PH", {
-            dateStyle: "medium",
-            timeStyle: "short",
-            timeZone: "Asia/Manila",
-          }).format(new Date())}
-        </p>
+      <div className="print-only hidden border-b pb-4 text-sm">
+        <div className="flex items-center gap-3">
+          <OfficialLogo className="h-16 w-16 shrink-0" />
+          <div>
+            <p className="font-heading text-base font-semibold">ALAGA-SYS</p>
+            <p className="text-xs font-medium tracking-wide">
+              BARANGAY HEALTHCARE
+            </p>
+            <p className="text-xs">Brgy. Bagongpook</p>
+          </div>
+        </div>
+        <div className="mt-3">
+          <p>Report: {categoryLabel}</p>
+          <p>
+            Reporting period: {filters.start_date} to {filters.end_date}
+          </p>
+          <p>Generated in Asia/Manila: {formatManilaDateTime(new Date())}</p>
+        </div>
       </div>
 
       <nav

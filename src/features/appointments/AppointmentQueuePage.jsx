@@ -25,6 +25,7 @@ import {
 } from "@/features/appointments/hooks";
 import { getAppointmentActions } from "@/features/appointments/permissions";
 import {
+  formatManilaDate,
   formatManilaTime,
   manilaDateKey,
 } from "@/features/appointments/timezone";
@@ -93,15 +94,23 @@ export default function AppointmentQueuePage() {
         title="Daily appointment queue"
         description="Operational order only. This queue is not a clinical triage assessment."
         actions={
-          <Button
-            type="button"
-            variant="outline"
-            disabled={query.isFetching}
-            onClick={() => query.refetch()}
-          >
-            <RefreshCw className={query.isFetching ? "animate-spin" : ""} />
-            Refresh
-          </Button>
+          <div className="flex max-w-full flex-wrap items-center gap-2">
+            <time
+              dateTime={filters.date}
+              className="rounded-lg border bg-card px-3 py-2 text-xs font-medium text-muted-foreground"
+            >
+              {formatManilaDate(filters.date)}
+            </time>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={query.isFetching}
+              onClick={() => query.refetch()}
+            >
+              <RefreshCw className={query.isFetching ? "animate-spin" : ""} />
+              Refresh
+            </Button>
+          </div>
         }
       />
       <AppointmentTabs />
