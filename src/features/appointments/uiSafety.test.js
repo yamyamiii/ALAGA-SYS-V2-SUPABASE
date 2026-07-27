@@ -40,10 +40,11 @@ describe("appointment UI boundaries", () => {
 
   it("keeps the resident request form free of staff-controlled fields", () => {
     expect(residentDialog).toMatch(/Request appointment/i);
-    expect(residentDialog).toMatch(/preferred schedule/i);
     expect(residentDialog).not.toMatch(
-      /AppointmentResidentField|AppointmentStaffField|priority|operational_notes|resident_id/i,
+      /AppointmentResidentField|AppointmentStaffField|resident-request-end|register\("end_time"\)|priority|operational_notes|resident_id/i,
     );
+    expect(residentDialog).toMatch(/preferred start time/i);
+    expect(residentDialog).toMatch(/provisional 30-minute duration/i);
     expect(residentPage).toMatch(/Pending = awaiting confirmation/i);
     expect(residentPage).toMatch(/ErrorState[\s\S]*refetch/i);
     expect(residentPage).not.toMatch(/Register walk-in|Daily queue/i);

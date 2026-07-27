@@ -4,8 +4,9 @@
 
 An authenticated resident with an active account and one linked, active
 resident record can request an appointment from `/appointments`. The browser
-sends only the allowlisted service, preferred Manila date and time range,
-reason for visit, and a one-use request key.
+sends only the allowlisted service, preferred Manila date and start time,
+reason for visit, and a one-use request key. It never sends an end time or
+resident identifier.
 
 The database derives `resident_id` from `auth.uid()` and forces:
 
@@ -22,14 +23,21 @@ slot. The request is visible only to its resident owner and authorized staff.
 
 Resident requests remain unassigned until review. Existing conflict protection
 is staff-specific, so the system cannot truthfully calculate capacity without
-an assigned staff member. The selected date and time are therefore a preferred
-schedule, not a reservation.
+an assigned staff member. The selected date and start time are therefore a
+preferred schedule, not a reservation.
 
-The original `requested_date`, `requested_start_time`, and
-`requested_end_time` remain immutable request context when staff adjust or
-atomically reschedule the operational appointment. Once staff assign an
-eligible person, the existing serialized overlap check protects that staff
-member's schedule.
+The trusted RPC calls the private
+`resident_appointment_provisional_duration()` helper and derives an end time
+exactly 30 minutes after the selected start. A request is rejected if that
+provisional range would cross the selected Manila calendar date. The range is
+then checked by the existing appointment schedule validator.
+
+The derived `requested_end_time`, along with the original requested date and
+start time, remains immutable request context when staff adjust or atomically
+reschedule the operational appointment. Administrator/BHW staff can set the
+final start and end times through the existing controlled schedule workflow.
+Once eligible staff are assigned, the existing serialized overlap check
+protects that staff member's schedule.
 
 ## Staff review
 
@@ -58,6 +66,8 @@ resident-cancelled.
 - There is no direct authenticated `INSERT` or `UPDATE` grant on appointments.
 - Resident ownership, account status, and resident status are checked again by
   security-definer RPCs with an empty fixed search path.
+- The resident RPC has no `resident_id`, `assigned_staff_id`, or `end_time`
+  argument. Its former end-time overload is retired.
 - Request keys are serialized and globally unique. A second identical pending
   request is rejected under a resident/schedule advisory lock.
 - Broad lists, staff review cards, calendars, queues, audits, notification

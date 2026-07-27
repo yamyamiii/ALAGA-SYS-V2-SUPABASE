@@ -61,22 +61,16 @@ export const cancellationSchema = z.object({
     .max(1000, "Cancellation reason must be 1,000 characters or fewer."),
 });
 
-export const residentAppointmentRequestSchema = z
-  .object({
-    service_type: z.enum(SERVICE_TYPES, { error: "Select a service." }),
-    scheduled_date: dateValue,
-    start_time: timeValue,
-    end_time: timeValue,
-    reason: z
-      .string()
-      .trim()
-      .min(1, "Reason for visit is required.")
-      .max(1000, "Reason must be 1,000 characters or fewer."),
-  })
-  .refine((values) => values.end_time > values.start_time, {
-    path: ["end_time"],
-    message: "End time must be after start time.",
-  });
+export const residentAppointmentRequestSchema = z.object({
+  service_type: z.enum(SERVICE_TYPES, { error: "Select a service." }),
+  scheduled_date: dateValue,
+  start_time: timeValue,
+  reason: z
+    .string()
+    .trim()
+    .min(1, "Reason for visit is required.")
+    .max(1000, "Reason must be 1,000 characters or fewer."),
+});
 
 export const rescheduleSchema = z
   .object({

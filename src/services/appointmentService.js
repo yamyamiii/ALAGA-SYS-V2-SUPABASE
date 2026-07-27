@@ -435,7 +435,6 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
           p_service_type: values.service_type,
           p_scheduled_date: values.scheduled_date,
           p_start_time: values.start_time,
-          p_end_time: values.end_time,
           p_reason: values.reason.trim(),
           p_request_key: requestKey,
         },

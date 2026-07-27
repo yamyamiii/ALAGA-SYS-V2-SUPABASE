@@ -27,6 +27,7 @@ const expectedMigrations = [
   "20260720002000_health_records_foundation.sql",
   "20260720002100_fix_clinical_manila_dates.sql",
   "20260720002200_resident_appointment_requests.sql",
+  "20260720002300_simplify_resident_request_duration.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -71,6 +72,8 @@ const completedMigrationHashes = {
     "384c8eb23e083f90df91900b5e9b35d60e32abb85b2a3e210ea77d0eb6ebae54",
   "20260720002100_fix_clinical_manila_dates.sql":
     "e332e611c0f3da60a61851bb72595534d73d51186afa3f717edce8be0a92092f",
+  "20260720002200_resident_appointment_requests.sql":
+    "cb42ae34dc5c6e864428f00e22f1cc3c7b8d81d571e5a214a253929c781d3123",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -144,7 +147,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly twenty-two expected migrations exist in lexical order",
+  "Exactly twenty-three expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -517,6 +520,65 @@ check(
       residentAppointmentRequestsMigration,
     ),
   "Resident request workflows do not restore direct writes or expose event rows",
+);
+
+const residentRequestDurationMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("simplify_resident_request_duration"),
+  )?.sql ?? "";
+const residentRequestDurationDeclarationAudit = auditPlpgsqlIntoTargets(
+  residentRequestDurationMigration,
+);
+const refinedResidentRequest = residentRequestDurationMigration.slice(
+  residentRequestDurationMigration.indexOf(
+    "create or replace function public.resident_appointment_request(",
+  ),
+);
+const refinedResidentRequestSignature = refinedResidentRequest.slice(
+  0,
+  refinedResidentRequest.indexOf(")"),
+);
+check(
+  residentRequestDurationDeclarationAudit.functionCount === 1 &&
+    residentRequestDurationDeclarationAudit.undeclared.length === 0,
+  "The refined resident-request RPC has declared PL/pgSQL targets",
+);
+check(
+  /resident_appointment_provisional_duration\(\)[\s\S]*select interval '30 minutes'/i.test(
+    residentRequestDurationMigration,
+  ) &&
+    /revoke all on function public\.resident_appointment_provisional_duration\(\)[\s\S]*authenticated/i.test(
+      residentRequestDurationMigration,
+    ),
+  "Resident provisional duration is centralized at a private database boundary",
+);
+check(
+  /drop function public\.resident_appointment_request\(\s*text, date, time, time, text, uuid\s*\)/i.test(
+    residentRequestDurationMigration,
+  ) && !/p_end_time/i.test(refinedResidentRequestSignature),
+  "The resident RPC retires browser-supplied end time",
+);
+check(
+  /provisional_end_at\s*:=\s*p_scheduled_date \+ p_start_time \+ provisional_duration/i.test(
+    refinedResidentRequest,
+  ) &&
+    /provisional_end_at::date is distinct from p_scheduled_date/i.test(
+      refinedResidentRequest,
+    ) &&
+    /appointment_validate_schedule\([\s\S]*p_start_time,\s*provisional_end_time/i.test(
+      refinedResidentRequest,
+    ),
+  "Derived resident request ranges stay on-date and use trusted schedule validation",
+);
+check(
+  /existing_record\.end_time is distinct from provisional_end_time/i.test(
+    refinedResidentRequest,
+  ) &&
+    /pg_advisory_xact_lock/i.test(refinedResidentRequest) &&
+    /matching pending resident request already exists/i.test(
+      refinedResidentRequest,
+    ),
+  "Derived duration preserves resident request idempotency and duplicate protection",
 );
 
 const healthRecordsMigration =

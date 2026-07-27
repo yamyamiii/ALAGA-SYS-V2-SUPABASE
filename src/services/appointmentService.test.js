@@ -216,7 +216,6 @@ describe("appointment service", () => {
           service_type: "General Consultation",
           scheduled_date: "2026-08-01",
           start_time: "08:00",
-          end_time: "08:30",
           reason: " Routine visit ",
         },
         requestKey,
@@ -230,7 +229,6 @@ describe("appointment service", () => {
       p_service_type: "General Consultation",
       p_scheduled_date: "2026-08-01",
       p_start_time: "08:00",
-      p_end_time: "08:30",
       p_reason: "Routine visit",
       p_request_key: requestKey,
     });
@@ -240,6 +238,35 @@ describe("appointment service", () => {
     expect(payload).not.toHaveProperty("p_status");
     expect(payload).not.toHaveProperty("p_appointment_type");
     expect(payload).not.toHaveProperty("p_priority");
+    expect(payload).not.toHaveProperty("p_end_time");
+  });
+
+  it("keeps unlinked residents blocked with health-center guidance", async () => {
+    const client = rpcClient({
+      data: null,
+      error: {
+        code: "42501",
+        message: "resident account is not linked to a resident record",
+      },
+    });
+    const service = createAppointmentService(() => client);
+
+    await expect(
+      service.requestResidentAppointment(
+        {
+          service_type: "General Consultation",
+          scheduled_date: "2026-08-01",
+          start_time: "08:00",
+          reason: "Routine visit",
+        },
+        requestKey,
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        code: "resident_link_required",
+        message: expect.stringMatching(/contact the health center/i),
+      }),
+    );
   });
 
   it("fails safely while offline without sending a resident request", async () => {
@@ -255,7 +282,6 @@ describe("appointment service", () => {
           service_type: "General Consultation",
           scheduled_date: "2026-08-01",
           start_time: "08:00",
-          end_time: "08:30",
           reason: "Routine visit",
         },
         requestKey,

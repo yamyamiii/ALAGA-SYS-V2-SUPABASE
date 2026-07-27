@@ -33,8 +33,13 @@ describe("ResidentAppointmentRequestDialog", () => {
     expect(screen.getByLabelText("Service")).toBeInTheDocument();
     expect(screen.getByLabelText("Preferred date")).toBeInTheDocument();
     expect(screen.getByLabelText("Preferred start time")).toBeInTheDocument();
-    expect(screen.getByLabelText("Preferred end time")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Preferred end time"),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText("Reason for visit")).toBeInTheDocument();
+    expect(
+      screen.getByText(/provisional 30-minute duration/i),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Resident", { selector: "label" })).toBeNull();
     expect(screen.queryByText(/assigned staff/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/priority/i)).not.toBeInTheDocument();
@@ -53,10 +58,10 @@ describe("ResidentAppointmentRequestDialog", () => {
         expect.objectContaining({
           service_type: "General Consultation",
           start_time: "08:00",
-          end_time: "08:30",
           reason: "Routine visit",
         }),
       ),
     );
+    expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty("end_time");
   });
 });

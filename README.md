@@ -129,9 +129,9 @@ delivery is implemented.
 
 ## Deployment note
 
-Migrations 1–21 are the completed remote baseline. Forward-only Migration 22 is
+Migrations 1–22 are the completed remote baseline. Forward-only Migration 23 is
 not applied by application startup. Review and apply it manually through the
-Supabase CLI before deploying the Phase 5.5 frontend.
+Supabase CLI before deploying the resident request UX refinement.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),

@@ -58,8 +58,9 @@ export function ResidentAppointmentsPage() {
       >
         <p className="font-semibold">Pending = awaiting confirmation</p>
         <p className="mt-1 text-muted-foreground">
-          Your selected date and time are preferences until health-center staff
-          review the request, assign staff, and confirm the appointment.
+          Your selected date and start time are preferences until health-center
+          staff review the request, finalize the schedule, assign staff, and
+          confirm the appointment.
         </p>
       </div>
 

@@ -101,3 +101,12 @@ Forward-only Migration
 `20260720002200_resident_appointment_requests.sql` adds the resident request
 RPCs, preferred-schedule metadata, staff review read model, request audit
 semantics, and private event boundary. No Edge Function is required.
+
+Forward-only Migration
+`20260720002300_simplify_resident_request_duration.sql` retires the
+resident-supplied end-time RPC overload. Residents submit only a preferred
+start time; a private immutable helper supplies the centralized 30-minute
+provisional duration, the trusted RPC rejects cross-date ranges, and the
+existing schedule validator applies Manila-date and time rules. Staff-created
+and staff-adjusted appointments continue accepting explicit start and end
+times.

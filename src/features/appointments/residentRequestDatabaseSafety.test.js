@@ -6,6 +6,10 @@ const migration = fs.readFileSync(
   "supabase/migrations/20260720002200_resident_appointment_requests.sql",
   "utf8",
 );
+const durationMigration = fs.readFileSync(
+  "supabase/migrations/20260720002300_simplify_resident_request_duration.sql",
+  "utf8",
+);
 const workflow = fs.readFileSync(
   "supabase/migrations/20260720001800_appointment_workflows.sql",
   "utf8",
@@ -148,6 +152,58 @@ describe("resident appointment request database safety", () => {
     );
     expect(migration).toMatch(
       /'requested_schedule', jsonb_build_object\([\s\S]*new\.requested_date/i,
+    );
+  });
+});
+
+describe("resident request provisional duration", () => {
+  const refinedRequest = durationMigration.slice(
+    durationMigration.indexOf(
+      "create or replace function public.resident_appointment_request(",
+    ),
+  );
+
+  it("centralizes and derives a thirty-minute provisional end time", () => {
+    expect(durationMigration).toMatch(
+      /resident_appointment_provisional_duration\(\)[\s\S]*select interval '30 minutes'/i,
+    );
+    expect(refinedRequest).toMatch(
+      /provisional_end_at\s*:=\s*p_scheduled_date \+ p_start_time \+ provisional_duration/i,
+    );
+    expect(refinedRequest).toMatch(
+      /appointment_validate_schedule\([\s\S]*p_start_time,\s*provisional_end_time/i,
+    );
+    expect(refinedRequest).toMatch(
+      /p_start_time,\s*provisional_end_time,\s*'normal'::public\.appointment_priority/i,
+    );
+  });
+
+  it("rejects a derived range that crosses the selected date", () => {
+    expect(refinedRequest).toMatch(
+      /provisional_end_at::date is distinct from p_scheduled_date/i,
+    );
+    expect(refinedRequest).toMatch(/provisional_end_time <= p_start_time/i);
+  });
+
+  it("removes the browser end-time override while preserving idempotency", () => {
+    expect(durationMigration).toMatch(
+      /drop function public\.resident_appointment_request\(\s*text, date, time, time, text, uuid\s*\)/i,
+    );
+    const signature = refinedRequest.slice(0, refinedRequest.indexOf(")"));
+    expect(signature).not.toMatch(/p_end_time/i);
+    expect(refinedRequest).toMatch(
+      /existing_record\.end_time is distinct from provisional_end_time/i,
+    );
+    expect(refinedRequest).toMatch(/pg_advisory_xact_lock/);
+    expect(refinedRequest).toMatch(/matching pending resident request/i);
+  });
+
+  it("keeps staff-controlled final schedule adjustment intact", () => {
+    expect(workflow).toMatch(
+      /appointment_update_schedule\([\s\S]*p_start_time time,\s*p_end_time time/i,
+    );
+    expect(workflow).toMatch(
+      /appointment editing requires an administrator or BHW/i,
     );
   });
 });

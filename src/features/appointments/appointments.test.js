@@ -70,7 +70,6 @@ describe("appointment foundations", () => {
       service_type: "General Consultation",
       scheduled_date: "2026-08-01",
       start_time: "08:00",
-      end_time: "08:30",
       reason: "Routine visit",
     };
     expect(residentAppointmentRequestSchema.safeParse(request).success).toBe(
@@ -82,12 +81,12 @@ describe("appointment foundations", () => {
         reason: "",
       }).success,
     ).toBe(false);
-    expect(
-      residentAppointmentRequestSchema.safeParse({
-        ...request,
-        end_time: "07:59",
-      }).success,
-    ).toBe(false);
+    const attemptedOverride = residentAppointmentRequestSchema.safeParse({
+      ...request,
+      end_time: "23:59",
+    });
+    expect(attemptedOverride.success).toBe(true);
+    expect(attemptedOverride.data).not.toHaveProperty("end_time");
   });
 
   it("calculates date-only values without browser timezone drift", () => {

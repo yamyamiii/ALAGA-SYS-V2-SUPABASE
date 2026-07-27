@@ -30,7 +30,6 @@ function defaults() {
     service_type: "General Consultation",
     scheduled_date: addDaysToDateKey(manilaDateKey(), 1),
     start_time: "08:00",
-    end_time: "08:30",
     reason: "",
   };
 }
@@ -85,9 +84,9 @@ export function ResidentAppointmentRequestDialog({
         <DialogHeader>
           <DialogTitle>Request appointment</DialogTitle>
           <DialogDescription>
-            Choose your preferred schedule in Asia/Manila. This is a request,
-            not a confirmed slot. Health-center staff will review the schedule
-            and assign an eligible staff member.
+            Choose your preferred start time in Asia/Manila. This is not a
+            confirmed slot. The health center will review the request, finalize
+            the schedule, and assign an eligible staff member.
           </DialogDescription>
         </DialogHeader>
 
@@ -115,8 +114,8 @@ export function ResidentAppointmentRequestDialog({
             <FieldError error={errors.service_type} />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-2 sm:col-span-3">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
               <Label htmlFor="resident-request-date">Preferred date</Label>
               <Input
                 id="resident-request-date"
@@ -139,17 +138,13 @@ export function ResidentAppointmentRequestDialog({
               />
               <FieldError error={errors.start_time} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="resident-request-end">Preferred end time</Label>
-              <Input
-                id="resident-request-end"
-                type="time"
-                disabled={mutation.isPending}
-                {...register("end_time")}
-              />
-              <FieldError error={errors.end_time} />
-            </div>
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            The system uses a provisional 30-minute duration for review.
+            Administrator or BHW staff may adjust the final start and end time
+            before confirmation.
+          </p>
 
           <div className="space-y-2">
             <Label htmlFor="resident-request-reason">Reason for visit</Label>
