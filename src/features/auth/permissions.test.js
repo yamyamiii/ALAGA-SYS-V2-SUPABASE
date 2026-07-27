@@ -53,6 +53,21 @@ describe("role permissions", () => {
       ),
     ).toBe(false);
     expect(
+      hasPermission(
+        USER_ROLES.BARANGAY_HEALTH_WORKER,
+        PERMISSIONS.VIEW_REPORTS,
+      ),
+    ).toBe(true);
+    expect(hasPermission(USER_ROLES.NURSE, PERMISSIONS.VIEW_REPORTS)).toBe(
+      true,
+    );
+    expect(hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.VIEW_REPORTS)).toBe(
+      true,
+    );
+    expect(hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.VIEW_REPORTS)).toBe(
+      false,
+    );
+    expect(
       hasPermission(USER_ROLES.NURSE, PERMISSIONS.MANAGE_CONSULTATIONS),
     ).toBe(true);
     expect(hasPermission(USER_ROLES.NURSE, PERMISSIONS.VIEW_APPOINTMENTS)).toBe(

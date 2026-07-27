@@ -34,6 +34,7 @@ import {
 import { useAuth } from "@/features/auth/authContext";
 import { hasPermission, PERMISSIONS } from "@/features/auth/permissions";
 import { useMaternalChildDashboard } from "@/features/maternal-child-care/hooks";
+import { useReport } from "@/features/reports/hooks";
 
 const unavailableActions = [
   { label: "New resident", icon: UsersRound },
@@ -43,7 +44,24 @@ const unavailableActions = [
 export default function DashboardPage() {
   const { profile } = useAuth();
   const today = manilaDateKey();
-  const summary = useAppointmentDashboard();
+  const canViewReports = hasPermission(profile.role, PERMISSIONS.VIEW_REPORTS);
+  const appointmentSummary = useAppointmentDashboard(!canViewReports);
+  const reportSummary = useReport(
+    "overview",
+    {
+      start_date: today,
+      end_date: today,
+      purok_id: "",
+      service_type: "",
+      status: "",
+      staff_id: "",
+    },
+    canViewReports,
+  );
+  const summary = canViewReports ? reportSummary : appointmentSummary;
+  const summaryData = canViewReports
+    ? reportSummary.data?.summary
+    : appointmentSummary.data;
   const queue = useAppointmentQueue(
     { date: today, page: 1, pageSize: 5 },
     { poll: false },
@@ -61,26 +79,32 @@ export default function DashboardPage() {
     {
       label: "Today's appointments",
       icon: CalendarCheck,
-      value: summary.data?.appointments_today,
+      value: summaryData?.appointments_today,
       helper: "Visible to your account",
     },
     {
       label: "Pending appointments",
       icon: CalendarClock,
-      value: summary.data?.pending_appointments,
+      value: canViewReports
+        ? summaryData?.pending_requests
+        : summaryData?.pending_appointments,
       helper: "Awaiting confirmation",
     },
     {
       label: "Checked in today",
       icon: UsersRound,
-      value: summary.data?.checked_in_today,
+      value: canViewReports
+        ? summaryData?.checked_in_queue
+        : summaryData?.checked_in_today,
       helper: "Current operational queue",
     },
     {
       label: "Completed today",
       icon: CircleCheckBig,
-      value: summary.data?.completed_today,
-      helper: `${summary.data?.upcoming_appointments ?? 0} upcoming`,
+      value: summaryData?.completed_today,
+      helper: canViewReports
+        ? "Authorized aggregate"
+        : `${summaryData?.upcoming_appointments ?? 0} upcoming`,
     },
   ];
 

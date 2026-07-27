@@ -81,11 +81,12 @@ export function useResidentAppointmentHistory(
   });
 }
 
-export function useAppointmentDashboard() {
+export function useAppointmentDashboard(enabled = true) {
   return useQuery({
     queryKey: appointmentKeys.dashboard,
     queryFn: () => appointmentService.getDashboardSummary(),
     staleTime: 60_000,
+    enabled,
   });
 }
 

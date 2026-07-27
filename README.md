@@ -101,7 +101,8 @@ the dashboard at `/`. Households are available at `/households`, residents at
 `/residents`, and appointments at `/appointments`, `/appointments/calendar`,
 and `/appointments/queue`. Unfinished healthcare module routes remain shared
 placeholders. Authorized accounts access clinical encounters at
-`/health-records` and `/health-records/:encounterId`.
+`/health-records` and `/health-records/:encounterId`. Authorized staff access
+aggregate reports and exports at `/reports`.
 
 ## Quality commands
 
@@ -117,11 +118,11 @@ npm run preview
 
 ## Current phase
 
-Phase 5 provides trusted encounter, vital-sign, allergy, and medical-history
-RPCs; immutable signed records; amendment lineage; optimistic concurrency;
-idempotent appointment linkage; role-shaped clinical reads; and data-minimized
-audit events. Appointment business time remains consistently interpreted as
-Asia/Manila.
+Phase 7 provides role-aware, database-aggregated reports for registry,
+appointments, health records, maternal care, child care, and operational staff
+workload. It adds bounded CSV/Excel-compatible export and browser PDF/printing
+with formula-injection protection and minimized export audits. Report pages do
+not receive clinical narratives or direct resident identifiers.
 Registry locality remains Brgy. Bagongpook with Purok 1 through Purok 7.
 Household latitude/longitude columns remain in the database for compatibility
 but are not selected, collected, submitted, or displayed by the frontend.
@@ -131,9 +132,9 @@ delivery is implemented.
 
 ## Deployment note
 
-Migrations 1–22 are the completed remote baseline. Forward-only Migration 23 is
-not applied by application startup. Review and apply it manually through the
-Supabase CLI before deploying the resident request UX refinement.
+Migrations 1–25 are the completed remote baseline. Forward-only Migration 26 is
+not applied by application startup. Review it and apply it manually through the
+Supabase CLI before enabling the Reports route in production.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),
@@ -141,6 +142,9 @@ See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Resident appointment request](docs/workflows/RESIDENT_APPOINTMENT_REQUEST.md),
 [Health Records architecture](docs/architecture/HEALTH_RECORDS.md),
 [Clinical encounter workflow](docs/workflows/CLINICAL_ENCOUNTER.md),
+[Reports architecture](docs/architecture/REPORTS_ANALYTICS.md),
+[Report exports](docs/workflows/REPORT_EXPORTS.md),
+[Report privacy](docs/workflows/REPORT_PRIVACY.md),
 [Vital Signs workflow](docs/workflows/VITAL_SIGNS.md),
 [Daily queue](docs/workflows/DAILY_QUEUE.md),
 [Private photo storage](docs/architecture/STORAGE.md),

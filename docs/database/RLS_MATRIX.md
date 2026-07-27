@@ -218,6 +218,23 @@ recursively invoke those same policies. They are schema-qualified, expose only
 an enum/UUID/boolean, use `search_path = ''`, and are executable only by
 `authenticated` plus database-owner roles.
 
+## Phase 7 report RPCs
+
+Registry and appointment report RPCs use `security invoker` and source-table
+RLS. Aggregate-only overview and clinical RPCs use narrow security definers
+because clinical table policies intentionally deny administrators/BHWs raw
+narrative rows. They return counts only and do not change table grants or RLS.
+All functions have fixed empty search paths. The security-definer scope
+validator rejects residents, inactive accounts, invalid role/category
+combinations, invalid filters, and date ranges over five years. Anonymous
+execute is revoked.
+
+Administrator/BHW may access registry aggregates; administrator/nurse may
+access health-record aggregates; administrator/BHW/midwife may access maternal
+and child aggregates. Appointment overview is available to nonresident staff.
+Administrator workload covers active staff, while nurse and midwife workload is
+self-only. Exports repeat these checks and write only minimized audit metadata.
+
 ## Retained restrictions
 
 Phase 4 keeps these deny-by-default boundaries:

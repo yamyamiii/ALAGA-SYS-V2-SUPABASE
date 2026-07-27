@@ -30,6 +30,7 @@ const expectedMigrations = [
   "20260720002300_simplify_resident_request_duration.sql",
   "20260720002400_maternal_child_care.sql",
   "20260720002500_fix_maternal_child_trigger_columns.sql",
+  "20260720002600_reports_analytics.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -80,6 +81,8 @@ const completedMigrationHashes = {
     "3fed17be6baacbc2b33e74ebc51dbfb06f18f8e1dbe7b6a17ca2484548f672eb",
   "20260720002400_maternal_child_care.sql":
     "4434f2a7504204996b795714d69a5be1d8550b771950ae0a625c5478cf3d3cc9",
+  "20260720002500_fix_maternal_child_trigger_columns.sql":
+    "6f19338b1d8b04d0d278b2987cf4e13d427cf758d986efa7ce9c06954f08ff41",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -161,7 +164,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly twenty-five expected migrations exist in lexical order",
+  "Exactly twenty-six expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -894,6 +897,56 @@ check(
       ),
     ),
   "Shared maternal-child auditing uses row-type-safe JSONB field access",
+);
+
+const reportsMigration =
+  migrationEntries.find(({ file }) => file.includes("reports_analytics"))
+    ?.sql ?? "";
+check(
+  /report_validate_scope[\s\S]*actor_role is null or actor_role = 'resident'/i.test(
+    reportsMigration,
+  ) &&
+    /revoke all on function public\.report_[\s\S]*from public, anon, authenticated/i.test(
+      reportsMigration,
+    ),
+  "Reports deny resident and anonymous access at the database boundary",
+);
+check(
+  /report_registry_summary[\s\S]*?security invoker/i.test(reportsMigration) &&
+    /report_appointment_summary[\s\S]*?security invoker/i.test(
+      reportsMigration,
+    ) &&
+    /report_overview_summary[\s\S]*?security definer[\s\S]*?report_validate_scope/i.test(
+      reportsMigration,
+    ) &&
+    /report_health_summary[\s\S]*?security definer[\s\S]*?report_validate_scope/i.test(
+      reportsMigration,
+    ) &&
+    /report_maternal_summary[\s\S]*?security definer[\s\S]*?report_validate_scope/i.test(
+      reportsMigration,
+    ) &&
+    !/security definer[\s\S]*returns table\([\s\S]*resident_name/i.test(
+      reportsMigration,
+    ),
+  "Report RPCs retain RLS or use authorized aggregate-only definers",
+);
+check(
+  /current_timestamp at time zone 'Asia\/Manila'/i.test(reportsMigration) &&
+    /between p_start_date and p_end_date/i.test(reportsMigration) &&
+    /report date range cannot exceed five years/i.test(reportsMigration),
+  "Reports use inclusive, bounded Manila-aware date filtering",
+);
+check(
+  /p_limit < 1 or p_limit > 5000/i.test(reportsMigration) &&
+    /report\.large_export_requested/i.test(reportsMigration) &&
+    /filter_fields[\s\S]*row_count/i.test(reportsMigration),
+  "Exports are capped and audited with minimized metadata",
+);
+check(
+  !/\b(?:chief_complaint|subjective_notes|objective_notes|assessment|diagnosis_text|treatment_notes|risk_notes|developmental_notes)\b/i.test(
+    reportsMigration,
+  ),
+  "Report functions do not select clinical narratives",
 );
 
 const functionBlocks = [

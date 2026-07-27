@@ -323,6 +323,18 @@ One row per encounter. Measurements are nullable individually, but at least one
 is required. Units are °C, mmHg, bpm, breaths/min, percent, cm, kg, and 0–10.
 BMI is calculated from height and weight and is not a writable column.
 
+## Phase 7 report contracts
+
+Phase 7 creates no reporting tables and stores no duplicated health data.
+`report_*` RPCs expose JSON summaries or narrow tabular aggregates. Common
+inputs are inclusive `start_date`/`end_date` plus optional canonical purok,
+service, appointment status, or active staff identifiers.
+
+`report_export_rows` returns `row_data jsonb` and `total_count bigint`, capped
+at 5,000 aggregate rows. `report_record_export` appends only report type, date
+range, filter-field names, format, and row count to `audit_logs.request_metadata`.
+No report RPC returns direct resident identifiers or clinical narrative fields.
+
 ### `resident_allergies`
 
 Stores resident, allergen, reaction, severity, clinical item status, author,

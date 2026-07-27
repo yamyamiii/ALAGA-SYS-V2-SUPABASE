@@ -54,3 +54,16 @@ communicate a healthcare state.
 - Never show sample healthcare numbers without an unmistakable preview label.
 - Do not use gradients for major UI surfaces; the dashboard background effect is
   an extremely subtle single-color radial wash, not a decorative gradient panel.
+
+## Reporting pattern
+
+Report categories use horizontally scrollable keyboard-focusable tabs, shared
+date/filter controls, responsive statistic cards, and CSS bar charts. Every
+chart includes an accessible text alternative and expandable data table; color
+is not the only carrier of meaning. At mobile widths controls remain reachable
+and wide workload tables scroll within their card.
+
+Print styles expose only `.report-print`, hide `.print-hidden` controls, show
+report metadata and footers, repeat table headings, avoid splitting cards and
+rows, and use an A4-safe monochrome surface. PDF is produced through the same
+reviewable browser print layout.
