@@ -28,6 +28,7 @@ const expectedMigrations = [
   "20260720002100_fix_clinical_manila_dates.sql",
   "20260720002200_resident_appointment_requests.sql",
   "20260720002300_simplify_resident_request_duration.sql",
+  "20260720002400_maternal_child_care.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -74,6 +75,8 @@ const completedMigrationHashes = {
     "e332e611c0f3da60a61851bb72595534d73d51186afa3f717edce8be0a92092f",
   "20260720002200_resident_appointment_requests.sql":
     "cb42ae34dc5c6e864428f00e22f1cc3c7b8d81d571e5a214a253929c781d3123",
+  "20260720002300_simplify_resident_request_duration.sql":
+    "3fed17be6baacbc2b33e74ebc51dbfb06f18f8e1dbe7b6a17ca2484548f672eb",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -81,8 +84,16 @@ const expectedTables = [
   "appointments",
   "audit_logs",
   "barangays",
+  "child_growth_measurements",
+  "child_health_profiles",
+  "child_health_visits",
+  "child_immunizations",
   "health_encounters",
   "households",
+  "maternal_delivery_outcomes",
+  "maternal_postnatal_visits",
+  "maternal_pregnancies",
+  "maternal_prenatal_visits",
   "profiles",
   "puroks",
   "resident_allergies",
@@ -147,7 +158,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly twenty-three expected migrations exist in lexical order",
+  "Exactly twenty-four expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -744,6 +755,91 @@ check(
       healthRecordsMigration,
     ),
   "Relative follow-up validation and UTC clinical event timestamps remain intact",
+);
+
+const maternalChildMigration =
+  migrationEntries.find(({ file }) => file.includes("maternal_child_care"))
+    ?.sql ?? "";
+const maternalChildDeclarationAudit = auditPlpgsqlIntoTargets(
+  maternalChildMigration,
+);
+check(
+  maternalChildDeclarationAudit.functionCount === 15 &&
+    maternalChildDeclarationAudit.undeclared.length === 0,
+  "Every maternal-child PL/pgSQL SELECT/RETURNING INTO target is declared",
+);
+check(
+  /nextval\('public\.maternal_pregnancy_number_seq'\)/i.test(
+    maternalChildMigration,
+  ) &&
+    /nextval\('public\.child_health_profile_number_seq'\)/i.test(
+      maternalChildMigration,
+    ) &&
+    !/select\s+max\s*\(/i.test(maternalChildMigration),
+  "Maternal and child identifiers use atomic sequences",
+);
+check(
+  /maternal_one_active_pregnancy/i.test(maternalChildMigration) &&
+    /child_one_active_profile/i.test(maternalChildMigration) &&
+    /request_key/i.test(maternalChildMigration) &&
+    /version bigint not null default 1/i.test(maternalChildMigration),
+  "Maternal and child creation is duplicate-safe, idempotent, and versioned",
+);
+check(
+  /revoke all on table public\.maternal_pregnancies[\s\S]*authenticated/i.test(
+    maternalChildMigration,
+  ) &&
+    !/grant\s+(?:insert|update|delete)[^;]*maternal_pregnancies[^;]*authenticated/i.test(
+      maternalChildMigration,
+    ) &&
+    !/using\s*\(\s*true\s*\)/i.test(maternalChildMigration),
+  "Maternal and child records have no browser write grants or broad RLS policies",
+);
+check(
+  /when 'resident' then p\.resident_id = public\.current_resident_id\(\)/i.test(
+    maternalChildMigration,
+  ) &&
+    /when 'resident' then c\.child_resident_id=public\.current_resident_id\(\)/i.test(
+      maternalChildMigration,
+    ) &&
+    /actor_role='resident' and resident_id<>public\.current_resident_id\(\)/i.test(
+      maternalChildMigration,
+    ),
+  "Resident access is limited to the resident's own linked record",
+);
+check(
+  /nurse maternal documentation requires an assigned appointment or encounter/i.test(
+    maternalChildMigration,
+  ) &&
+    /BHW growth recording requires a checked-in child appointment/i.test(
+      maternalChildMigration,
+    ) &&
+    /child profile management requires a midwife/i.test(maternalChildMigration),
+  "Clinical mutation RPCs enforce midwife, assignment-scoped nurse, and BHW measurement boundaries",
+);
+check(
+  /at time zone 'Asia\/Manila'/i.test(maternalChildMigration) &&
+    /last menstrual period cannot be in the future/i.test(
+      maternalChildMigration,
+    ) &&
+    /immunization date cannot be in the future/i.test(maternalChildMigration),
+  "Maternal and child date-only rules use the Manila business date",
+);
+check(
+  /maternal\.pregnancy_created/i.test(maternalChildMigration) &&
+    /child\.growth_recorded/i.test(maternalChildMigration) &&
+    /changed_fields/i.test(maternalChildMigration) &&
+    !/new\.(?:risk_notes|findings|plan|developmental_notes|notes)/i.test(
+      maternalChildMigration.slice(
+        maternalChildMigration.indexOf(
+          "create or replace function public.audit_maternal_child_change",
+        ),
+        maternalChildMigration.indexOf(
+          "create or replace function public.maternal_pregnancy_list",
+        ),
+      ),
+    ),
+  "Maternal and child audits are semantic and exclude clinical narrative values",
 );
 
 const functionBlocks = [

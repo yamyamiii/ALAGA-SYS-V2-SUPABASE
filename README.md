@@ -12,9 +12,11 @@ encounters, vital signs, allergies, medical history, signatures, amendments,
 and resident clinical timelines.
 Phase 5.5 allows a linked active resident to submit an own pending appointment
 request for staff review and cancel it only while still pending.
+Phase 6 adds secure pregnancy, prenatal, delivery, postnatal, child profile,
+growth, immunization, and developmental-visit foundations.
 
-Inventory, prescription dispensing, laboratory integrations, maternal-care
-module workflows, reports, notification delivery, and AI are not implemented.
+Inventory, prescription dispensing, laboratory integrations, birth
+registration, reports, notification delivery, and AI are not implemented.
 
 ## Technology stack
 

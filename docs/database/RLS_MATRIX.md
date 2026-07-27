@@ -1,5 +1,20 @@
 # Row Level Security matrix
 
+## Phase 6 maternal and child care
+
+| Resource/action        | Admin        | BHW                    | Nurse        | Midwife        | Resident         | Anonymous |
+| ---------------------- | ------------ | ---------------------- | ------------ | -------------- | ---------------- | --------- |
+| Pregnancy/child list   | Metadata     | Metadata               | Assigned     | Clinical scope | Own              | No        |
+| Clinical timelines     | No narrative | No narrative           | Assigned     | Clinical scope | Own safe summary | No        |
+| Create episode/profile | No           | No                     | No           | Trusted RPC    | No               | No        |
+| Maternal/child visit   | No           | No                     | Assigned RPC | Trusted RPC    | No               | No        |
+| Growth measurement     | No           | Checked-in appointment | Assigned RPC | Trusted RPC    | No               | No        |
+| Immunization           | No           | No                     | Assigned RPC | Trusted RPC    | No               | No        |
+| Archive                | Trusted RPC  | No                     | No           | No             | No               | No        |
+
+Authenticated table writes are revoked. Select policies and role-shaped RPCs
+preserve resident ownership, staff assignment, and data minimization.
+
 ## Phase 5.5 resident appointment requests
 
 | Resource/action                     | Admin          | BHW            | Nurse  | Midwife | Resident        | Anonymous |

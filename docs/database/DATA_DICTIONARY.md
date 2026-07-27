@@ -1,8 +1,24 @@
-# Data dictionary through Phase 3B
+# Data dictionary through Phase 6
 
 All timestamps are `timestamptz` in UTC storage. UUID values are internal keys;
 display numbers are database-generated text. Nullable means the value may be
 unknown, not collected, not applicable, or not yet linked as described.
+
+## Phase 6 maternal and child care tables
+
+| Table                        | Purpose              | Important integrity rules                      |
+| ---------------------------- | -------------------- | ---------------------------------------------- |
+| `maternal_pregnancies`       | Pregnancy episode    | Atomic MAT number, one active episode, version |
+| `maternal_prenatal_visits`   | Prenatal timeline    | Same-resident links and request idempotency    |
+| `maternal_delivery_outcomes` | Delivery fact        | One active outcome per pregnancy               |
+| `maternal_postnatal_visits`  | Postnatal timeline   | Delivered episode and same-resident links      |
+| `child_health_profiles`      | Child timeline root  | Atomic CHD number and registry birth date      |
+| `child_growth_measurements`  | Growth facts         | Plausible measurements and no stored BMI       |
+| `child_immunizations`        | Vaccine facts        | Unique vaccine/dose and completed-date rule    |
+| `child_health_visits`        | Development timeline | Same-resident links and follow-up chronology   |
+
+All Phase 6 tables have optimistic versions, UTC timestamps, RLS, and minimized
+semantic audit.
 
 Phase 3B adds no healthcare tables or columns. It activates the existing
 `residents.photo_path` and `residents.linked_profile_id` fields through private

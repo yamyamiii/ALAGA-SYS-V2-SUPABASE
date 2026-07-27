@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import {
   BellRing,
+  Baby,
   CalendarCheck,
   CalendarClock,
   CircleCheckBig,
@@ -32,6 +33,7 @@ import {
 } from "@/features/appointments/timezone";
 import { useAuth } from "@/features/auth/authContext";
 import { hasPermission, PERMISSIONS } from "@/features/auth/permissions";
+import { useMaternalChildDashboard } from "@/features/maternal-child-care/hooks";
 
 const unavailableActions = [
   { label: "New resident", icon: UsersRound },
@@ -46,6 +48,11 @@ export default function DashboardPage() {
     { date: today, page: 1, pageSize: 5 },
     { poll: false },
   );
+  const canViewMaternalChild = hasPermission(
+    profile.role,
+    PERMISSIONS.VIEW_MATERNAL_CHILD_CARE,
+  );
+  const maternalChild = useMaternalChildDashboard(canViewMaternalChild);
   const canSchedule = hasPermission(
     profile.role,
     PERMISSIONS.SCHEDULE_APPOINTMENTS,
@@ -102,6 +109,57 @@ export default function DashboardPage() {
           <StatCard key={stat.label} {...stat} loading={summary.isLoading} />
         ))}
       </section>
+
+      {canViewMaternalChild ? (
+        <section aria-label="Maternal and child care overview">
+          <Card>
+            <CardHeader>
+              <SectionHeading
+                title="Maternal and child care"
+                description="Authorized aggregate counts only; no clinical names or narratives"
+                action={
+                  <Button asChild size="sm" variant="outline">
+                    <Link to={ROUTES.maternalChildCare}>Open care module</Link>
+                  </Button>
+                }
+              />
+            </CardHeader>
+            <CardContent>
+              {maternalChild.isError ? (
+                <EmptyState
+                  compact
+                  title="Care totals unavailable"
+                  description={maternalChild.error.message}
+                  actionLabel="Try again"
+                  onAction={() => maternalChild.refetch()}
+                />
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  {[
+                    ["Active pregnancies", "active_pregnancies"],
+                    ["Expected in 30 days", "expected_deliveries"],
+                    ["Prenatal today", "prenatal_visits_today"],
+                    ["Immunizations due", "immunizations_due"],
+                    ["Child visits today", "child_visits_today"],
+                  ].map(([label, key]) => (
+                    <div key={key} className="rounded-xl border p-4">
+                      <Baby className="h-4 w-4 text-primary" />
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        {label}
+                      </p>
+                      <p className="mt-1 text-2xl font-semibold">
+                        {maternalChild.isLoading
+                          ? "…"
+                          : (maternalChild.data?.[key] ?? 0)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
 
       <section className="grid gap-6 xl:grid-cols-5">
         <Card className="xl:col-span-3">

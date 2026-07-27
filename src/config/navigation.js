@@ -51,7 +51,7 @@ export const navigationItems = [
     label: "Maternal and Child Care",
     path: ROUTES.maternalChildCare,
     icon: Users,
-    permission: PERMISSIONS.MANAGE_MATERNAL_CARE,
+    permission: PERMISSIONS.VIEW_MATERNAL_CHILD_CARE,
   },
   {
     label: "Medicine Inventory",

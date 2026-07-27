@@ -38,6 +38,9 @@ const HealthRecordsPage = lazy(
 const HealthRecordDetailPage = lazy(
   () => import("@/features/health-records/HealthRecordDetailPage"),
 );
+const MaternalChildCarePage = lazy(
+  () => import("@/features/maternal-child-care/MaternalChildCarePage"),
+);
 const ConfigurationErrorPage = lazy(
   () => import("@/pages/ConfigurationErrorPage"),
 );
@@ -50,7 +53,8 @@ const moduleRoutes = navigationItems.filter(
     item.path !== ROUTES.households &&
     item.path !== ROUTES.residents &&
     item.path !== ROUTES.appointments &&
-    item.path !== ROUTES.healthRecords,
+    item.path !== ROUTES.healthRecords &&
+    item.path !== ROUTES.maternalChildCare,
 );
 
 function RouteFallback() {
@@ -139,6 +143,14 @@ export function AppRouter() {
               element={
                 <RoleGuard permission={PERMISSIONS.VIEW_HEALTH_RECORDS}>
                   <HealthRecordDetailPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.maternalChildCare}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_MATERNAL_CHILD_CARE}>
+                  <MaternalChildCarePage />
                 </RoleGuard>
               }
             />
