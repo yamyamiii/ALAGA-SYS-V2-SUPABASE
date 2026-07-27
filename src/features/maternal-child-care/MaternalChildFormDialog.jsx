@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import { useMaternalChildMutation } from "@/features/maternal-child-care/hooks";
 import { validateMaternalChildForm } from "@/features/maternal-child-care/schemas";
 import { maternalChildService } from "@/services/maternalChildService";
 
-const pregnancyDefaults = {
+const pregnancyDefaults = Object.freeze({
   resident_id: "",
   last_menstrual_period: "",
   estimated_delivery_date: "",
@@ -28,8 +28,8 @@ const pregnancyDefaults = {
   living_children: 0,
   pregnancy_risk_level: "unassessed",
   risk_notes: "",
-};
-const childDefaults = {
+});
+const childDefaults = Object.freeze({
   child_resident_id: "",
   mother_resident_id: "",
   guardian_resident_id: "",
@@ -41,7 +41,26 @@ const childDefaults = {
   delivery_type: "",
   newborn_screening_status: "",
   blood_type: "unknown",
-};
+});
+
+function createMaternalChildFormValues(kind, record = null) {
+  const defaults = kind === "pregnancy" ? pregnancyDefaults : childDefaults;
+  if (!record) return { ...defaults };
+  return Object.fromEntries(
+    Object.keys(defaults).map((key) => [key, record[key] ?? defaults[key]]),
+  );
+}
+
+function snapshotPregnancyDates(form, values) {
+  const formData = new FormData(form);
+  return {
+    ...values,
+    last_menstrual_period: String(formData.get("last_menstrual_period") ?? ""),
+    estimated_delivery_date: String(
+      formData.get("estimated_delivery_date") ?? "",
+    ),
+  };
+}
 
 function Field({ label, name, value, onChange, ...props }) {
   return (
@@ -57,17 +76,31 @@ function Field({ label, name, value, onChange, ...props }) {
   );
 }
 
-export function MaternalChildFormDialog({ open, onOpenChange, kind }) {
-  const [values, setValues] = useState(
-    kind === "pregnancy" ? pregnancyDefaults : childDefaults,
+export function MaternalChildFormDialog({
+  open,
+  onOpenChange,
+  kind,
+  record = null,
+}) {
+  const [values, setValues] = useState(() =>
+    createMaternalChildFormValues(kind, record),
   );
   const [error, setError] = useState("");
   const [selectedResident, setSelectedResident] = useState(null);
   const mutation = useMaternalChildMutation((payload) =>
     kind === "pregnancy"
-      ? maternalChildService.savePregnancy(payload)
-      : maternalChildService.saveChildProfile(payload),
+      ? maternalChildService.savePregnancy(payload, record)
+      : maternalChildService.saveChildProfile(payload, record),
   );
+  const resetMutation = mutation.reset;
+
+  useEffect(() => {
+    if (!open) return;
+    setValues(createMaternalChildFormValues(kind, record));
+    setSelectedResident(null);
+    setError("");
+    resetMutation();
+  }, [kind, open, record, resetMutation]);
 
   function update(name, value) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -76,7 +109,11 @@ export function MaternalChildFormDialog({ open, onOpenChange, kind }) {
   async function submit(event) {
     event.preventDefault();
     setError("");
-    const parsed = validateMaternalChildForm(kind, values);
+    const submittedValues =
+      kind === "pregnancy"
+        ? snapshotPregnancyDates(event.currentTarget, values)
+        : values;
+    const parsed = validateMaternalChildForm(kind, submittedValues);
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Review the form values.");
       return;
@@ -88,7 +125,6 @@ export function MaternalChildFormDialog({ open, onOpenChange, kind }) {
           ? "Pregnancy record created."
           : "Child health profile created.",
       );
-      setValues(kind === "pregnancy" ? pregnancyDefaults : childDefaults);
       onOpenChange(false);
     } catch (requestError) {
       setError(requestError.message);
@@ -101,8 +137,12 @@ export function MaternalChildFormDialog({ open, onOpenChange, kind }) {
         <DialogHeader>
           <DialogTitle>
             {kind === "pregnancy"
-              ? "New pregnancy record"
-              : "New child profile"}
+              ? record
+                ? "Edit pregnancy record"
+                : "New pregnancy record"
+              : record
+                ? "Edit child profile"
+                : "New child profile"}
           </DialogTitle>
           <DialogDescription>
             Select an active registry resident. The database validates sex,
@@ -255,7 +295,11 @@ export function MaternalChildFormDialog({ open, onOpenChange, kind }) {
               Cancel
             </Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? "Saving…" : "Create record"}
+              {mutation.isPending
+                ? "Saving…"
+                : record
+                  ? "Save changes"
+                  : "Create record"}
             </Button>
           </DialogFooter>
         </form>

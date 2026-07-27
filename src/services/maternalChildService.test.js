@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildPregnancySaveParameters,
   createMaternalChildService,
   MaternalChildServiceError,
+  serializePregnancyDate,
 } from "@/services/maternalChildService";
 
 const recordId = "11111111-1111-4111-8111-111111111111";
@@ -53,15 +55,50 @@ describe("maternal-child service", () => {
     });
     const service = createMaternalChildService(() => ({ rpc }));
     const requestKey = "22222222-2222-4222-8222-222222222222";
-    await service.savePregnancy({ resident_id: recordId }, null, requestKey);
+    await service.savePregnancy(
+      {
+        resident_id: recordId,
+        last_menstrual_period: "2026-07-01",
+        estimated_delivery_date: "2027-04-07",
+      },
+      null,
+      requestKey,
+    );
     expect(rpc).toHaveBeenCalledWith(
       "maternal_pregnancy_save",
       expect.objectContaining({
         p_id: null,
         p_expected_version: null,
         p_request_key: requestKey,
+        p_values: expect.objectContaining({
+          last_menstrual_period: "2026-07-01",
+          estimated_delivery_date: "2027-04-07",
+        }),
       }),
     );
+  });
+
+  it("serializes localized display dates into distinct ISO payload fields", () => {
+    expect(serializePregnancyDate("27/07/2026")).toBe("2026-07-27");
+    expect(serializePregnancyDate("03/05/2027")).toBe("2027-05-03");
+    expect(
+      buildPregnancySaveParameters(
+        {
+          last_menstrual_period: "27/07/2026",
+          estimated_delivery_date: "03/05/2027",
+        },
+        null,
+        "22222222-2222-4222-8222-222222222222",
+      ),
+    ).toEqual({
+      p_id: null,
+      p_expected_version: null,
+      p_values: {
+        last_menstrual_period: "2026-07-27",
+        estimated_delivery_date: "2027-05-03",
+      },
+      p_request_key: "22222222-2222-4222-8222-222222222222",
+    });
   });
 
   it("uses expected versions for concurrent archive protection", async () => {

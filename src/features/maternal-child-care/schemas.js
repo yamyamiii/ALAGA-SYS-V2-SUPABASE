@@ -5,16 +5,28 @@ const optionalNumber = z.union([
   z.literal(""),
   z.coerce.number().nonnegative(),
 ]);
+const isoDate = (label) =>
+  z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, `${label} must be a valid date.`)
+    .refine(
+      (value) => {
+        const [year, month, day] = value.split("-").map(Number);
+        const parsed = new Date(Date.UTC(year, month - 1, day));
+        return (
+          parsed.getUTCFullYear() === year &&
+          parsed.getUTCMonth() === month - 1 &&
+          parsed.getUTCDate() === day
+        );
+      },
+      { message: `${label} must be a valid date.` },
+    );
 
 export const pregnancySchema = z
   .object({
     resident_id: z.uuid("Select a valid resident record."),
-    last_menstrual_period: z
-      .string()
-      .min(1, "Last menstrual period is required."),
-    estimated_delivery_date: z
-      .string()
-      .min(1, "Estimated delivery date is required."),
+    last_menstrual_period: isoDate("Last menstrual period"),
+    estimated_delivery_date: isoDate("Estimated delivery date"),
     gravida: z.coerce.number().int().min(1).max(30),
     para: z.coerce.number().int().min(0).max(30),
     term_births: z.coerce.number().int().min(0).max(30),
@@ -25,9 +37,10 @@ export const pregnancySchema = z
     risk_notes: z.string().max(5000),
   })
   .refine(
-    (value) => value.estimated_delivery_date >= value.last_menstrual_period,
+    (value) => value.estimated_delivery_date > value.last_menstrual_period,
     {
-      message: "Estimated delivery date must follow the last menstrual period.",
+      message:
+        "Estimated delivery date must be after the last menstrual period.",
       path: ["estimated_delivery_date"],
     },
   );

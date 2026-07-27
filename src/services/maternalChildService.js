@@ -16,6 +16,36 @@ function nullable(value) {
   return value === "" || value === undefined ? null : value;
 }
 
+export function serializePregnancyDate(value) {
+  const date = String(value ?? "").trim();
+  const displayDate = date.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (displayDate) {
+    return `${displayDate[3]}-${displayDate[2]}-${displayDate[1]}`;
+  }
+  return date;
+}
+
+export function buildPregnancySaveParameters(
+  values,
+  current = null,
+  requestKey,
+) {
+  return {
+    p_id: current?.id ?? null,
+    p_expected_version: current?.version ?? null,
+    p_values: {
+      ...values,
+      last_menstrual_period: serializePregnancyDate(
+        values.last_menstrual_period,
+      ),
+      estimated_delivery_date: serializePregnancyDate(
+        values.estimated_delivery_date,
+      ),
+    },
+    p_request_key: current ? null : requestKey,
+  };
+}
+
 function mapError(error, fallback) {
   const message = error?.message ?? "";
   if (/changed by another user|could not serialize/i.test(message)) {
@@ -187,12 +217,10 @@ export function createMaternalChildService(clientProvider = getSupabaseClient) {
       return run(
         "maternal_pregnancy_save",
         () =>
-          client().rpc("maternal_pregnancy_save", {
-            p_id: current?.id ?? null,
-            p_expected_version: current?.version ?? null,
-            p_values: values,
-            p_request_key: current ? null : requestKey,
-          }),
+          client().rpc(
+            "maternal_pregnancy_save",
+            buildPregnancySaveParameters(values, current, requestKey),
+          ),
         "The pregnancy record could not be saved.",
       );
     },

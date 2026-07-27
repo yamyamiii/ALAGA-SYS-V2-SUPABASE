@@ -8,7 +8,7 @@ import {
 const residentId = "11111111-1111-4111-8111-111111111111";
 
 describe("maternal-child form schemas", () => {
-  it("accepts a valid pregnancy profile and rejects reversed dates", () => {
+  it("accepts distinct pregnancy dates and rejects reversed or same-day dates", () => {
     const valid = {
       resident_id: residentId,
       last_menstrual_period: "2026-06-01",
@@ -27,6 +27,12 @@ describe("maternal-child form schemas", () => {
       pregnancySchema.safeParse({
         ...valid,
         estimated_delivery_date: "2026-05-01",
+      }).success,
+    ).toBe(false);
+    expect(
+      pregnancySchema.safeParse({
+        ...valid,
+        estimated_delivery_date: valid.last_menstrual_period,
       }).success,
     ).toBe(false);
   });
