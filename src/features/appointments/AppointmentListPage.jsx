@@ -106,7 +106,11 @@ function StaffAppointmentListPage({ profile }) {
       <PageHeading
         eyebrow="Scheduling"
         title="Appointments"
-        description="Schedule and manage operational health-center visits. Times are displayed in Asia/Manila."
+        description={
+          profile.role === USER_ROLES.NURSE
+            ? "Only appointments assigned to your active staff profile are shown. Times are displayed in Asia/Manila."
+            : "Schedule and manage operational health-center visits. Times are displayed in Asia/Manila."
+        }
         actions={
           canSchedule ? (
             <div className="flex flex-wrap gap-2">

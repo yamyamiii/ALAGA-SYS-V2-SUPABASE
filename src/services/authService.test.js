@@ -140,6 +140,34 @@ describe("auth service", () => {
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
+  it("preserves an expired local session during a temporary refresh failure", async () => {
+    const client = createClient({
+      session: { ...validSession, expires_at: 1 },
+      refreshSession: null,
+      refreshError: { status: 503, message: "Network connection timed out" },
+    });
+    const service = createAuthService(() => client);
+
+    await expect(service.recoverSession()).rejects.toMatchObject({
+      code: AUTH_ERROR_CODES.RECOVERY_FAILED,
+      recoverable: true,
+    });
+    expect(client.auth.signOut).not.toHaveBeenCalled();
+  });
+
+  it("preserves a valid local session when server verification is temporarily offline", async () => {
+    const client = createClient({
+      getUserError: { status: 503, message: "Failed to fetch" },
+    });
+    const service = createAuthService(() => client);
+
+    await expect(service.recoverSession()).rejects.toMatchObject({
+      code: AUTH_ERROR_CODES.RECOVERY_FAILED,
+      recoverable: true,
+    });
+    expect(client.auth.signOut).not.toHaveBeenCalled();
+  });
+
   it("rejects a missing profile and clears the invalid local session", async () => {
     const client = createClient({ profile: null });
     const service = createAuthService(() => client);
@@ -158,6 +186,18 @@ describe("auth service", () => {
 
     await expect(service.recoverSession()).rejects.toMatchObject({
       code: AUTH_ERROR_CODES.PROFILE_INACTIVE,
+    });
+    expect(client.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  it("rejects suspended accounts and clears their local session", async () => {
+    const client = createClient({
+      profile: { ...activeProfile, account_status: "suspended" },
+    });
+    const service = createAuthService(() => client);
+
+    await expect(service.recoverSession()).rejects.toMatchObject({
+      code: AUTH_ERROR_CODES.PROFILE_SUSPENDED,
     });
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
   });

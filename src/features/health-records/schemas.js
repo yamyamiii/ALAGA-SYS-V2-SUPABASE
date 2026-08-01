@@ -37,6 +37,19 @@ const vitalFields = [
   "pain_score",
 ];
 
+export const ENCOUNTER_SIGN_REQUIRED_FIELDS = Object.freeze([
+  ["chief_complaint", "Chief complaint"],
+  ["assessment", "Assessment"],
+  ["plan", "Plan"],
+]);
+
+export function missingEncounterSignFields(encounter) {
+  const clinical = encounter?.clinical ?? encounter ?? {};
+  return ENCOUNTER_SIGN_REQUIRED_FIELDS.filter(
+    ([field]) => !String(clinical[field] ?? "").trim(),
+  ).map(([, label]) => label);
+}
+
 export const encounterCreateSchema = z.object({
   resident_id: z.string().uuid("Select an active resident."),
   appointment_id: z.union([z.literal(""), z.string().uuid()]),

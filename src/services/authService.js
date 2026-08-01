@@ -155,6 +155,12 @@ export function createAuthService(clientProvider = getSupabaseClient) {
     if (expiresSoon) {
       const { data, error } = await supabaseClient.auth.refreshSession();
       if (error || !data.session) {
+        if (isNetworkError(error)) {
+          throw new AuthServiceError(AUTH_ERROR_CODES.RECOVERY_FAILED, {
+            cause: error,
+            recoverable: true,
+          });
+        }
         await clearInvalidSession(supabaseClient);
         throw new AuthServiceError(AUTH_ERROR_CODES.INVALID_SESSION, {
           cause: error,

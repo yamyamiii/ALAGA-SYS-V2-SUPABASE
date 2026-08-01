@@ -8,6 +8,7 @@ import {
   canEditEncounter,
   canRecordVitals,
 } from "@/features/health-records/permissions";
+import { missingEncounterSignFields } from "@/features/health-records/schemas";
 
 const profileId = "11111111-1111-4111-8111-111111111111";
 const draft = {
@@ -66,5 +67,22 @@ describe("clinical UI permissions", () => {
     expect(canAmendEncounter(USER_ROLES.NURSE, signed)).toBe(true);
     expect(canArchiveEncounter(USER_ROLES.ADMINISTRATOR, signed)).toBe(true);
     expect(canArchiveEncounter(USER_ROLES.NURSE, signed)).toBe(false);
+  });
+
+  it("identifies every missing field required by the signing RPC", () => {
+    expect(
+      missingEncounterSignFields({
+        clinical: { chief_complaint: "Complaint", assessment: "", plan: " " },
+      }),
+    ).toEqual(["Assessment", "Plan"]);
+    expect(
+      missingEncounterSignFields({
+        clinical: {
+          chief_complaint: "Complaint",
+          assessment: "Assessment",
+          plan: "Plan",
+        },
+      }),
+    ).toEqual([]);
   });
 });

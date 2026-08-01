@@ -19,13 +19,13 @@ import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { healthRecordService } from "@/services/healthRecordService";
 
 const fields = [
-  ["chief_complaint", "Chief complaint", 3],
-  ["subjective_notes", "Subjective notes", 5],
-  ["objective_notes", "Objective notes", 5],
-  ["assessment", "Assessment", 5],
-  ["diagnosis_text", "Diagnosis text", 3],
-  ["plan", "Plan", 5],
-  ["treatment_notes", "Treatment notes", 4],
+  ["chief_complaint", "Chief complaint", 3, true],
+  ["subjective_notes", "Subjective notes", 5, false],
+  ["objective_notes", "Objective notes", 5, false],
+  ["assessment", "Assessment", 5, true],
+  ["diagnosis_text", "Diagnosis text", 3, false],
+  ["plan", "Plan", 5, true],
+  ["treatment_notes", "Treatment notes", 4, false],
 ];
 
 export function EncounterClinicalFormDialog({
@@ -83,16 +83,21 @@ export function EncounterClinicalFormDialog({
           <DialogTitle>Edit draft encounter</DialogTitle>
           <DialogDescription>
             Document clinical observations in sections. Signed records cannot be
-            overwritten.
+            overwritten. Chief complaint, assessment, and plan must be completed
+            before signing; incomplete drafts may still be saved.
           </DialogDescription>
         </DialogHeader>
         <form className="space-y-5" onSubmit={submit}>
-          {fields.map(([name, label, rows]) => (
+          {fields.map(([name, label, rows, requiredForSigning]) => (
             <div key={name} className="space-y-2">
-              <Label htmlFor={name}>{label}</Label>
+              <Label htmlFor={name}>
+                {label}
+                {requiredForSigning ? " (required before signing)" : ""}
+              </Label>
               <textarea
                 id={name}
                 rows={rows}
+                aria-required={requiredForSigning}
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 disabled={mutation.isPending}
                 {...register(name)}

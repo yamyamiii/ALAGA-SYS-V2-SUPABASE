@@ -23,6 +23,11 @@ const appointmentConstants = fs.readFileSync(
   "src/features/appointments/constants.js",
   "utf8",
 );
+const clinicalForm = fs.readFileSync(
+  "src/features/health-records/EncounterClinicalFormDialog.jsx",
+  "utf8",
+);
+const detailPage = pages[1];
 
 describe("health-record UI boundaries", () => {
   it("protects list and detail routes with the centralized permission", () => {
@@ -77,5 +82,18 @@ describe("health-record UI boundaries", () => {
     expect(pages[0]).toMatch(/pageSize: STAFF_SEARCH_MAX_PAGE_SIZE/);
     expect(pages[0]).not.toMatch(/pageSize:\s*100/);
     expect(appointmentConstants).toMatch(/STAFF_SEARCH_MAX_PAGE_SIZE\s*=\s*25/);
+  });
+
+  it("explains and enforces the required signing fields in the UI", () => {
+    expect(clinicalForm).toMatch(
+      /Chief complaint[\s\S]*required before signing/i,
+    );
+    expect(clinicalForm).toMatch(/Assessment[\s\S]*required before signing/i);
+    expect(clinicalForm).toMatch(/Plan[\s\S]*required before signing/i);
+    expect(clinicalForm).toMatch(/incomplete drafts may still be saved/i);
+    expect(detailPage).toContain("disabled={!signReady}");
+    expect(detailPage).toMatch(
+      /Complete required documentation before signing/i,
+    );
   });
 });

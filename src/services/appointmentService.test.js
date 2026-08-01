@@ -307,13 +307,13 @@ describe("appointment service", () => {
 
     await service.cancelResidentAppointment(
       { id: appointmentId, version: 1 },
-      " Unable to attend ",
+      " CHANGE DATE ",
     );
 
     expect(client.rpc).toHaveBeenCalledWith("resident_appointment_cancel", {
       p_appointment_id: appointmentId,
       p_expected_version: 1,
-      p_cancellation_reason: "Unable to attend",
+      p_cancellation_reason: "CHANGE DATE",
     });
   });
 

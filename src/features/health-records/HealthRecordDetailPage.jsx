@@ -34,6 +34,7 @@ import {
   useResidentAllergies,
   useResidentMedicalHistory,
 } from "@/features/health-records/hooks";
+import { missingEncounterSignFields } from "@/features/health-records/schemas";
 import {
   canAmendEncounter,
   canArchiveEncounter,
@@ -128,6 +129,8 @@ export default function HealthRecordDetailPage() {
   const canVitals = canRecordVitals(profile.role, encounter, profile.id);
   const canManageHistory = canManageClinicalHistory(profile.role);
   const vitals = encounter.vital_signs;
+  const missingSignFields = missingEncounterSignFields(encounter);
+  const signReady = missingSignFields.length === 0;
 
   return (
     <ContentContainer className="space-y-6">
@@ -153,7 +156,13 @@ export default function HealthRecordDetailPage() {
               </Button>
             ) : null}
             {canSign ? (
-              <Button onClick={() => setAction("sign")}>
+              <Button
+                onClick={() => setAction("sign")}
+                disabled={!signReady}
+                aria-describedby={
+                  signReady ? undefined : "encounter-sign-requirements"
+                }
+              >
                 <FileSignature /> Sign
               </Button>
             ) : null}
@@ -173,6 +182,19 @@ export default function HealthRecordDetailPage() {
           </div>
         }
       />
+
+      {canSign && !signReady ? (
+        <Alert id="encounter-sign-requirements">
+          <ShieldAlert />
+          <AlertTitle>
+            Complete required documentation before signing
+          </AlertTitle>
+          <AlertDescription>
+            Save the following draft fields first:{" "}
+            {missingSignFields.join(", ")}.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {!clinicalVisible ? (
         <Alert>

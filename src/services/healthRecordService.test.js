@@ -68,6 +68,71 @@ describe("health-record service", () => {
     });
   });
 
+  it("saves every required signing field under the deployed RPC names", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{ id: encounterId, version: 3 }],
+      error: null,
+    });
+    const service = createHealthRecordService(() => ({ rpc }));
+    const encounter = { id: encounterId, version: 2 };
+
+    await service.update(encounter, {
+      chief_complaint: "Persistent cough",
+      subjective_notes: "Symptoms described by resident",
+      objective_notes: "Observed findings",
+      assessment: "Upper respiratory symptoms",
+      plan: "Supportive care and follow-up",
+      diagnosis_text: "Provisional diagnosis",
+      treatment_notes: "Care instructions",
+      follow_up_date: "2026-08-09",
+    });
+
+    expect(rpc).toHaveBeenCalledWith("health_encounter_update", {
+      p_encounter_id: encounterId,
+      p_expected_version: 2,
+      p_chief_complaint: "Persistent cough",
+      p_subjective_notes: "Symptoms described by resident",
+      p_objective_notes: "Observed findings",
+      p_assessment: "Upper respiratory symptoms",
+      p_plan: "Supportive care and follow-up",
+      p_diagnosis_text: "Provisional diagnosis",
+      p_treatment_notes: "Care instructions",
+      p_follow_up_date: "2026-08-09",
+    });
+  });
+
+  it("saves valid vital signs through the corrected trusted RPC contract", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "55555555-5555-4555-8555-555555555555",
+          encounter_id: encounterId,
+          bmi: 22.5,
+        },
+      ],
+      error: null,
+    });
+    const service = createHealthRecordService(() => ({ rpc }));
+
+    await expect(
+      service.saveVitals(encounterId, {
+        temperature_c: 36.8,
+        systolic_bp: 120,
+        diastolic_bp: 80,
+        height_cm: 160,
+        weight_kg: 57.6,
+      }),
+    ).resolves.toEqual(expect.objectContaining({ encounter_id: encounterId }));
+    expect(rpc).toHaveBeenCalledWith("health_vital_signs_save", {
+      p_encounter_id: encounterId,
+      p_temperature_c: 36.8,
+      p_systolic_bp: 120,
+      p_diastolic_bp: 80,
+      p_height_cm: 160,
+      p_weight_kg: 57.6,
+    });
+  });
+
   it("maps duplicate, stale, signed, and permission failures safely", async () => {
     for (const [message, code] of [
       ["an encounter already exists", "encounter_exists"],

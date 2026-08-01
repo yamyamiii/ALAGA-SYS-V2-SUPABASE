@@ -32,6 +32,7 @@ const expectedMigrations = [
   "20260720002500_fix_maternal_child_trigger_columns.sql",
   "20260720002600_reports_analytics.sql",
   "20260720002700_general_assistance.sql",
+  "20260720002800_final_qa_fixes.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -90,6 +91,8 @@ const reviewedPendingMigrationHashes = {
     "7ed101a662168b37235ff583c1efe4556f147db93f52e93468e8af4962f90ba3",
   "20260720002700_general_assistance.sql":
     "dcffe0bf7d90408e198eaa57ac6c237b99f3f20d73617896bc5858a6d41d5bfe",
+  "20260720002800_final_qa_fixes.sql":
+    "252cb4306ec04fafcdd3cc3774c8f44563a882c61f561da1ad5ae60bc0dc676b",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -176,7 +179,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly twenty-seven expected migrations exist in lexical order",
+  "Exactly twenty-eight expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -1056,6 +1059,64 @@ check(
     /notification\.read_all/i.test(assistanceMigration) &&
     /inquiry\.status_changed/i.test(assistanceMigration),
   "Required assistance actions produce minimized semantic audits",
+);
+
+const finalQaMigration =
+  migrationEntries.find(({ file }) => file.includes("final_qa_fixes"))?.sql ??
+  "";
+const finalQaDeclarationAudit = auditPlpgsqlIntoTargets(finalQaMigration);
+check(
+  finalQaDeclarationAudit.functionCount === 2 &&
+    finalQaDeclarationAudit.undeclared.length === 0,
+  "Every final-QA PL/pgSQL SELECT/RETURNING INTO target is declared",
+);
+check(
+  /drop constraint assistance_notification_path_safe/i.test(finalQaMigration) &&
+    /char_length\(action_path\) between 2 and 301/i.test(finalQaMigration) &&
+    finalQaMigration.includes("action_path ~ '^/[a-z0-9_/?=&-]+$'"),
+  "Notification paths avoid unsupported PostgreSQL repetition bounds",
+);
+check(
+  /protect_appointment_request_metadata[\s\S]*new\.request_source is distinct from old\.request_source/i.test(
+    finalQaMigration,
+  ) &&
+    /new\.requested_date is distinct from old\.requested_date[\s\S]*new\.requested_start_time is distinct from old\.requested_start_time[\s\S]*new\.requested_end_time is distinct from old\.requested_end_time/i.test(
+      finalQaMigration,
+    ) &&
+    /scheduled_date = p_scheduled_date[\s\S]*start_time = p_start_time[\s\S]*end_time = p_end_time/i.test(
+      allSql,
+    ),
+  "Resident preferences remain immutable while current schedules stay staff-managed",
+);
+check(
+  /health_vital_signs_save[\s\S]*v_encounter_record public\.health_encounters%rowtype/i.test(
+    finalQaMigration,
+  ) &&
+    /select e\.\* into v_encounter_record/i.test(finalQaMigration) &&
+    /on conflict on constraint vital_signs_encounter_unique do update/i.test(
+      finalQaMigration,
+    ) &&
+    !/on conflict \(encounter_id\)/i.test(finalQaMigration),
+  "Vital-sign upserts avoid PL/pgSQL output-column ambiguity",
+);
+const finalQaAuditFields = finalQaMigration.slice(
+  finalQaMigration.indexOf("function public.appointment_changed_fields"),
+  finalQaMigration.indexOf(
+    "revoke all on function public.appointment_changed_fields",
+  ),
+);
+check(
+  finalQaAuditFields.length > 0 &&
+    !/cancellation_reason|operational_notes|['"]reason['"]/i.test(
+      finalQaAuditFields,
+    ),
+  "Cancellation reasons remain excluded from appointment audit metadata",
+);
+check(
+  !/grant\s+(?:select|insert|update|delete)[^;]*authenticated/i.test(
+    finalQaMigration,
+  ) && !/grant execute[^;]*authenticated/i.test(finalQaMigration),
+  "Final QA fixes do not broaden browser database privileges",
 );
 
 const functionBlocks = [

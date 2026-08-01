@@ -15,11 +15,19 @@ const initialState = {
   error: null,
 };
 
+function reportAuthDiagnostic(category, error) {
+  console.warn("[ALAGA-SYS auth diagnostic]", {
+    category,
+    code: error?.code ?? AUTH_ERROR_CODES.UNKNOWN,
+    recoverable: Boolean(error?.recoverable),
+  });
+}
+
 export function AuthProvider({ children }) {
   const [state, setState] = useState(initialState);
   const requestId = useRef(0);
 
-  const recover = useCallback(async ({ silent = false } = {}) => {
+  const recover = useCallback(async ({ silent = false, reason } = {}) => {
     const currentRequest = ++requestId.current;
     if (!silent) {
       setState((current) => ({ ...current, status: "loading", error: null }));
@@ -27,6 +35,7 @@ export function AuthProvider({ children }) {
     try {
       const profile = await authService.recoverSession();
       if (currentRequest !== requestId.current) return;
+      if (!profile) queryClient.clear();
       setState({
         status: profile ? "authenticated" : "unauthenticated",
         profile,
@@ -35,6 +44,7 @@ export function AuthProvider({ children }) {
     } catch (error) {
       if (currentRequest !== requestId.current) return;
       if (silent && error instanceof AuthServiceError && error.recoverable) {
+        reportAuthDiagnostic(reason ?? "session_revalidation_deferred", error);
         setState((current) =>
           current.status === "authenticated"
             ? { ...current, error }
@@ -46,6 +56,8 @@ export function AuthProvider({ children }) {
         );
         return;
       }
+      queryClient.clear();
+      reportAuthDiagnostic(reason ?? "session_recovery_failed", error);
       const configurationError =
         error instanceof AuthServiceError &&
         error.code === AUTH_ERROR_CODES.CONFIGURATION;
@@ -60,7 +72,8 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (state.status !== "authenticated") return undefined;
 
-    const revalidate = () => recover({ silent: true });
+    const revalidate = () =>
+      recover({ silent: true, reason: "periodic_or_focus_revalidation" });
     const interval = window.setInterval(revalidate, 5 * 60 * 1000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") revalidate();
@@ -80,15 +93,21 @@ export function AuthProvider({ children }) {
 
     const subscription = authService.onAuthStateChange((event) => {
       if (!active || event === "INITIAL_SESSION") return;
-      if (event === "SIGNED_OUT") {
-        requestId.current += 1;
-        queryClient.clear();
-        setState({ status: "unauthenticated", profile: null, error: null });
-        return;
-      }
-      if (["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event)) {
+      if (
+        ["SIGNED_OUT", "SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(
+          event,
+        )
+      ) {
         window.setTimeout(() => {
-          if (active) recover({ silent: true });
+          if (active) {
+            recover({
+              silent: true,
+              reason:
+                event === "SIGNED_OUT"
+                  ? "signed_out_event_confirmation"
+                  : "auth_event_revalidation",
+            });
+          }
         }, 0);
       }
     });

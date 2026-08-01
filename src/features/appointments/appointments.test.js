@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   APPOINTMENT_STATUSES,
+  INITIAL_APPOINTMENT_FILTERS,
   SERVICE_TYPES,
 } from "@/features/appointments/constants";
+import { buildAppointmentListParameters } from "@/services/appointmentService";
 import { getAppointmentActions } from "@/features/appointments/permissions";
 import {
   appointmentSchema,
@@ -147,5 +149,27 @@ describe("appointment foundations", () => {
         profileId,
       ),
     ).toContain("check_in");
+  });
+
+  it("does not hide nurse assignments with default frontend filters", () => {
+    expect(INITIAL_APPOINTMENT_FILTERS).toEqual(
+      expect.objectContaining({
+        date_from: "",
+        date_to: "",
+        status: "",
+        service_type: "",
+        assigned_staff_id: "",
+        include_archived: false,
+      }),
+    );
+    expect(buildAppointmentListParameters(INITIAL_APPOINTMENT_FILTERS)).toEqual(
+      expect.objectContaining({
+        p_date_from: null,
+        p_date_to: null,
+        p_status: null,
+        p_service_type: null,
+        p_assigned_staff_id: null,
+      }),
+    );
   });
 });
