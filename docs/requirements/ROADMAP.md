@@ -47,8 +47,22 @@ printable operational summaries.
 Add announcements, in-app notification read state, activity timelines,
 health-center information, FAQs, and resident inquiry tickets.
 
+## Phase 9A — Secure ALAGA AI assistant foundation
+
+Add an authenticated, server-proxied Gemini assistant for role-aware system
+guidance and general assistance. Keep conversations in browser memory only,
+send no application PHI, apply server-side medical and prompt-injection safety
+boundaries, and enforce a per-profile server rate limit.
+
+## Phase 9B — Advanced AI capabilities (future)
+
+Any database-grounded answer, report generation, navigation or mutation tool,
+clinical-data use, external knowledge retrieval, or autonomous action requires
+a separately approved threat model, narrow authorization design, audit model,
+and privacy review. None is part of Phase 9A.
+
 ## Future phases
 
 Medicine inventory, dispensing, laboratory integrations, external notification
-delivery, backup/restore operations, AI assistance, and final deployment
-hardening remain explicitly out of scope until separately approved.
+delivery, backup/restore operations, advanced AI capabilities, and final
+deployment hardening remain explicitly out of scope until separately approved.

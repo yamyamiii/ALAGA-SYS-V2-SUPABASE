@@ -33,6 +33,7 @@ const expectedMigrations = [
   "20260720002600_reports_analytics.sql",
   "20260720002700_general_assistance.sql",
   "20260720002800_final_qa_fixes.sql",
+  "20260720002900_ai_assistant_rate_limit.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -85,8 +86,6 @@ const completedMigrationHashes = {
     "4434f2a7504204996b795714d69a5be1d8550b771950ae0a625c5478cf3d3cc9",
   "20260720002500_fix_maternal_child_trigger_columns.sql":
     "6f19338b1d8b04d0d278b2987cf4e13d427cf758d986efa7ce9c06954f08ff41",
-};
-const reviewedPendingMigrationHashes = {
   "20260720002600_reports_analytics.sql":
     "7ed101a662168b37235ff583c1efe4556f147db93f52e93468e8af4962f90ba3",
   "20260720002700_general_assistance.sql":
@@ -94,8 +93,13 @@ const reviewedPendingMigrationHashes = {
   "20260720002800_final_qa_fixes.sql":
     "252cb4306ec04fafcdd3cc3774c8f44563a882c61f561da1ad5ae60bc0dc676b",
 };
+const reviewedPendingMigrationHashes = {
+  "20260720002900_ai_assistant_rate_limit.sql":
+    "6bc5e5dd2d1b83a1f1be07837013c4e9d22243fe27d20172506d548c55475b35",
+};
 const expectedTables = [
   "admin_action_rate_limits",
+  "ai_request_rate_limits",
   "announcements",
   "appointment_request_events",
   "appointments",
@@ -179,7 +183,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly twenty-eight expected migrations exist in lexical order",
+  "Exactly twenty-nine expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -1117,6 +1121,47 @@ check(
     finalQaMigration,
   ) && !/grant execute[^;]*authenticated/i.test(finalQaMigration),
   "Final QA fixes do not broaden browser database privileges",
+);
+
+const aiRateLimitMigration =
+  migrationEntries.find(({ file }) => file.includes("ai_assistant_rate_limit"))
+    ?.sql ?? "";
+const aiRateLimitDeclarationAudit =
+  auditPlpgsqlIntoTargets(aiRateLimitMigration);
+check(
+  aiRateLimitDeclarationAudit.functionCount === 1 &&
+    aiRateLimitDeclarationAudit.undeclared.length === 0,
+  "Every AI rate-limit PL/pgSQL SELECT/RETURNING INTO target is declared",
+);
+check(
+  /create table public\.ai_request_rate_limits/i.test(aiRateLimitMigration) &&
+    /alter table public\.ai_request_rate_limits enable row level security/i.test(
+      aiRateLimitMigration,
+    ) &&
+    /revoke all on table public\.ai_request_rate_limits[\s\S]*public, anon, authenticated/i.test(
+      aiRateLimitMigration,
+    ) &&
+    !/create policy/i.test(aiRateLimitMigration),
+  "AI request counters are an RLS-enabled service-only boundary",
+);
+check(
+  /on conflict \(profile_id\) do update/i.test(aiRateLimitMigration) &&
+    /p_max_requests not between 1 and 100/i.test(aiRateLimitMigration) &&
+    /account_status = 'active'/i.test(aiRateLimitMigration) &&
+    /grant execute on function public\.consume_ai_request_rate_limit\(uuid, integer\)[\s\S]*to service_role/i.test(
+      aiRateLimitMigration,
+    ) &&
+    !/grant execute[^;]*authenticated/i.test(aiRateLimitMigration),
+  "AI rate limiting is atomic, active-profile-bound, and service-role-only",
+);
+const aiRateLimitTable = aiRateLimitMigration.slice(
+  aiRateLimitMigration.indexOf("create table public.ai_request_rate_limits"),
+  aiRateLimitMigration.indexOf("alter table public.ai_request_rate_limits"),
+);
+check(
+  aiRateLimitTable.length > 0 &&
+    !/message|prompt|response|content|diagnos|clinical/i.test(aiRateLimitTable),
+  "AI rate limiting stores no prompt, response, or clinical content",
 );
 
 const functionBlocks = [

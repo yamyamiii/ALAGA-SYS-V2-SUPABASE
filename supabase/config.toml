@@ -376,6 +376,11 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/manage-user/index.ts"
 
+[functions.alaga-ai]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/alaga-ai/index.ts"
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

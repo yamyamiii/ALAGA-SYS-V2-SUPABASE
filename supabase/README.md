@@ -1,13 +1,13 @@
 # Supabase database and trusted-function foundation
 
 This directory contains the reviewable PostgreSQL and Edge Function source for
-ALAGA-SYS through Phase 3B.
+ALAGA-SYS through Phase 9A.
 
 ```text
 supabase/
   bootstrap/   Reviewed manual first-administrator transaction
-  functions/   Trusted server-only Auth Admin operations
-  migrations/  Seventeen ordered forward-only migrations
+  functions/   Trusted Auth Admin and ALAGA AI Edge Functions
+  migrations/  Twenty-nine ordered forward-only migrations
   policies/     Reserved for supplementary reviewed policy notes/fragments
   seed.sql      Optional fictional development reference data
 ```
@@ -50,6 +50,18 @@ unless the database has the expected sole-barangay P01-P08 seed shape.
 Temporary purok codes use an ordered row number within a transaction; the
 per-barangay name/code uniqueness indexes are recreated before commit so the
 deterministic UUIDs cannot collide while labels are being evacuated.
+
+Migrations 18 through 28 add the reviewed appointment, clinical,
+resident-request, maternal/child, reporting, and general-assistance foundations.
+They are the applied remote baseline for Phase 9A. Migration 29 is a pending,
+forward-only change that adds a metadata-only, service-role AI rate-limit table
+and atomic consume function. It stores no prompts, responses, resident data, or
+clinical data.
+
+The `alaga-ai` Edge Function revalidates the Supabase user and active profile,
+derives role context from the database, enforces the server rate limit, and
+calls Gemini with provider storage disabled. It does not query application
+healthcare data and must be deployed separately from Migration 29.
 
 ## Applying migrations
 
@@ -96,6 +108,12 @@ historical references.
 - Normal client roles receive no physical delete or direct audit-insert access.
 - Service-role credentials belong only in a trusted backend and are not needed
   to build or lint this frontend.
+- `GEMINI_API_KEY`, `GEMINI_MODEL`, and the exact-origin allowlist are
+  server-only Edge Function secrets. They must never appear in frontend code.
+- The ALAGA AI rate-limit table and consume function are callable only by
+  `service_role`; authenticated clients have no direct access.
+- AI prompt and response content is not stored in PostgreSQL or application
+  logs. Provider-side interaction storage is explicitly disabled per request.
 
 ## Migration authoring rules
 

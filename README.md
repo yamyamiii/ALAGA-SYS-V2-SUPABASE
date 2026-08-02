@@ -17,9 +17,12 @@ growth, immunization, and developmental-visit foundations.
 Phase 7 adds privacy-safe aggregate reports, bounded exports, and printing.
 Phase 8 adds announcements, in-app notifications, resident/admin activity,
 health-center information, FAQs, and resident inquiry tickets.
+Phase 9A adds a stateless, role-aware ALAGA AI general-assistance chat through
+an authenticated Supabase Edge Function and the Gemini Interactions API.
 
 Inventory, prescription dispensing, laboratory integrations, birth
-registration, external notification delivery, and AI are not implemented.
+registration, external notification delivery, advanced AI database actions,
+and AI access to clinical or resident data are not implemented.
 
 ## Technology stack
 
@@ -31,6 +34,7 @@ registration, external notification delivery, and AI are not implemented.
 - React Hook Form, Zod, and Hook Form resolvers
 - date-fns
 - Supabase JavaScript client with persisted authentication
+- Supabase Edge Functions with the server-only Google GenAI SDK
 - Vitest, Testing Library, ESLint, and Prettier
 
 ## Project structure
@@ -88,6 +92,10 @@ not through this browser configuration.
 > Never add a Supabase secret key or service-role key to this React application,
 > any `VITE_` variable, source control, logs, screenshots, or support messages.
 
+The ALAGA AI gateway requires server-only Gemini secrets configured through
+Supabase. They must never use the `VITE_` prefix. See
+[Gemini AI deployment](docs/deployment/GEMINI_AI.md) for the complete setup.
+
 The reusable client boundary is `src/lib/supabase/client.js`. Calling
 `getSupabaseClient()` without both public variables throws a clear
 `SupabaseConfigurationError`. Authentication pages use the auth service and do
@@ -123,6 +131,13 @@ npm run preview
 
 ## Current phase
 
+Phase 9A provides a floating, authenticated general-assistance chat. The browser
+calls only the `alaga-ai` Edge Function; the Gemini key, role validation,
+rate-limit enforcement, medical-safety boundaries, and provider request remain
+server-side. Conversation drafts stay in React memory and are cleared on
+logout, account/role remount, or page reload. No application resident or
+clinical data is queried or supplied to Gemini.
+
 Phase 8 provides role-aware announcements, own/relevant in-app notifications,
 privacy-minimized activity timelines, public health-center information,
 searchable FAQs, and a simple resident inquiry workflow. All data access is
@@ -137,10 +152,10 @@ delivery is implemented.
 
 ## Deployment note
 
-Migrations 1–25 are the completed remote baseline. Forward-only Migrations 26
-and 27 are not applied by application startup. Review and apply them manually
-in sequence through the Supabase CLI before enabling Reports and General
-Assistance in production.
+Migrations 1–28 are the completed remote baseline. Forward-only Migration 29
+adds only the service-role AI rate-limit primitive and remains pending for
+manual review and deployment. The `alaga-ai` Edge Function and its secrets also
+require separate, explicit deployment; application startup applies neither.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),
@@ -150,6 +165,9 @@ See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Clinical encounter workflow](docs/workflows/CLINICAL_ENCOUNTER.md),
 [Reports architecture](docs/architecture/REPORTS_ANALYTICS.md),
 [General assistance architecture](docs/architecture/GENERAL_ASSISTANCE.md),
+[AI assistant architecture](docs/architecture/AI_ASSISTANT.md),
+[AI safety](docs/security/AI_SAFETY.md),
+[Gemini AI deployment](docs/deployment/GEMINI_AI.md),
 [Announcements and notifications](docs/workflows/ANNOUNCEMENTS_NOTIFICATIONS.md),
 [Resident inquiries](docs/workflows/RESIDENT_INQUIRIES.md),
 [Report exports](docs/workflows/REPORT_EXPORTS.md),

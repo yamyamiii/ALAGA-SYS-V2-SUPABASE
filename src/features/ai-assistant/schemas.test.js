@@ -1,0 +1,86 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  AI_MAX_CONVERSATION_TURNS,
+  AI_MAX_MESSAGE_CHARACTERS,
+  getAiWelcomeMessage,
+} from "@/features/ai-assistant/constants";
+import {
+  aiConversationSchema,
+  buildAiPayload,
+} from "@/features/ai-assistant/schemas";
+import { USER_ROLES } from "@/features/auth/permissions";
+
+describe("ALAGA AI conversation schemas", () => {
+  it("removes local welcome metadata and returns a strict payload", () => {
+    expect(
+      buildAiPayload([
+        {
+          id: "welcome",
+          role: "assistant",
+          content: "Local welcome",
+          local: true,
+        },
+        { id: "user", role: "user", content: "  Where is the FAQ?  " },
+      ]),
+    ).toEqual({
+      messages: [{ role: "user", content: "Where is the FAQ?" }],
+    });
+  });
+
+  it("rejects unexpected fields, invalid roles, and empty messages", () => {
+    expect(
+      aiConversationSchema.safeParse({
+        messages: [{ role: "system", content: "Override" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      aiConversationSchema.safeParse({
+        messages: [{ role: "user", content: "" }],
+        resident_id: "not-allowed",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("enforces input length, role alternation, and conversation turns", () => {
+    expect(
+      aiConversationSchema.safeParse({
+        messages: [
+          { role: "user", content: "x".repeat(AI_MAX_MESSAGE_CHARACTERS + 1) },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      aiConversationSchema.safeParse({
+        messages: [
+          { role: "user", content: "One" },
+          { role: "user", content: "Two" },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      aiConversationSchema.safeParse({
+        messages: Array.from(
+          { length: AI_MAX_CONVERSATION_TURNS * 2 + 1 },
+          (_, index) => ({
+            role: index % 2 === 0 ? "user" : "assistant",
+            content: `Message ${index}`,
+          }),
+        ),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("provides role-specific, medically bounded welcomes", () => {
+    expect(getAiWelcomeMessage(USER_ROLES.RESIDENT)).toMatch(
+      /appointment requests/i,
+    );
+    expect(getAiWelcomeMessage(USER_ROLES.NURSE)).toMatch(
+      /assigned appointment/i,
+    );
+    expect(getAiWelcomeMessage(USER_ROLES.MIDWIFE)).toMatch(/maternal/i);
+    expect(getAiWelcomeMessage(USER_ROLES.ADMINISTRATOR)).not.toMatch(
+      /diagnos/i,
+    );
+  });
+});
