@@ -95,7 +95,7 @@ const completedMigrationHashes = {
 };
 const reviewedPendingMigrationHashes = {
   "20260720002900_ai_assistant_rate_limit.sql":
-    "6bc5e5dd2d1b83a1f1be07837013c4e9d22243fe27d20172506d548c55475b35",
+    "f0045e8159826e46fa2b7eab65a0a2a1692e40c4f6fc4aed2991971fcb46655a",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -1146,6 +1146,13 @@ check(
 );
 check(
   /on conflict \(profile_id\) do update/i.test(aiRateLimitMigration) &&
+    /returning rate_limit\.request_count into v_request_count/i.test(
+      aiRateLimitMigration,
+    ) &&
+    /least\(rate_limit\.request_count \+ 1, p_max_requests \+ 1\)/i.test(
+      aiRateLimitMigration,
+    ) &&
+    /p_max_requests is null/i.test(aiRateLimitMigration) &&
     /p_max_requests not between 1 and 100/i.test(aiRateLimitMigration) &&
     /account_status = 'active'/i.test(aiRateLimitMigration) &&
     /grant execute on function public\.consume_ai_request_rate_limit\(uuid, integer\)[\s\S]*to service_role/i.test(
@@ -1153,6 +1160,19 @@ check(
     ) &&
     !/grant execute[^;]*authenticated/i.test(aiRateLimitMigration),
   "AI rate limiting is atomic, active-profile-bound, and service-role-only",
+);
+check(
+  /extract\(\s*epoch from \(/i.test(aiRateLimitMigration) &&
+    !/pg_catalog\.(?:extract|greatest|least)\s*\(/i.test(
+      aiRateLimitMigration,
+    ) &&
+    /greatest\(p_max_requests - v_request_count, 0\)/i.test(
+      aiRateLimitMigration,
+    ) &&
+    /when v_request_count <= p_max_requests then 0[\s\S]*else greatest\([\s\S]*1,[\s\S]*pg_catalog\.ceil\([\s\S]*extract\([\s\S]*epoch from[\s\S]*v_window_started_at \+ interval '1 hour'[\s\S]*pg_catalog\.statement_timestamp\(\)[\s\S]*\)::integer/i.test(
+      aiRateLimitMigration,
+    ),
+  "AI retry timing uses parser-safe UTC-hour arithmetic and bounded integers",
 );
 const aiRateLimitTable = aiRateLimitMigration.slice(
   aiRateLimitMigration.indexOf("create table public.ai_request_rate_limits"),

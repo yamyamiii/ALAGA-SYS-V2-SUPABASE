@@ -36,7 +36,9 @@ declare
   ) at time zone 'UTC';
   v_request_count integer;
 begin
-  if p_profile_id is null or p_max_requests not between 1 and 100 then
+  if p_profile_id is null
+    or p_max_requests is null
+    or p_max_requests not between 1 and 100 then
     raise exception 'invalid AI rate limit configuration'
       using errcode = '22023';
   end if;
@@ -77,7 +79,7 @@ begin
       end,
       request_count = case
         when rate_limit.window_started_at < v_window_started_at then 1
-        else pg_catalog.least(rate_limit.request_count + 1, p_max_requests + 1)
+        else least(rate_limit.request_count + 1, p_max_requests + 1)
       end,
       updated_at = pg_catalog.statement_timestamp()
   returning rate_limit.request_count into v_request_count;
@@ -85,15 +87,15 @@ begin
   return query
   select
     v_request_count <= p_max_requests,
-    pg_catalog.greatest(p_max_requests - v_request_count, 0),
+    greatest(p_max_requests - v_request_count, 0),
     case
       when v_request_count <= p_max_requests then 0
-      else pg_catalog.greatest(
+      else greatest(
         1,
         pg_catalog.ceil(
-          pg_catalog.extract(
+          extract(
             epoch from (
-              v_window_started_at + interval '1 hour'
+              (v_window_started_at + interval '1 hour')
               - pg_catalog.statement_timestamp()
             )
           )
