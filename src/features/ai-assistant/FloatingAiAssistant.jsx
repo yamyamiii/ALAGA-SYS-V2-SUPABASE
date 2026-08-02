@@ -1,5 +1,6 @@
 import { MessageCircleMore } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
@@ -9,12 +10,14 @@ import {
   createWelcomeMessage,
 } from "@/features/ai-assistant/constants";
 import { useAiAssistantMutation } from "@/features/ai-assistant/hooks";
+import { resolveAiNavigationAction } from "@/features/ai-assistant/navigation";
 
 function messageId() {
   return globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}`;
 }
 
 export function FloatingAiAssistant({ profile }) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState(() => [
@@ -30,10 +33,16 @@ export function FloatingAiAssistant({ profile }) {
   const completeRequest = (requestMessages) => {
     setRetryMessages(requestMessages);
     mutation.mutate(requestMessages, {
-      onSuccess: ({ content }) => {
+      onSuccess: ({ content, sources, actions }) => {
         setMessages((current) => [
           ...current,
-          { id: messageId(), role: "assistant", content },
+          {
+            id: messageId(),
+            role: "assistant",
+            content,
+            sources,
+            actions,
+          },
         ]);
         setRetryMessages(null);
       },
@@ -65,6 +74,14 @@ export function FloatingAiAssistant({ profile }) {
     completeRequest(retryMessages);
   };
 
+  const followAction = (action) => {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    const target = resolveAiNavigationAction(action, profile.role);
+    if (!target) return;
+    navigate(target.route);
+    setOpen(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -88,6 +105,8 @@ export function FloatingAiAssistant({ profile }) {
         pending={mutation.isPending}
         error={mutation.error}
         turnLimitReached={turnLimitReached}
+        profileRole={profile.role}
+        onAction={followAction}
       />
     </Dialog>
   );

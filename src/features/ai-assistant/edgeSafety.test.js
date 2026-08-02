@@ -5,6 +5,10 @@ import { describe, expect, it } from "vitest";
 const index = fs.readFileSync("supabase/functions/alaga-ai/index.ts", "utf8");
 const domain = fs.readFileSync("supabase/functions/alaga-ai/domain.ts", "utf8");
 const config = fs.readFileSync("supabase/config.toml", "utf8");
+const groundingMigration = fs.readFileSync(
+  "supabase/migrations/20260720003000_ai_grounding_context.sql",
+  "utf8",
+);
 const frontend = [
   "src/services/aiAssistantService.js",
   "src/features/ai-assistant/FloatingAiAssistant.jsx",
@@ -123,6 +127,61 @@ describe("ALAGA AI Edge Function security boundary", () => {
   it("keeps conversations out of browser persistence", () => {
     expect(frontend).not.toMatch(
       /localStorage|sessionStorage|indexedDB|URLSearchParams/i,
+    );
+  });
+
+  it("loads grounding only through the narrow service-role RPC", () => {
+    expect(index).toMatch(/admin\.rpc\("ai_grounding_context"/);
+    expect(index).toMatch(/sanitizeGroundingSources\(data\)/);
+    expect(groundingMigration).toMatch(
+      /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
+    );
+    expect(index).not.toMatch(
+      /\.from\("(?:faq_entries|announcements|health_center_information)"\)/i,
+    );
+  });
+
+  it("keeps grounding read-only and excludes PHI tables", () => {
+    expect(groundingMigration).not.toMatch(
+      /from public\.(?:residents|appointments|health_encounters|vital_signs|maternal_|child_|audit_logs)/i,
+    );
+    expect(groundingMigration).not.toMatch(
+      /\b(?:insert into|update public|delete from public)\b/i,
+    );
+    expect(index).not.toMatch(
+      /appointment_reason|chief_complaint|diagnosis_text|treatment_notes|pregnancy_number/i,
+    );
+  });
+
+  it("sanitizes symbolic navigation outside the model", () => {
+    expect(domain).toMatch(/NAVIGATION_DEFINITIONS/);
+    expect(domain).toMatch(/sanitizeNavigationActions/);
+    expect(domain).toMatch(/navigationResponseFor/);
+    expect(domain).toMatch(/navigation_unauthorized/);
+    expect(domain).toMatch(/navigation_rejected/);
+    expect(domain).not.toMatch(/route:\s*["'`]\//);
+    expect(index).toMatch(/navigationResponseFor\(/);
+  });
+
+  it("returns structured metadata without returning grounding content", () => {
+    const assistantData = index.slice(
+      index.indexOf("function assistantData"),
+      index.indexOf("async function withProviderTimeout"),
+    );
+    expect(assistantData).toMatch(/message/);
+    expect(assistantData).toMatch(/sources:/);
+    expect(assistantData).toMatch(/actions/);
+    expect(assistantData).toMatch(/type, label, title, updatedAt/);
+    expect(assistantData).not.toMatch(/content/);
+    expect(index).toMatch(/Verified ALAGA-SYS information is unavailable/);
+  });
+
+  it("preserves Phase 9A safety and no-content logging", () => {
+    expect(index).toMatch(/safetyResponseFor\(finalUserMessage\)/);
+    expect(index).toMatch(/store: false/);
+    expect(domain).toMatch(/Never diagnose/);
+    expect(frontend).not.toMatch(
+      /localStorage|sessionStorage|indexedDB|dangerouslySetInnerHTML/i,
     );
   });
 });

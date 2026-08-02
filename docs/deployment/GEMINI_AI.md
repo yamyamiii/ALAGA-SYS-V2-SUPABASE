@@ -1,7 +1,8 @@
 # Gemini AI deployment
 
-Phase 9A source does not deploy itself. Migration 29 and the `alaga-ai` Edge
-Function remain pending until reviewed and applied manually.
+Phase 9A and Migration 29 are deployed. Phase 9B source does not deploy itself:
+Migration 30 and the updated `alaga-ai` Edge Function remain pending until
+reviewed and applied manually.
 
 ## Runtime requirements
 
@@ -50,13 +51,18 @@ npx supabase functions deploy alaga-ai
 npx supabase functions list
 ```
 
+Apply Migration 30 before deploying the updated function. The function expects
+the service-role-only `ai_grounding_context` RPC. Do not deploy the function
+first and do not use `--no-verify-jwt`.
+
 Use the Dashboard or an approved secret manager instead of command arguments
 when shell-history policy requires it. Do not use `--no-verify-jwt`;
 `supabase/config.toml` explicitly keeps JWT verification enabled.
 
 ## Live verification
 
-1. Confirm the dry run lists only Migration 29 before applying it.
+1. Confirm the dry run lists only Migration 30 before applying it. Confirm
+   Migrations 1-29 are already applied and unchanged.
 2. Confirm anonymous and invalid-token requests are denied.
 3. Confirm a missing, invited, inactive, suspended, or unsupported profile is
    denied before Gemini is called.
@@ -77,10 +83,19 @@ when shell-history policy requires it. Do not use `--no-verify-jwt`;
 11. Confirm Clear, logout, account invalidation, role change, and full reload
     remove the conversation; closing and reopening during the same session keeps
     it.
+12. Ask for current FAQ, health-center services/hours, and current
+    announcements. Verify source badges appear and no IDs, contacts, authors,
+    resident data, or clinical data is returned.
+13. Ask to open one allowed destination for each role. Verify the response has
+    only a symbolic action ID and the client opens its fixed route after a
+    click.
+14. Ask for an unauthorized page, an unknown page, a raw route, and an external
+    URL. Verify none navigates. Ask for two destinations and verify an explicit
+    choice is required. Go offline and verify action buttons are disabled.
 
 ## Rollback
 
 Undeploy or disable the Edge Function first if unsafe behavior is found. The
-rate-limit table contains no conversation content and may remain for forensic
-request-count review. A database rollback or table deletion requires a separate
-reviewed forward-only migration; never edit or revert applied migrations.
+rate-limit table contains no conversation content, and Migration 30 creates no
+table or stored content. A database rollback requires a separate reviewed
+forward-only migration; never edit or revert applied migrations.

@@ -34,6 +34,7 @@ const expectedMigrations = [
   "20260720002700_general_assistance.sql",
   "20260720002800_final_qa_fixes.sql",
   "20260720002900_ai_assistant_rate_limit.sql",
+  "20260720003000_ai_grounding_context.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -92,10 +93,12 @@ const completedMigrationHashes = {
     "dcffe0bf7d90408e198eaa57ac6c237b99f3f20d73617896bc5858a6d41d5bfe",
   "20260720002800_final_qa_fixes.sql":
     "252cb4306ec04fafcdd3cc3774c8f44563a882c61f561da1ad5ae60bc0dc676b",
-};
-const reviewedPendingMigrationHashes = {
   "20260720002900_ai_assistant_rate_limit.sql":
     "f0045e8159826e46fa2b7eab65a0a2a1692e40c4f6fc4aed2991971fcb46655a",
+};
+const reviewedPendingMigrationHashes = {
+  "20260720003000_ai_grounding_context.sql":
+    "911a4ac9e22d94d10b97b7febe2aed6ca35543556b6c356d05f595609a89d979",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -183,7 +186,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly twenty-nine expected migrations exist in lexical order",
+  "Exactly thirty expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -1182,6 +1185,78 @@ check(
   aiRateLimitTable.length > 0 &&
     !/message|prompt|response|content|diagnos|clinical/i.test(aiRateLimitTable),
   "AI rate limiting stores no prompt, response, or clinical content",
+);
+
+const aiGroundingMigration =
+  migrationEntries.find(({ file }) => file.includes("ai_grounding_context"))
+    ?.sql ?? "";
+const aiGroundingDeclarationAudit =
+  auditPlpgsqlIntoTargets(aiGroundingMigration);
+check(
+  aiGroundingDeclarationAudit.functionCount === 1 &&
+    aiGroundingDeclarationAudit.undeclared.length === 0,
+  "Every AI grounding PL/pgSQL SELECT INTO target is declared",
+);
+const aiGroundingFunction = aiGroundingMigration.slice(
+  aiGroundingMigration.indexOf("create or replace function"),
+  aiGroundingMigration.indexOf("revoke all on function"),
+);
+check(
+  /from public\.faq_entries as faq/i.test(aiGroundingFunction) &&
+    /from public\.health_center_information as info/i.test(
+      aiGroundingFunction,
+    ) &&
+    /from public\.announcements as announcement/i.test(aiGroundingFunction) &&
+    !/from public\.(?:residents|appointments|health_encounters|vital_signs|maternal_|child_|audit_logs|resident_inquiries)/i.test(
+      aiGroundingFunction,
+    ),
+  "AI grounding reads only approved low-risk assistance sources",
+);
+check(
+  /faq\.archived_at is null/i.test(aiGroundingFunction) &&
+    /announcement\.archived_at is null/i.test(aiGroundingFunction) &&
+    /announcement\.publish_at <= pg_catalog\.statement_timestamp\(\)/i.test(
+      aiGroundingFunction,
+    ) &&
+    /announcement\.expires_at > pg_catalog\.statement_timestamp\(\)/i.test(
+      aiGroundingFunction,
+    ),
+  "AI grounding excludes archived, future, and expired source rows",
+);
+check(
+  /cardinality\(p_source_types\) not between 1 and 3/i.test(
+    aiGroundingFunction,
+  ) &&
+    /p_per_source_limit not between 1 and 8/i.test(aiGroundingFunction) &&
+    /where grounding\.source_rank <= p_per_source_limit/i.test(
+      aiGroundingFunction,
+    ) &&
+    /left\(btrim\(faq\.answer\), 2000\)/i.test(aiGroundingFunction) &&
+    /left\(btrim\(announcement\.content\), 1600\)/i.test(aiGroundingFunction),
+  "AI grounding source types, row counts, and text sizes are bounded",
+);
+check(
+  /profile\.account_status = 'active'/i.test(aiGroundingFunction) &&
+    /active supported profile required for AI grounding/i.test(
+      aiGroundingFunction,
+    ) &&
+    /revoke all on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*public, anon, authenticated/i.test(
+      aiGroundingMigration,
+    ) &&
+    /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i.test(
+      aiGroundingMigration,
+    ) &&
+    !/grant execute[^;]*authenticated/i.test(aiGroundingMigration),
+  "AI grounding is active-profile-bound and service-role-only",
+);
+check(
+  !/\b(?:insert\s+into|update\s+public|delete\s+from|execute\s+format|nextval)\b/i.test(
+    aiGroundingFunction,
+  ) &&
+    !/created_by|updated_by|contact_number|email|emergency_contacts|doctors|nurses|midwives|bhws/i.test(
+      aiGroundingFunction,
+    ),
+  "AI grounding is read-only and excludes author, contact, and staff fields",
 );
 
 const functionBlocks = [

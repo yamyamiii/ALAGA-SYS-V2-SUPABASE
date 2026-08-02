@@ -7,14 +7,21 @@ import {
   buildProviderInput,
   buildSystemInstruction,
   exactOriginCorsHeaders,
+  groundingSourceTypesFor,
   isSupportedRole,
   MAX_BODY_BYTES,
+  navigationResponseFor,
   parseAllowedOrigins,
   parsePositiveInteger,
   PROVIDER_TIMEOUT_MS,
+  requiresLiveGrounding,
   safetyResponseFor,
+  sanitizeGroundingSources,
   validateConversationPayload,
+  withWorkflowGrounding,
   type CanonicalRole,
+  type GroundingSource,
+  type NavigationAction,
 } from "./domain.ts";
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -207,6 +214,43 @@ async function consumeRateLimit(
   };
 }
 
+async function loadApprovedGrounding(
+  admin: SupabaseClient,
+  profileId: string,
+  sourceTypes: string[],
+) {
+  const { data, error } = await admin.rpc("ai_grounding_context", {
+    p_profile_id: profileId,
+    p_source_types: sourceTypes,
+    p_per_source_limit: 8,
+  });
+  if (error || !Array.isArray(data)) {
+    throw new AiAssistantError(
+      "grounding_unavailable",
+      "Verified ALAGA-SYS information is temporarily unavailable. Please try again later.",
+      503,
+    );
+  }
+  return sanitizeGroundingSources(data);
+}
+
+function assistantData(
+  message: string,
+  sources: GroundingSource[] = [],
+  actions: NavigationAction[] = [],
+) {
+  return {
+    message,
+    sources: sources.map(({ type, label, title, updatedAt }) => ({
+      type,
+      label,
+      title,
+      updatedAt,
+    })),
+    actions,
+  };
+}
+
 async function withProviderTimeout<T>(operation: Promise<T>) {
   let timeoutId: number | undefined;
   try {
@@ -367,7 +411,8 @@ Deno.serve(async (request) => {
       parsed,
       env.maximumInputCharacters,
     );
-    const safetyResponse = safetyResponseFor(messages.at(-1)?.content ?? "");
+    const finalUserMessage = messages.at(-1)?.content ?? "";
+    const safetyResponse = safetyResponseFor(finalUserMessage);
     if (safetyResponse) {
       logRequest(
         requestId,
@@ -377,11 +422,65 @@ Deno.serve(async (request) => {
         startedAt,
       );
       return jsonResponse(
-        { data: { message: safetyResponse.response }, request_id: requestId },
+        {
+          data: assistantData(safetyResponse.response),
+          request_id: requestId,
+        },
         200,
         headers,
       );
     }
+
+    const navigationResponse = navigationResponseFor(
+      finalUserMessage,
+      profile.role,
+    );
+    if (navigationResponse) {
+      logRequest(
+        requestId,
+        profile.id,
+        profile.role,
+        navigationResponse.category,
+        startedAt,
+      );
+      return jsonResponse(
+        {
+          data: assistantData(
+            navigationResponse.message,
+            [],
+            navigationResponse.actions,
+          ),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+
+    const sourceTypes = groundingSourceTypesFor(finalUserMessage);
+    const liveGrounding = sourceTypes.length
+      ? await loadApprovedGrounding(admin, profile.id, sourceTypes)
+      : [];
+    if (requiresLiveGrounding(finalUserMessage) && liveGrounding.length === 0) {
+      logRequest(
+        requestId,
+        profile.id,
+        profile.role,
+        "grounding_empty",
+        startedAt,
+      );
+      return jsonResponse(
+        {
+          data: assistantData(
+            "Verified ALAGA-SYS information is unavailable for that question. Please check the relevant module or contact the Barangay Health Center.",
+          ),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+    const grounding = withWorkflowGrounding(liveGrounding, profile.role);
 
     const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
     let interaction;
@@ -389,7 +488,7 @@ Deno.serve(async (request) => {
       interaction = await withProviderTimeout(
         ai.interactions.create({
           model: env.model,
-          input: buildProviderInput(messages),
+          input: buildProviderInput(messages, grounding),
           system_instruction: buildSystemInstruction(profile.role),
           generation_config: {
             max_output_tokens: 800,
@@ -405,7 +504,7 @@ Deno.serve(async (request) => {
 
     logRequest(requestId, profile.id, profile.role, "success", startedAt);
     return jsonResponse(
-      { data: { message }, request_id: requestId },
+      { data: assistantData(message, grounding), request_id: requestId },
       200,
       headers,
     );

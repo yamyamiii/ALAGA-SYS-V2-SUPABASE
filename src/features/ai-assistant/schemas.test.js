@@ -8,6 +8,7 @@ import {
 import {
   aiConversationSchema,
   buildAiPayload,
+  parseAiResponse,
 } from "@/features/ai-assistant/schemas";
 import { USER_ROLES } from "@/features/auth/permissions";
 
@@ -82,5 +83,63 @@ describe("ALAGA AI conversation schemas", () => {
     expect(getAiWelcomeMessage(USER_ROLES.ADMINISTRATOR)).not.toMatch(
       /diagnos/i,
     );
+  });
+
+  it("accepts bounded source metadata and symbolic actions", () => {
+    expect(
+      parseAiResponse({
+        message: "The center is open during the posted hours.",
+        sources: [
+          {
+            type: "health_center",
+            label: "Health Center Information",
+            title: "Brgy. Bagongpook Health Center",
+            updatedAt: "2026-08-02T00:00:00.000Z",
+          },
+        ],
+        actions: [
+          {
+            type: "navigate",
+            actionId: "open_health_center",
+            label: "Open Health Center Information",
+            requiresConfirmation: false,
+          },
+        ],
+      }),
+    ).toMatchObject({
+      content: "The center is open during the posted hours.",
+      sources: [{ type: "health_center" }],
+      actions: [{ actionId: "open_health_center" }],
+    });
+  });
+
+  it("ignores unknown, raw-route, and malformed response actions", () => {
+    const parsed = parseAiResponse({
+      message: "Choose a permitted destination.",
+      sources: [],
+      actions: [
+        {
+          type: "navigate",
+          actionId: "unknown_action",
+          label: "Unknown",
+          requiresConfirmation: false,
+        },
+        {
+          type: "navigate",
+          actionId: "open_reports",
+          label: "Open Reports",
+          requiresConfirmation: false,
+          route: "/reports",
+        },
+        {
+          type: "navigate",
+          actionId: "https://evil.example",
+          label: "Open URL",
+          requiresConfirmation: false,
+        },
+      ],
+    });
+
+    expect(parsed.actions).toEqual([]);
   });
 });

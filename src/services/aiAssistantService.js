@@ -1,6 +1,9 @@
 import { ZodError } from "zod";
 
-import { buildAiPayload } from "@/features/ai-assistant/schemas";
+import {
+  buildAiPayload,
+  parseAiResponse,
+} from "@/features/ai-assistant/schemas";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
 const REQUEST_TIMEOUT_MS = 25_000;
@@ -93,15 +96,15 @@ export function createAiAssistantService(clientProvider = getSupabaseClient) {
           timeout,
         ]);
         if (result.error) throw await mapFunctionError(result.error);
-        const message = result.data?.data?.message;
-        if (typeof message !== "string" || !message.trim()) {
+        try {
+          return parseAiResponse(result.data?.data);
+        } catch (error) {
           throw new AiAssistantServiceError(
             "invalid_response",
             "The assistant returned an invalid response. Please try again.",
-            { retryable: true },
+            { retryable: true, cause: error },
           );
         }
-        return { content: message.trim() };
       } catch (error) {
         if (error instanceof AiAssistantServiceError) throw error;
         throw await mapFunctionError(error);

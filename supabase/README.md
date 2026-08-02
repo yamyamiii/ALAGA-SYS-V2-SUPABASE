@@ -1,13 +1,13 @@
 # Supabase database and trusted-function foundation
 
 This directory contains the reviewable PostgreSQL and Edge Function source for
-ALAGA-SYS through Phase 9A.
+ALAGA-SYS through Phase 9B.
 
 ```text
 supabase/
   bootstrap/   Reviewed manual first-administrator transaction
   functions/   Trusted Auth Admin and ALAGA AI Edge Functions
-  migrations/  Twenty-nine ordered forward-only migrations
+  migrations/  Thirty ordered forward-only migrations
   policies/     Reserved for supplementary reviewed policy notes/fragments
   seed.sql      Optional fictional development reference data
 ```
@@ -53,15 +53,18 @@ deterministic UUIDs cannot collide while labels are being evacuated.
 
 Migrations 18 through 28 add the reviewed appointment, clinical,
 resident-request, maternal/child, reporting, and general-assistance foundations.
-They are the applied remote baseline for Phase 9A. Migration 29 is a pending,
-forward-only change that adds a metadata-only, service-role AI rate-limit table
-and atomic consume function. It stores no prompts, responses, resident data, or
-clinical data.
+Migration 29 adds a metadata-only, service-role AI rate-limit table and atomic
+consume function. Migrations 1 through 29 are the applied remote baseline.
+Pending Migration 30 adds a service-role-only, read-only grounding RPC whose
+explicit output is limited to approved public operational text. It creates no
+content store and returns no database identifiers or author/contact fields.
 
 The `alaga-ai` Edge Function revalidates the Supabase user and active profile,
-derives role context from the database, enforces the server rate limit, and
-calls Gemini with provider storage disabled. It does not query application
-healthcare data and must be deployed separately from Migration 29.
+derives role context from the database, enforces the server rate limit, loads
+only approved grounding through Migration 30, and calls Gemini with provider
+storage disabled. Deterministic symbolic navigation is role checked before the
+provider. It does not query application healthcare data and must be deployed
+separately after Migration 30.
 
 ## Applying migrations
 
@@ -112,6 +115,9 @@ historical references.
   server-only Edge Function secrets. They must never appear in frontend code.
 - The ALAGA AI rate-limit table and consume function are callable only by
   `service_role`; authenticated clients have no direct access.
+- The ALAGA AI grounding RPC is callable only by `service_role`, is read-only,
+  and returns only bounded active FAQ, public health-center, and current
+  announcement fields.
 - AI prompt and response content is not stored in PostgreSQL or application
   logs. Provider-side interaction storage is explicitly disabled per request.
 

@@ -4,6 +4,7 @@ import {
   AI_MAX_CONVERSATION_TURNS,
   AI_MAX_MESSAGE_CHARACTERS,
 } from "@/features/ai-assistant/constants";
+import { isKnownAiActionId } from "@/features/ai-assistant/navigation";
 
 export const aiMessageSchema = z
   .object({
@@ -52,4 +53,50 @@ export function buildAiPayload(messages) {
       .filter((message) => !message.local)
       .map(({ role, content }) => ({ role, content })),
   });
+}
+
+const aiSourceSchema = z
+  .object({
+    type: z.enum(["faq", "health_center", "announcement", "workflow"]),
+    label: z.string().trim().min(1).max(60),
+    title: z.string().trim().min(1).max(500),
+    updatedAt: z.string().datetime({ offset: true }).nullable(),
+  })
+  .strict();
+
+const aiActionSchema = z
+  .object({
+    type: z.literal("navigate"),
+    actionId: z
+      .string()
+      .trim()
+      .regex(/^[a-z][a-z0-9_]{2,79}$/),
+    label: z.string().trim().min(1).max(100),
+    requiresConfirmation: z.boolean(),
+  })
+  .strict();
+
+const aiResponseSchema = z
+  .object({
+    message: z.string().trim().min(1).max(4_000),
+    sources: z.array(z.unknown()).max(12).default([]),
+    actions: z.array(z.unknown()).max(6).default([]),
+  })
+  .strict();
+
+export function parseAiResponse(value) {
+  const response = aiResponseSchema.parse(value);
+  return {
+    content: response.message,
+    sources: response.sources.flatMap((source) => {
+      const parsed = aiSourceSchema.safeParse(source);
+      return parsed.success ? [parsed.data] : [];
+    }),
+    actions: response.actions.flatMap((action) => {
+      const parsed = aiActionSchema.safeParse(action);
+      return parsed.success && isKnownAiActionId(parsed.data.actionId)
+        ? [parsed.data]
+        : [];
+    }),
+  };
 }

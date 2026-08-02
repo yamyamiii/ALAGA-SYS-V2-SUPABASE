@@ -3,12 +3,18 @@ import {
   buildProviderInput,
   buildSystemInstruction,
   exactOriginCorsHeaders,
+  groundingSourceTypesFor,
   MAX_CONVERSATION_TURNS,
   MAX_MESSAGE_CHARACTERS,
+  navigationResponseFor,
   parseAllowedOrigins,
   parsePositiveInteger,
   safetyResponseFor,
+  sanitizeGroundingSources,
+  sanitizeNavigationActions,
   validateConversationPayload,
+  withWorkflowGrounding,
+  workflowGrounding,
 } from "./domain.ts";
 
 function assert(condition: unknown, message = "Assertion failed") {
@@ -172,3 +178,93 @@ Deno.test(
     assert(!input.includes("chief_complaint"));
   },
 );
+
+Deno.test("enforces role-specific symbolic navigation", () => {
+  assertEquals(
+    navigationResponseFor("Open reports", "resident")?.category,
+    "navigation_unauthorized",
+  );
+  assertEquals(
+    navigationResponseFor("Open user management", "nurse")?.actions,
+    [],
+  );
+  assertEquals(
+    navigationResponseFor("Open reports", "admin")?.actions[0]?.actionId,
+    "open_reports",
+  );
+  assertEquals(
+    navigationResponseFor("Open reports", "barangay_health_worker")?.actions[0]
+      ?.actionId,
+    "open_reports",
+  );
+  assertEquals(
+    navigationResponseFor("Open https://evil.example", "admin")?.category,
+    "navigation_rejected",
+  );
+});
+
+Deno.test("rejects unknown, unauthorized, and route-bearing actions", () => {
+  assertEquals(
+    sanitizeNavigationActions(
+      [
+        { type: "navigate", actionId: "unknown_action" },
+        { type: "navigate", actionId: "open_reports" },
+        {
+          type: "navigate",
+          actionId: "open_faq",
+          route: "https://evil.example",
+        },
+      ],
+      "resident",
+    ),
+    [],
+  );
+});
+
+Deno.test("bounds approved grounding and excludes unsupported fields", () => {
+  const sources = sanitizeGroundingSources([
+    {
+      source_type: "faq",
+      source_label: "FAQ",
+      title: "How are appointments requested?",
+      content: "Use the appointment request form.",
+      updated_at: "2026-08-02T00:00:00.000Z",
+      resident_name: "must not be copied",
+      diagnosis: "must not be copied",
+    },
+    {
+      source_type: "resident",
+      source_label: "Resident",
+      title: "Rejected",
+      content: "Rejected",
+    },
+  ]);
+  assertEquals(sources.length, 1);
+  assertEquals(Object.keys(sources[0]).sort(), [
+    "content",
+    "label",
+    "title",
+    "type",
+    "updatedAt",
+  ]);
+  assertEquals(groundingSourceTypesFor("What are the clinic hours?"), [
+    "health_center",
+  ]);
+  assertEquals(groundingSourceTypesFor("Hello"), []);
+  const bounded = withWorkflowGrounding(sources, "resident");
+  const providerInput = buildProviderInput(
+    [{ role: "user", content: "How do appointments work?" }],
+    bounded,
+  );
+  assert(providerInput.includes("VERIFIED ALAGA-SYS GROUNDING"));
+  assert(providerInput.includes("FAQ"));
+  assert(!providerInput.includes("must not be copied"));
+});
+
+Deno.test("workflow grounding is role specific and read only", () => {
+  const resident = workflowGrounding("resident");
+  const admin = workflowGrounding("admin");
+  assert(resident.content.includes("preferred appointment start time"));
+  assert(!resident.content.includes("trusted user access"));
+  assert(admin.content.includes("trusted user access"));
+});

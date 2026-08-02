@@ -1,5 +1,5 @@
 import { RotateCcw, Send, ShieldAlert, Trash2 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { OfficialLogo } from "@/components/common/OfficialLogo";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -27,9 +27,24 @@ export function AiChatPanel({
   pending,
   error,
   turnLimitReached,
+  profileRole,
+  onAction,
 }) {
   const inputRef = useRef(null);
   const endRef = useRef(null);
+  const [online, setOnline] = useState(
+    () => typeof navigator === "undefined" || navigator.onLine,
+  );
+
+  useEffect(() => {
+    const updateStatus = () => setOnline(navigator.onLine);
+    window.addEventListener("online", updateStatus);
+    window.addEventListener("offline", updateStatus);
+    return () => {
+      window.removeEventListener("online", updateStatus);
+      window.removeEventListener("offline", updateStatus);
+    };
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: "nearest" });
@@ -75,7 +90,13 @@ export function AiChatPanel({
         aria-label="ALAGA AI conversation"
       >
         {messages.map((message) => (
-          <AiMessage key={message.id} message={message} />
+          <AiMessage
+            key={message.id}
+            message={message}
+            profileRole={profileRole}
+            onAction={onAction}
+            actionsDisabled={!online}
+          />
         ))}
         {pending ? (
           <li

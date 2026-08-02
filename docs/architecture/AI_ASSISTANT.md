@@ -1,9 +1,9 @@
 # ALAGA AI Assistant architecture
 
-Phase 9A adds a general-assistance chat surface without granting a model access
-to ALAGA-SYS data or actions. It uses Google's current `@google/genai` SDK and
-the Gemini Interactions API from the authenticated `alaga-ai` Supabase Edge
-Function.
+Phase 9B extends the authenticated Phase 9A assistant with narrowly approved,
+read-only grounding and deterministic navigation. It does not give Gemini a
+database connection, route control, mutation tool, or access to resident and
+clinical data.
 
 ## Request path
 
@@ -11,90 +11,95 @@ Function.
 Authenticated AppShell
   -> in-memory FloatingAiAssistant
   -> aiAssistantService
-  -> Supabase functions.invoke("alaga-ai") with current JWT
-  -> exact-origin CORS
-  -> Supabase Auth getUser verification
-  -> active profiles row and canonical role
-  -> service-only atomic hourly rate limit
-  -> strict conversation schema and deterministic safety checks
-  -> Gemini Interactions API with fixed role/safety instruction and store=false
-  -> bounded plain-text response
+  -> authenticated alaga-ai Edge Function
+  -> exact-origin CORS, getUser, active profile, canonical role
+  -> strict payload and deterministic medical/security checks
+  -> deterministic navigation parser (before Gemini)
+     -> symbolic action IDs only
+  -> service-role ai_grounding_context RPC
+     -> active FAQ, health-center, and announcement text only
+  -> server sanitization and character/source limits
+  -> Gemini Interactions API with store=false
+  -> { message, sources, actions }
+  -> frontend schema and role/action allowlist
+  -> fixed local route, after user confirmation when ambiguous
 ```
 
-Pages and visual components never call Gemini. The browser knows no Gemini key,
-model credential, service-role key, system instruction, database rate-limit
-table, or provider response object.
+Pages and visual components never call Gemini or query grounding tables. The
+browser knows no Gemini key, service-role key, system instruction, database
+rate-limit table, or provider response object.
+
+## Approved grounding
+
+Migration 30 adds `ai_grounding_context`, a service-role-only, read-only RPC.
+It may return only bounded fields from:
+
+- non-archived FAQ entries;
+- health-center name, address, hours, and services; and
+- non-archived announcements inside their publish and expiry window.
+
+The Edge Function adds role-specific workflow descriptions from static server
+code. It never supplies profile IDs, resident or household data, names,
+contacts, appointments, appointment reasons, encounters, vital signs,
+diagnoses, allergies, pregnancy/child records, reports, inquiries, audit logs,
+authors, or clinical narratives. Grounding is loaded live for each eligible
+request, sanitized again at the Edge boundary, capped by source count and total
+characters, and placed in a section separate from the untrusted transcript.
+
+Grounding rows are data, never instructions. Gemini is instructed to ignore
+commands embedded in source text and to say that verified information is
+unavailable when the supplied sources do not establish an answer. Source
+badges identify the approved context supplied for the answer; source content
+and database identifiers are not returned to the browser.
+
+## Safe navigation
+
+Navigation is deterministic and runs before Gemini. The server maps supported
+phrases to symbolic action IDs, checks each ID against the canonical role, and
+never accepts or emits a raw route or URL. Unknown, unauthorized, or URL-like
+requests are rejected. Ambiguous requests return confirmation-required action
+choices rather than navigating immediately.
+
+The frontend validates the structured response, discards malformed actions,
+rechecks the action against its own role allowlist, and maps it to a fixed local
+route. Gemini cannot create a new route, URL, action ID, or permission. See
+[AI navigation](../workflows/AI_NAVIGATION.md).
 
 ## Stateless conversation
 
-The component holds the welcome, user messages, and assistant messages only in
-React memory. It sends a bounded, alternating text transcript on each request.
-The local welcome is not sent. No interaction ID is accepted or returned, and
-the provider request sets `store: false`; this avoids the Interactions API's
-default server-side interaction retention.
+Messages remain only in React memory. The client sends a bounded alternating
+text transcript on each request. No interaction ID is accepted or returned,
+and provider requests use `store: false`.
 
-Conversation state is cleared by explicit Clear, component unmount on logout or
-account invalidation, a full page reload, and the keyed remount produced by a
-profile ID or role change. Closing and reopening the panel preserves the draft
-during the same authenticated page session. No application code writes chat
-content to localStorage, sessionStorage, IndexedDB, a URL, PostgreSQL, logs, or
-analytics.
+Conversation state is cleared by explicit Clear, component unmount on logout
+or account invalidation, a full reload, and profile/role changes. Closing the
+panel preserves the draft only for the current authenticated page session. No
+application code writes chat or grounding content to localStorage,
+sessionStorage, IndexedDB, URLs, PostgreSQL, logs, or analytics.
 
 ## Role context
 
-Only the canonical database role and an allowlist of high-level module names are
-added to the fixed server instruction:
-
-| Role                   | High-level guidance scope                                                                                               |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Administrator          | Administration and system module workflows; never unrestricted patient summaries                                        |
-| Barangay Health Worker | Resident/household workflows, appointment review, announcements, inquiries                                              |
-| Nurse                  | Assigned appointments, queue, and health-record workflow explanations                                                   |
-| Midwife                | Assigned maternal/child, appointment, and health-record workflow explanations                                           |
-| Resident               | Appointment requests, notifications, signed-record navigation, announcements, FAQ, health-center information, inquiries |
-
-Frontend welcomes use the same boundaries for clarity, but the Edge Function
-loads and enforces the role independently. Frontend role values are never sent
-or trusted.
-
-## Data boundary
-
-The provider receives:
-
-- one fixed medical/security system instruction;
-- the canonical role;
-- allowed high-level module names;
-- the current bounded, user-supplied session transcript.
-
-The function never queries or supplies residents, household members,
-appointments, reasons, encounters, vital signs, diagnoses, treatment notes,
-allergies, pregnancy/child records, reports, notifications, inquiries, names,
-contact data, or other PHI. Likely email, phone, UUID, and ALAGA-SYS record-number
-input is rejected locally with a privacy reminder. Detection is defense in
-depth, not a guarantee that arbitrary user-entered sensitive text can always be
-recognized.
+Only the canonical database role and approved high-level module descriptions
+are used. Administrator, BHW, Nurse, Midwife, and Resident each receive a
+separate server navigation allowlist. Frontend role values are never sent or
+trusted.
 
 ## Reliability and limits
 
-- JWT verification remains enabled at the gateway and `getUser()` validates the
-  token again.
-- Profile status and role are loaded through the service boundary before any
-  provider call.
-- Requests are capped by bytes, messages, user turns, per-message length, and
-  total conversation characters.
-- Provider work has a 20-second response boundary and an 800-token generation
-  cap; returned text is limited to 4,000 characters.
-- Provider and internal errors map to stable messages without raw SDK errors.
-- The database counter is atomic per profile in fixed UTC hour windows. Its
-  default is 20 requests per hour and its maximum configuration is 100.
-- Responses use plain React text rendering. There is no HTML execution or
-  `dangerouslySetInnerHTML`.
+- JWT verification remains enabled at the gateway and `getUser()` validates
+  the token again.
+- Active profile and canonical role are established before grounding or model
+  access.
+- The existing atomic fixed-UTC-hour per-profile rate limit remains in place.
+- Input, transcript, grounding, provider output, and response arrays are
+  bounded.
+- Provider calls retain the Phase 9A timeout and error normalization.
+- Responses are rendered as plain React text; no HTML is executed.
+- Navigation is disabled while offline and never performs a mutation.
 
-## Deliberately absent from Phase 9A
+## Deliberately absent
 
-There are no tools, function calls, SQL execution, RAG/grounding, report
-generation, navigation commands, health-record retrieval, appointment actions,
-clinical decision support, diagnosis, prescription, dosage guidance, lab
-interpretation, pregnancy determination, emergency assessment, or autonomous
-action. Phase 9B may add narrowly reviewed grounding and navigation only after
-separate authorization, privacy, and clinical-safety design.
+There is no resident/clinical/report grounding, semantic search over protected
+data, SQL execution, report generation, appointment mutation, record mutation,
+external knowledge retrieval, clinical decision support, diagnosis,
+prescription/dosage guidance, or autonomous action.

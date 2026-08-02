@@ -19,10 +19,12 @@ Phase 8 adds announcements, in-app notifications, resident/admin activity,
 health-center information, FAQs, and resident inquiry tickets.
 Phase 9A adds a stateless, role-aware ALAGA AI general-assistance chat through
 an authenticated Supabase Edge Function and the Gemini Interactions API.
+Phase 9B adds bounded live grounding from approved public operational sources
+and deterministic, role-checked, read-only navigation using symbolic actions.
 
 Inventory, prescription dispensing, laboratory integrations, birth
-registration, external notification delivery, advanced AI database actions,
-and AI access to clinical or resident data are not implemented.
+registration, external notification delivery, AI mutations, and AI access to
+clinical or resident data are not implemented.
 
 ## Technology stack
 
@@ -131,12 +133,14 @@ npm run preview
 
 ## Current phase
 
-Phase 9A provides a floating, authenticated general-assistance chat. The browser
-calls only the `alaga-ai` Edge Function; the Gemini key, role validation,
-rate-limit enforcement, medical-safety boundaries, and provider request remain
-server-side. Conversation drafts stay in React memory and are cleared on
-logout, account/role remount, or page reload. No application resident or
-clinical data is queried or supplied to Gemini.
+Phase 9B extends the floating authenticated assistant with live, read-only
+grounding from active FAQs, health-center name/address/hours/services, and
+current announcements. Deterministic navigation runs before Gemini and returns
+only role-checked symbolic action IDs; the frontend revalidates each ID and
+maps it to a fixed local route. Conversation drafts stay in React memory. No
+resident, appointment, clinical, maternal/child, report, contact, inquiry,
+notification, or audit data is supplied to Gemini, and no AI action mutates
+application data.
 
 Phase 8 provides role-aware announcements, own/relevant in-app notifications,
 privacy-minimized activity timelines, public health-center information,
@@ -152,10 +156,10 @@ delivery is implemented.
 
 ## Deployment note
 
-Migrations 1–28 are the completed remote baseline. Forward-only Migration 29
-adds only the service-role AI rate-limit primitive and remains pending for
-manual review and deployment. The `alaga-ai` Edge Function and its secrets also
-require separate, explicit deployment; application startup applies neither.
+Migrations 1-29 are the completed remote baseline. Forward-only Migration 30
+adds the service-role-only, read-only AI grounding RPC and remains pending for
+manual review and deployment. The updated `alaga-ai` Edge Function also
+requires a separate explicit deployment; application startup applies neither.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),
@@ -167,6 +171,7 @@ See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [General assistance architecture](docs/architecture/GENERAL_ASSISTANCE.md),
 [AI assistant architecture](docs/architecture/AI_ASSISTANT.md),
 [AI safety](docs/security/AI_SAFETY.md),
+[AI navigation](docs/workflows/AI_NAVIGATION.md),
 [Gemini AI deployment](docs/deployment/GEMINI_AI.md),
 [Announcements and notifications](docs/workflows/ANNOUNCEMENTS_NOTIFICATIONS.md),
 [Resident inquiries](docs/workflows/RESIDENT_INQUIRIES.md),
