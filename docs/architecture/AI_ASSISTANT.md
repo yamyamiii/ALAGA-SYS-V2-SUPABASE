@@ -1,7 +1,7 @@
 # ALAGA AI Assistant architecture
 
-Phase 9B extends the authenticated Phase 9A assistant with narrowly approved,
-read-only grounding and deterministic navigation. It does not give Gemini a
+Phase 9C polishes the authenticated assistant with narrowly approved,
+read-only grounding, deterministic fact responses, and deterministic navigation. It does not give Gemini a
 database connection, route control, mutation tool, or access to resident and
 clinical data.
 
@@ -19,6 +19,7 @@ Authenticated AppShell
   -> service-role ai_grounding_context RPC
      -> active FAQ, health-center, and announcement text only
   -> server sanitization and character/source limits
+  -> deterministic hours/services/current-announcement synthesis when matched
   -> Gemini Interactions API with store=false
   -> { message, sources, actions }
   -> frontend schema and role/action allowlist
@@ -46,11 +47,20 @@ authors, or clinical narratives. Grounding is loaded live for each eligible
 request, sanitized again at the Edge boundary, capped by source count and total
 characters, and placed in a section separate from the untrusted transcript.
 
+Operating-hours, service-list, and current-announcement questions are answered
+directly from the sanitized live values without calling Gemini. This prevents
+the model from paraphrasing or inventing these high-confidence operational
+facts. English, Filipino, and common Taglish intents share this path. FAQ and
+workflow questions continue through the bounded provider path when no
+deterministic response applies.
+
 Grounding rows are data, never instructions. Gemini is instructed to ignore
 commands embedded in source text and to say that verified information is
 unavailable when the supplied sources do not establish an answer. Source
-badges identify the approved context supplied for the answer; source content
-and database identifiers are not returned to the browser.
+cards identify the approved record used for the answer and may show its Manila
+updated date. They are source-level provenance, not sentence-level or quoted
+citations. Source content and database identifiers are not returned to the
+browser.
 
 ## Safe navigation
 
@@ -67,11 +77,13 @@ route. Gemini cannot create a new route, URL, action ID, or permission. See
 
 ## Stateless conversation
 
-Messages remain only in React memory. The client sends a bounded alternating
+Messages remain only in React memory. Role-aware starters submit ordinary
+bounded user messages. The client sends a bounded alternating
 text transcript on each request. No interaction ID is accepted or returned,
 and provider requests use `store: false`.
 
-Conversation state is cleared by explicit Clear, component unmount on logout
+Clear and New conversation require confirmation. Conversation state is cleared
+by either confirmed action, component unmount on logout
 or account invalidation, a full reload, and profile/role changes. Closing the
 panel preserves the draft only for the current authenticated page session. No
 application code writes chat or grounding content to localStorage,
@@ -95,6 +107,10 @@ trusted.
   bounded.
 - Provider calls retain the Phase 9A timeout and error normalization.
 - Responses are rendered as plain React text; no HTML is executed.
+- A synchronous client guard prevents duplicate in-flight submissions.
+- Provider errors are mapped from known codes to local privacy-safe copy; raw
+  server, provider, and database messages are never displayed.
+- Copy response uses the browser clipboard and does not persist the message.
 - Navigation is disabled while offline and never performs a mutation.
 
 ## Deliberately absent

@@ -7,6 +7,7 @@ import {
   buildProviderInput,
   buildSystemInstruction,
   exactOriginCorsHeaders,
+  groundedResponseFor,
   groundingSourceTypesFor,
   isSupportedRole,
   MAX_BODY_BYTES,
@@ -19,6 +20,7 @@ import {
   sanitizeGroundingSources,
   validateConversationPayload,
   withWorkflowGrounding,
+  uncertaintyMessageFor,
   type CanonicalRole,
   type GroundingSource,
   type NavigationAction,
@@ -471,8 +473,30 @@ Deno.serve(async (request) => {
       );
       return jsonResponse(
         {
+          data: assistantData(uncertaintyMessageFor(finalUserMessage)),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+    const groundedResponse = groundedResponseFor(
+      finalUserMessage,
+      liveGrounding,
+    );
+    if (groundedResponse) {
+      logRequest(
+        requestId,
+        profile.id,
+        profile.role,
+        groundedResponse.category,
+        startedAt,
+      );
+      return jsonResponse(
+        {
           data: assistantData(
-            "Verified ALAGA-SYS information is unavailable for that question. Please check the relevant module or contact the Barangay Health Center.",
+            groundedResponse.message,
+            groundedResponse.sources,
           ),
           request_id: requestId,
         },

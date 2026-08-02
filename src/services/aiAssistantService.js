@@ -9,6 +9,66 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 const REQUEST_TIMEOUT_MS = 25_000;
 const FALLBACK_MESSAGE =
   "The AI assistant could not complete that request. Please try again.";
+const SAFE_FUNCTION_ERRORS = Object.freeze({
+  invalid_session: {
+    message: "Your session is no longer valid. Please sign in again.",
+    retryable: false,
+  },
+  profile_missing: {
+    message: "Your ALAGA-SYS profile is unavailable. Contact an administrator.",
+    retryable: false,
+  },
+  profile_inactive: {
+    message: "Your account is inactive. Contact an administrator.",
+    retryable: false,
+  },
+  profile_suspended: {
+    message: "Your account is suspended. Contact an administrator.",
+    retryable: false,
+  },
+  rate_limited: {
+    message:
+      "You have reached the temporary AI request limit. Please try again later.",
+    retryable: false,
+  },
+  provider_timeout: {
+    message: "The assistant took too long to respond. Please try again.",
+    retryable: true,
+  },
+  provider_unavailable: {
+    message: "The assistant is temporarily unavailable. Please try again.",
+    retryable: true,
+  },
+  provider_failure: {
+    message: "The assistant could not complete that request. Please try again.",
+    retryable: true,
+  },
+  provider_configuration_error: {
+    message: "The assistant is temporarily unavailable.",
+    retryable: false,
+  },
+  authorization_unavailable: {
+    message: "Your access could not be verified. Please try again.",
+    retryable: true,
+  },
+  rate_limit_unavailable: {
+    message: "The assistant is temporarily unavailable. Please try again.",
+    retryable: true,
+  },
+  grounding_unavailable: {
+    message: "Verified ALAGA-SYS information is temporarily unavailable.",
+    retryable: true,
+  },
+  grounding_empty: {
+    message: "No verified ALAGA-SYS information is available for that request.",
+    retryable: false,
+  },
+  invalid_json: { message: "The request could not be read.", retryable: false },
+  invalid_payload: {
+    message: "The conversation could not be processed.",
+    retryable: false,
+  },
+});
 
 export class AiAssistantServiceError extends Error {
   constructor(code, message = FALLBACK_MESSAGE, options = {}) {
@@ -33,17 +93,11 @@ async function mapFunctionError(error) {
   try {
     const body = await error?.context?.json?.();
     const code = body?.error?.code;
-    const message = body?.error?.message;
-    if (typeof code === "string" && typeof message === "string") {
-      return new AiAssistantServiceError(code, message, {
+    const safeError = SAFE_FUNCTION_ERRORS[code];
+    if (typeof code === "string" && safeError) {
+      return new AiAssistantServiceError(code, safeError.message, {
         cause: error,
-        retryable: [
-          "provider_timeout",
-          "provider_unavailable",
-          "provider_failure",
-          "authorization_unavailable",
-          "rate_limit_unavailable",
-        ].includes(code),
+        retryable: safeError.retryable,
       });
     }
   } catch {

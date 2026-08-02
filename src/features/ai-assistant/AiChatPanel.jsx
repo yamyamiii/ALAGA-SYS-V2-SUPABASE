@@ -1,10 +1,18 @@
-import { RotateCcw, Send, ShieldAlert, Trash2 } from "lucide-react";
+import {
+  MessageSquarePlus,
+  RotateCcw,
+  Send,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { OfficialLogo } from "@/components/common/OfficialLogo";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -15,6 +23,7 @@ import {
   AI_ASSISTANT_NAME,
   AI_ASSISTANT_SUBTITLE,
   AI_MAX_MESSAGE_CHARACTERS,
+  getAiStarterPrompts,
 } from "@/features/ai-assistant/constants";
 
 export function AiChatPanel({
@@ -24,6 +33,8 @@ export function AiChatPanel({
   onSend,
   onRetry,
   onClear,
+  onNewConversation,
+  onStarter,
   pending,
   error,
   turnLimitReached,
@@ -35,6 +46,9 @@ export function AiChatPanel({
   const [online, setOnline] = useState(
     () => typeof navigator === "undefined" || navigator.onLine,
   );
+  const [resetIntent, setResetIntent] = useState(null);
+  const starters = getAiStarterPrompts(profileRole);
+  const showStarters = messages.every((message) => message.local);
 
   useEffect(() => {
     const updateStatus = () => setOnline(navigator.onLine);
@@ -57,7 +71,7 @@ export function AiChatPanel({
 
   return (
     <DialogContent
-      className="bottom-2 left-2 right-2 top-auto flex h-[min(42rem,calc(100dvh-1rem))] w-auto max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:bottom-6 sm:left-auto sm:right-6 sm:h-[min(42rem,calc(100dvh-3rem))] sm:w-[26rem] sm:max-w-[calc(100vw-3rem)]"
+      className="bottom-2 left-2 right-2 top-auto flex h-[min(42rem,calc(100dvh-1rem))] w-auto max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden overscroll-contain p-0 motion-reduce:transition-none sm:bottom-6 sm:left-auto sm:right-6 sm:h-[min(42rem,calc(100dvh-3rem))] sm:w-[26rem] sm:max-w-[calc(100vw-3rem)]"
       onOpenAutoFocus={(event) => {
         event.preventDefault();
         window.requestAnimationFrame(() => inputRef.current?.focus());
@@ -74,6 +88,18 @@ export function AiChatPanel({
               {AI_ASSISTANT_SUBTITLE}
             </DialogDescription>
           </div>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="ml-auto shrink-0"
+            onClick={() => setResetIntent("new")}
+            disabled={pending || showStarters}
+            aria-label="Start a new conversation"
+            title="New conversation"
+          >
+            <MessageSquarePlus />
+          </Button>
         </div>
       </DialogHeader>
 
@@ -82,6 +108,16 @@ export function AiChatPanel({
         reasons, or clinical information. For emergencies, contact local
         emergency services or the Barangay Health Center immediately.
       </div>
+
+      {!online ? (
+        <Alert className="mx-4 mt-3" aria-live="polite">
+          <ShieldAlert />
+          <AlertDescription>
+            You are offline. Reconnect to send a message or open a suggested
+            destination.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <ol
         className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-muted/35 p-4"
@@ -98,10 +134,34 @@ export function AiChatPanel({
             actionsDisabled={!online}
           />
         ))}
+        {showStarters ? (
+          <li className="ml-10" aria-label="Suggested questions">
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              Try asking
+            </p>
+            <ul className="flex flex-wrap gap-2">
+              {starters.map((starter) => (
+                <li key={starter}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-auto min-h-9 whitespace-normal text-left text-xs"
+                    onClick={() => onStarter(starter)}
+                    disabled={pending || !online}
+                  >
+                    {starter}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ) : null}
         {pending ? (
           <li
             className="flex items-center gap-2 text-sm text-muted-foreground"
-            role="status"
+            aria-hidden="true"
           >
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
               <OfficialLogo className="h-6 w-6 rounded-md bg-white" />
@@ -138,6 +198,52 @@ export function AiChatPanel({
         </p>
       ) : null}
 
+      <Dialog
+        open={Boolean(resetIntent)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setResetIntent(null);
+        }}
+      >
+        <DialogContent
+          className="max-w-sm p-4 sm:p-5"
+          role="alertdialog"
+          aria-labelledby="alaga-ai-reset-title"
+          aria-describedby="alaga-ai-reset-description"
+        >
+          <DialogHeader>
+            <DialogTitle id="alaga-ai-reset-title" className="text-base">
+              {resetIntent === "new"
+                ? "Start a new conversation?"
+                : "Clear this conversation?"}
+            </DialogTitle>
+            <DialogDescription id="alaga-ai-reset-description">
+              The current in-memory conversation will be removed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 flex justify-end gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setResetIntent(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                if (resetIntent === "new") onNewConversation();
+                else onClear();
+                setResetIntent(null);
+              }}
+            >
+              {resetIntent === "new" ? "Start new" : "Clear"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <form className="border-t bg-card p-3" onSubmit={submit}>
         <label htmlFor="alaga-ai-message" className="sr-only">
           Message ALAGA AI Assistant
@@ -154,10 +260,11 @@ export function AiChatPanel({
             }
           }}
           maxLength={AI_MAX_MESSAGE_CHARACTERS}
+          enterKeyHint="send"
           rows={3}
-          disabled={pending || Boolean(error) || turnLimitReached}
+          disabled={pending || Boolean(error) || turnLimitReached || !online}
           placeholder="Ask how to use ALAGA-SYS…"
-          className="min-h-20 w-full resize-none rounded-xl border bg-background px-3 py-2 text-sm leading-5 outline-none transition focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          className="min-h-20 w-full resize-none rounded-xl border bg-background px-3 py-2 text-base leading-5 outline-none transition focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
         />
         <div className="mt-2 flex items-center justify-between gap-2">
           <span
@@ -171,7 +278,7 @@ export function AiChatPanel({
               type="button"
               size="sm"
               variant="ghost"
-              onClick={onClear}
+              onClick={() => setResetIntent("clear")}
               disabled={pending || messages.every((message) => message.local)}
             >
               <Trash2 /> Clear
@@ -180,7 +287,11 @@ export function AiChatPanel({
               type="submit"
               size="sm"
               disabled={
-                pending || Boolean(error) || turnLimitReached || !draft.trim()
+                pending ||
+                Boolean(error) ||
+                turnLimitReached ||
+                !online ||
+                !draft.trim()
               }
             >
               <Send /> Send

@@ -1,8 +1,10 @@
-import { ArrowRight, Bot, UserRound } from "lucide-react";
+import { ArrowRight, Bot, Check, Copy, UserRound } from "lucide-react";
+import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { resolveAiNavigationAction } from "@/features/ai-assistant/navigation";
+import { formatManilaDate } from "@/lib/dateTime";
 import { cn } from "@/lib/utils";
 
 export function AiMessage({
@@ -11,6 +13,7 @@ export function AiMessage({
   onAction,
   actionsDisabled = false,
 }) {
+  const [copied, setCopied] = useState(false);
   const assistant = message.role === "assistant";
   const Icon = assistant ? Bot : UserRound;
   const sources =
@@ -42,30 +45,65 @@ export function AiMessage({
       </span>
       <div
         className={cn(
-          "max-w-[82%] rounded-2xl px-3 py-2 text-sm leading-6 shadow-sm",
+          "min-w-0 max-w-[88%] rounded-2xl px-3 py-2 text-sm leading-6 shadow-sm sm:max-w-[82%]",
           assistant
             ? "rounded-tl-md border bg-card"
             : "rounded-tr-md bg-primary text-primary-foreground",
         )}
       >
         <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        {assistant && !message.local ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="mt-1 h-7 px-2 text-xs text-muted-foreground"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(message.content);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1_500);
+              } catch {
+                setCopied(false);
+              }
+            }}
+            aria-label={copied ? "Response copied" : "Copy response"}
+          >
+            {copied ? <Check /> : <Copy />}
+            {copied ? "Copied" : "Copy"}
+          </Button>
+        ) : null}
         {sources.length ? (
-          <ul className="mt-2 space-y-1.5 border-t pt-2" aria-label="Sources">
+          <ul
+            className="mt-2 space-y-1.5 border-t pt-2"
+            aria-label="Verified sources used"
+          >
             {sources.map((source, index) => (
               <li
                 key={`${source.type}-${source.title}-${index}`}
-                className="flex min-w-0 items-center gap-1.5"
+                className="min-w-0 rounded-lg border bg-background/80 px-2 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                tabIndex={0}
+                aria-label={`${source.label}: ${source.title}${source.updatedAt ? `, updated ${formatManilaDate(source.updatedAt)}` : ""}`}
               >
-                <Badge
-                  variant="outline"
-                  className="shrink-0 bg-background px-2 py-0 text-[10px]"
-                  aria-label={`Source: ${source.label}`}
-                >
-                  {source.label}
-                </Badge>
-                <span className="truncate text-[11px] text-muted-foreground">
-                  {source.title}
-                </span>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <Badge
+                    variant="outline"
+                    className="shrink-0 bg-background px-2 py-0 text-[10px]"
+                  >
+                    {source.label}
+                  </Badge>
+                  <span className="truncate text-[11px] font-medium">
+                    {source.title}
+                  </span>
+                </div>
+                {source.updatedAt ? (
+                  <time
+                    className="mt-0.5 block text-[10px] text-muted-foreground"
+                    dateTime={source.updatedAt}
+                  >
+                    Updated {formatManilaDate(source.updatedAt)}
+                  </time>
+                ) : null}
               </li>
             ))}
           </ul>

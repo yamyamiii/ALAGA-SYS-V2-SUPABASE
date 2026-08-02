@@ -142,4 +142,46 @@ describe("ALAGA AI conversation schemas", () => {
 
     expect(parsed.actions).toEqual([]);
   });
+
+  it("deduplicates source cards and symbolic action IDs", () => {
+    const source = {
+      type: "faq",
+      label: "FAQ",
+      title: "Appointment requests",
+      updatedAt: null,
+    };
+    const action = {
+      type: "navigate",
+      actionId: "open_faq",
+      label: "Untrusted label",
+      requiresConfirmation: false,
+    };
+    const parsed = parseAiResponse({
+      message: "Open the FAQ.",
+      sources: [source, source],
+      actions: [action, action],
+    });
+
+    expect(parsed.sources).toEqual([source]);
+    expect(parsed.actions).toEqual([action]);
+  });
+
+  it("drops source metadata containing IDs or internal fields", () => {
+    const parsed = parseAiResponse({
+      message: "Safe response.",
+      sources: [
+        {
+          type: "announcement",
+          label: "Announcement",
+          title: "Clinic update",
+          updatedAt: null,
+          id: "internal-id",
+          author_id: "internal-author",
+        },
+      ],
+      actions: [],
+    });
+
+    expect(parsed.sources).toEqual([]);
+  });
 });

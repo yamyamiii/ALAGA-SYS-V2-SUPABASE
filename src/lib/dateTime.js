@@ -52,3 +52,13 @@ export function formatManilaDateTime(value, options = {}) {
     ...options,
   }).format(date);
 }
+
+export function formatManilaDate(value) {
+  const date = validDate(value);
+  if (!date) return "Date unavailable";
+
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: MANILA_TIME_ZONE,
+    dateStyle: "medium",
+  }).format(date);
+}

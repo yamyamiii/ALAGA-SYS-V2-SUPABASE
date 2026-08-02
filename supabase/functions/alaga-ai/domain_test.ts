@@ -3,6 +3,7 @@ import {
   buildProviderInput,
   buildSystemInstruction,
   exactOriginCorsHeaders,
+  groundedResponseFor,
   groundingSourceTypesFor,
   MAX_CONVERSATION_TURNS,
   MAX_MESSAGE_CHARACTERS,
@@ -294,6 +295,36 @@ Deno.test("bounds approved grounding and excludes unsupported fields", () => {
   assert(providerInput.includes("VERIFIED ALAGA-SYS GROUNDING"));
   assert(providerInput.includes("FAQ"));
   assert(!providerInput.includes("must not be copied"));
+});
+
+Deno.test(
+  "answers hours and services from exact sanitized source values",
+  () => {
+    const sources = sanitizeGroundingSources([
+      {
+        source_type: "health_center",
+        source_label: "Health Center Information",
+        title: "Brgy. Bagongpook Health Center",
+        content:
+          "Operating hours: Monday to Friday, 8:00 AM to 5:00 PM.\nServices offered: Consultations and immunization.",
+        updated_at: "2026-08-02T00:00:00.000Z",
+      },
+    ]);
+    assertEquals(
+      groundedResponseFor("What are the operating hours?", sources)?.message,
+      "The health center's verified operating hours are: Monday to Friday, 8:00 AM to 5:00 PM.",
+    );
+    assertEquals(
+      groundedResponseFor("Anong services ang available?", sources)?.message,
+      "Ang mga nakatalang services ng health center ay: Consultations and immunization.",
+    );
+  },
+);
+
+Deno.test("fails closed when requested verified grounding is absent", () => {
+  const response = groundedResponseFor("Kailan bukas ang health center?", []);
+  assertEquals(response?.category, "grounding_missing");
+  assertEquals(response?.sources, []);
 });
 
 Deno.test("workflow grounding is role specific and read only", () => {

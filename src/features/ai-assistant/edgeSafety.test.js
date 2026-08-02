@@ -177,7 +177,7 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(assistantData).toMatch(/actions/);
     expect(assistantData).toMatch(/type, label, title, updatedAt/);
     expect(assistantData).not.toMatch(/content/);
-    expect(index).toMatch(/Verified ALAGA-SYS information is unavailable/);
+    expect(index).toMatch(/uncertaintyMessageFor\(finalUserMessage\)/);
   });
 
   it("preserves Phase 9A safety and no-content logging", () => {

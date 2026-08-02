@@ -53,9 +53,63 @@ describe("AI assistant service", () => {
       service.send([{ role: "user", content: "Help" }]),
     ).rejects.toMatchObject({
       code: "provider_unavailable",
-      message: "The assistant is temporarily unavailable.",
+      message: "The assistant is temporarily unavailable. Please try again.",
       retryable: true,
     });
+    expect(context.json).toHaveBeenCalledOnce();
+  });
+
+  it("never displays an Edge Function's untrusted error message", async () => {
+    const context = {
+      json: vi.fn().mockResolvedValue({
+        error: {
+          code: "rate_limited",
+          message: "RAW DATABASE DETAIL service_role_secret",
+        },
+      }),
+    };
+    const service = createAiAssistantService(() =>
+      client({ data: null, error: { context, message: "RAW NETWORK DETAIL" } }),
+    );
+
+    await expect(
+      service.send([{ role: "user", content: "Help" }]),
+    ).rejects.toMatchObject({
+      code: "rate_limited",
+      message:
+        "You have reached the temporary AI request limit. Please try again later.",
+      retryable: false,
+    });
+  });
+
+  it.each([
+    [
+      "invalid_session",
+      "Your session is no longer valid. Please sign in again.",
+      false,
+    ],
+    [
+      "provider_timeout",
+      "The assistant took too long to respond. Please try again.",
+      true,
+    ],
+    [
+      "grounding_empty",
+      "No verified ALAGA-SYS information is available for that request.",
+      false,
+    ],
+  ])("maps %s to fixed safe UX copy", async (code, message, retryable) => {
+    const context = {
+      json: vi.fn().mockResolvedValue({
+        error: { code, message: "UNTRUSTED INTERNAL DETAIL" },
+      }),
+    };
+    const service = createAiAssistantService(() =>
+      client({ data: null, error: { context } }),
+    );
+    await expect(
+      service.send([{ role: "user", content: "Help" }]),
+    ).rejects.toMatchObject({ code, message, retryable });
   });
 
   it("returns an offline retry state before invoking Supabase", async () => {

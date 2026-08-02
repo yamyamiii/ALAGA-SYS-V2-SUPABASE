@@ -56,6 +56,8 @@ defense in depth but is not the authorization authority.
   redirect from model output.
 - Actions only open existing pages. They cannot submit, approve, archive,
   cancel, sign, export, or mutate anything.
+- The response introduction follows recognizable English, Filipino, or
+  Taglish phrasing and uses the locally trusted action label.
 
 ## Supported resident phrasing
 
@@ -73,3 +75,7 @@ staff queue, and the staff calendar remain unavailable to residents.
 
 Both allowlists must be updated and tested when an approved route is added.
 Never add a generic `navigate(url)` action or accept model-generated paths.
+
+Phase 9C also recognizes common Filipino module nouns for the staff queue,
+health records, maternal/child care, reports, user management, and audit logs.
+These phrase additions do not change any role allowlist.

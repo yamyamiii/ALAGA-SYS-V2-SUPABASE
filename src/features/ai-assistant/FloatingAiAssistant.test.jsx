@@ -1,8 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FloatingAiAssistant } from "@/features/ai-assistant/FloatingAiAssistant";
 import { USER_ROLES } from "@/features/auth/permissions";
@@ -38,6 +44,13 @@ function LocationProbe() {
 }
 
 describe("floating ALAGA AI assistant", () => {
+  beforeEach(() => {
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     Object.defineProperty(navigator, "onLine", {
@@ -72,9 +85,10 @@ describe("floating ALAGA AI assistant", () => {
     );
     const user = userEvent.setup();
     renderAssistant();
-    await user.click(
-      screen.getByRole("button", { name: "Open ALAGA AI Assistant" }),
-    );
+    const opener = screen.getByRole("button", {
+      name: "Open ALAGA AI Assistant",
+    });
+    await user.click(opener);
     await user.type(
       screen.getByLabelText("Message ALAGA AI Assistant"),
       "Where is the FAQ?",
@@ -89,6 +103,12 @@ describe("floating ALAGA AI assistant", () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /clear/i }));
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: /^clear$/i,
+      }),
+    );
     expect(screen.queryByText("Where is the FAQ?")).not.toBeInTheDocument();
     expect(
       screen.queryByText("Open the FAQ module from the navigation menu."),
@@ -107,13 +127,15 @@ describe("floating ALAGA AI assistant", () => {
       .mockResolvedValueOnce({ content: "Please open Notifications." });
     const user = userEvent.setup();
     renderAssistant();
-    await user.click(
-      screen.getByRole("button", { name: "Open ALAGA AI Assistant" }),
-    );
+    const opener = screen.getByRole("button", {
+      name: "Open ALAGA AI Assistant",
+    });
+    await user.click(opener);
     const input = screen.getByLabelText("Message ALAGA AI Assistant");
     await user.type(input, "Draft only");
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(opener).toHaveFocus());
     await user.click(
       screen.getByRole("button", { name: "Open ALAGA AI Assistant" }),
     );
@@ -165,7 +187,7 @@ describe("floating ALAGA AI assistant", () => {
     await user.click(
       screen.getByRole("button", { name: "Open ALAGA AI Assistant" }),
     );
-    expect(screen.getByText(/assigned appointment/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/assigned appointment/i)).not.toHaveLength(0);
     expect(
       screen.queryByDisplayValue("Resident draft"),
     ).not.toBeInTheDocument();
@@ -229,7 +251,9 @@ describe("floating ALAGA AI assistant", () => {
     await user.click(screen.getByRole("button", { name: /send/i }));
 
     expect(
-      await screen.findByLabelText("Source: Health Center Information"),
+      await screen.findByLabelText(
+        "Health Center Information: Brgy. Bagongpook Health Center",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Brgy. Bagongpook Health Center"),
@@ -324,5 +348,108 @@ describe("floating ALAGA AI assistant", () => {
     window.dispatchEvent(new Event("offline"));
 
     await waitFor(() => expect(action).toBeDisabled());
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
+    window.dispatchEvent(new Event("online"));
+    await waitFor(() => expect(action).toBeEnabled());
+  });
+
+  it("sends a role-aware starter and starts a new conversation only after confirmation", async () => {
+    const send = vi.spyOn(aiAssistantService, "send").mockResolvedValue({
+      content: "Use the resident appointment request form.",
+      sources: [],
+      actions: [],
+    });
+    const user = userEvent.setup();
+    renderAssistant();
+    await user.click(
+      screen.getByRole("button", { name: "Open ALAGA AI Assistant" }),
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Paano mag-request ng appointment?",
+      }),
+    );
+    await screen.findByText("Use the resident appointment request form.");
+    expect(send).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "user",
+          content: "Paano mag-request ng appointment?",
+        }),
+      ]),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Start a new conversation" }),
+    );
+    const confirmation = screen.getByRole("alertdialog");
+    expect(confirmation).toHaveTextContent("Start a new conversation?");
+    await user.click(
+      within(confirmation).getByRole("button", { name: "Start new" }),
+    );
+    expect(
+      screen.queryByText("Use the resident appointment request form."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Paano mag-request ng appointment?",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("copies an assistant response without rendering it as HTML", async () => {
+    vi.spyOn(aiAssistantService, "send").mockResolvedValue({
+      content: '<script>alert("unsafe")</script>',
+      sources: [],
+      actions: [],
+    });
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, "writeText");
+    renderAssistant();
+    await user.click(
+      screen.getByRole("button", { name: "Open ALAGA AI Assistant" }),
+    );
+    await user.type(
+      screen.getByLabelText("Message ALAGA AI Assistant"),
+      "Explain this safely",
+    );
+    await user.click(screen.getByRole("button", { name: /send/i }));
+    expect(
+      await screen.findByText('<script>alert("unsafe")</script>'),
+    ).toBeInTheDocument();
+    expect(document.querySelector("script")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Copy response" }));
+    expect(writeText).toHaveBeenCalledWith('<script>alert("unsafe")</script>');
+    expect(
+      screen.getByRole("button", { name: "Response copied" }),
+    ).toBeInTheDocument();
+  });
+
+  it("prevents duplicate submission while one request is active", async () => {
+    let resolveRequest;
+    const send = vi.spyOn(aiAssistantService, "send").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    renderAssistant();
+    await user.click(
+      screen.getByRole("button", { name: "Open ALAGA AI Assistant" }),
+    );
+    const input = screen.getByLabelText("Message ALAGA AI Assistant");
+    await user.type(input, "One request only");
+    const sendButton = screen.getByRole("button", { name: /send/i });
+    fireEvent.click(sendButton);
+    fireEvent.click(sendButton);
+
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    resolveRequest({ content: "Handled once.", sources: [], actions: [] });
+    expect(await screen.findByText("Handled once.")).toBeInTheDocument();
   });
 });

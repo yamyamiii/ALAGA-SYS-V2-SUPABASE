@@ -86,17 +86,29 @@ const aiResponseSchema = z
 
 export function parseAiResponse(value) {
   const response = aiResponseSchema.parse(value);
+  const sourceKeys = new Set();
+  const actionIds = new Set();
   return {
     content: response.message,
     sources: response.sources.flatMap((source) => {
       const parsed = aiSourceSchema.safeParse(source);
-      return parsed.success ? [parsed.data] : [];
+      if (!parsed.success) return [];
+      const key = `${parsed.data.type}\u0000${parsed.data.title}`;
+      if (sourceKeys.has(key)) return [];
+      sourceKeys.add(key);
+      return [parsed.data];
     }),
     actions: response.actions.flatMap((action) => {
       const parsed = aiActionSchema.safeParse(action);
-      return parsed.success && isKnownAiActionId(parsed.data.actionId)
-        ? [parsed.data]
-        : [];
+      if (
+        !parsed.success ||
+        !isKnownAiActionId(parsed.data.actionId) ||
+        actionIds.has(parsed.data.actionId)
+      ) {
+        return [];
+      }
+      actionIds.add(parsed.data.actionId);
+      return [parsed.data];
     }),
   };
 }

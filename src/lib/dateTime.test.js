@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatManilaDate,
   formatManilaClock,
   formatManilaDateTime,
   MANILA_TIME_ZONE,
@@ -20,10 +21,12 @@ describe("Manila date and time formatting", () => {
 
   it("reuses Manila formatting for operational timestamps", () => {
     expect(formatManilaDateTime(instant)).toMatch(/Jul 27, 2026,? 7:45 PM/i);
+    expect(formatManilaDate(instant)).toMatch(/Jul 27, 2026/i);
   });
 
   it("fails safely for invalid timestamps", () => {
     expect(formatManilaDateTime("not-a-date")).toBe("Not available");
+    expect(formatManilaDate("not-a-date")).toBe("Date unavailable");
     expect(formatManilaClock("not-a-date")).toEqual({
       date: "Date unavailable",
       time: "Time unavailable • Asia/Manila",

@@ -1,8 +1,8 @@
 # Gemini AI deployment
 
-Phase 9A and Migration 29 are deployed. Phase 9B source does not deploy itself:
-Migration 30 and the updated `alaga-ai` Edge Function remain pending until
-reviewed and applied manually.
+Phase 9A, Phase 9B, and Migration 30 are deployed. Phase 9C adds no database
+migration. Its updated `alaga-ai` Edge Function remains pending until reviewed
+and deployed manually.
 
 ## Runtime requirements
 
@@ -38,9 +38,6 @@ file, paste it into logs, or return it to a browser.
 From the reviewed repository and linked project:
 
 ```bash
-npx supabase db push --dry-run
-npx supabase db push
-
 npx supabase secrets set GEMINI_API_KEY=REPLACE_SECURELY
 npx supabase secrets set GEMINI_MODEL=gemini-3.6-flash
 npx supabase secrets set AI_ALLOWED_ORIGINS=https://REPLACE_WITH_APP_ORIGIN
@@ -51,9 +48,9 @@ npx supabase functions deploy alaga-ai
 npx supabase functions list
 ```
 
-Apply Migration 30 before deploying the updated function. The function expects
-the service-role-only `ai_grounding_context` RPC. Do not deploy the function
-first and do not use `--no-verify-jwt`.
+Confirm Migration 30 is already present before deploying the updated function.
+The function expects the service-role-only `ai_grounding_context` RPC. Do not
+use `--no-verify-jwt`.
 
 Use the Dashboard or an approved secret manager instead of command arguments
 when shell-history policy requires it. Do not use `--no-verify-jwt`;
@@ -61,8 +58,8 @@ when shell-history policy requires it. Do not use `--no-verify-jwt`;
 
 ## Live verification
 
-1. Confirm the dry run lists only Migration 30 before applying it. Confirm
-   Migrations 1-29 are already applied and unchanged.
+1. Confirm Migrations 1-30 are already applied and unchanged. Phase 9C should
+   not add a pending migration.
 2. Confirm anonymous and invalid-token requests are denied.
 3. Confirm a missing, invited, inactive, suspended, or unsupported profile is
    denied before Gemini is called.
@@ -92,6 +89,11 @@ when shell-history policy requires it. Do not use `--no-verify-jwt`;
 14. Ask for an unauthorized page, an unknown page, a raw route, and an external
     URL. Verify none navigates. Ask for two destinations and verify an explicit
     choice is required. Go offline and verify action buttons are disabled.
+15. Ask for hours, services, and announcements in English, Filipino, and
+    Taglish. Verify exact configured facts, natural uncertainty, and that these
+    deterministic matches do not require Gemini.
+16. Verify role-aware starters, Copy, Retry, confirmed Clear/New conversation,
+    keyboard focus return, 390px layout, and privacy-safe error copy.
 
 ## Rollback
 

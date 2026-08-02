@@ -29,6 +29,13 @@ untrusted conversation and is never logged or persisted. If approved live
 grounding is unavailable, the assistant states that verified information is
 unavailable instead of fabricating it.
 
+Verified hours, services, and current announcements use deterministic server
+synthesis from the sanitized records and bypass the provider. The response
+language follows recognizable English, Filipino, or Taglish phrasing. Source
+cards expose only a safe type, label, title, and optional updated timestamp;
+they do not expose source bodies or database identifiers and are not presented
+as exact sentence citations.
+
 ## Navigation boundary
 
 Navigation supports symbolic, read-only action IDs only. The deterministic
@@ -58,6 +65,10 @@ Prompt injection cannot be made fully preventable. Independent controls are:
    interaction ID, or application credentials.
 6. Input, output, source, body-size, timeout, and hourly limits reduce abuse.
 7. Output is rendered as plain text, never raw HTML.
+8. Known Edge error codes map to fixed client messages; untrusted backend error
+   text is discarded.
+9. Duplicate source metadata and action IDs are removed before rendering, and
+   a synchronous in-flight guard blocks repeated submission clicks.
 
 Model output remains probabilistic and must not be treated as clinical or
 operational authority.

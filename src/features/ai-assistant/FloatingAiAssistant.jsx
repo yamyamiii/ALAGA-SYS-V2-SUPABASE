@@ -1,5 +1,5 @@
 import { MessageCircleMore } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ export function FloatingAiAssistant({ profile }) {
     createWelcomeMessage(profile.role),
   ]);
   const [retryMessages, setRetryMessages] = useState(null);
+  const requestInFlightRef = useRef(false);
   const mutation = useAiAssistantMutation();
   const userTurns = messages.filter(
     (message) => !message.local && message.role === "user",
@@ -31,6 +32,8 @@ export function FloatingAiAssistant({ profile }) {
   const turnLimitReached = userTurns >= AI_MAX_CONVERSATION_TURNS;
 
   const completeRequest = (requestMessages) => {
+    if (requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
     setRetryMessages(requestMessages);
     mutation.mutate(requestMessages, {
       onSuccess: ({ content, sources, actions }) => {
@@ -46,12 +49,24 @@ export function FloatingAiAssistant({ profile }) {
         ]);
         setRetryMessages(null);
       },
+      onSettled: () => {
+        requestInFlightRef.current = false;
+      },
     });
   };
 
-  const send = () => {
-    const content = draft.trim();
-    if (!content || mutation.isPending || mutation.error || turnLimitReached) {
+  const send = (suggestedPrompt) => {
+    const content =
+      typeof suggestedPrompt === "string"
+        ? suggestedPrompt.trim()
+        : draft.trim();
+    if (
+      !content ||
+      requestInFlightRef.current ||
+      mutation.isPending ||
+      mutation.error ||
+      turnLimitReached
+    ) {
       return;
     }
     const userMessage = { id: messageId(), role: "user", content };
@@ -62,6 +77,7 @@ export function FloatingAiAssistant({ profile }) {
   };
 
   const clear = () => {
+    requestInFlightRef.current = false;
     mutation.reset();
     setRetryMessages(null);
     setDraft("");
@@ -102,6 +118,8 @@ export function FloatingAiAssistant({ profile }) {
         onSend={send}
         onRetry={retry}
         onClear={clear}
+        onNewConversation={clear}
+        onStarter={send}
         pending={mutation.isPending}
         error={mutation.error}
         turnLimitReached={turnLimitReached}

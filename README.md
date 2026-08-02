@@ -21,6 +21,9 @@ Phase 9A adds a stateless, role-aware ALAGA AI general-assistance chat through
 an authenticated Supabase Edge Function and the Gemini Interactions API.
 Phase 9B adds bounded live grounding from approved public operational sources
 and deterministic, role-checked, read-only navigation using symbolic actions.
+Phase 9C adds deterministic trusted answers for hours, services, and current
+announcements plus multilingual matching, role-aware starters, compact source
+cards, copy/retry/confirmed-reset controls, and stricter client safety handling.
 
 Inventory, prescription dispensing, laboratory integrations, birth
 registration, external notification delivery, AI mutations, and AI access to
@@ -133,7 +136,7 @@ npm run preview
 
 ## Current phase
 
-Phase 9B extends the floating authenticated assistant with live, read-only
+Phase 9C completes the floating authenticated assistant experience with live, read-only
 grounding from active FAQs, health-center name/address/hours/services, and
 current announcements. Deterministic navigation runs before Gemini and returns
 only role-checked symbolic action IDs; the frontend revalidates each ID and
@@ -156,10 +159,9 @@ delivery is implemented.
 
 ## Deployment note
 
-Migrations 1-29 are the completed remote baseline. Forward-only Migration 30
-adds the service-role-only, read-only AI grounding RPC and remains pending for
-manual review and deployment. The updated `alaga-ai` Edge Function also
-requires a separate explicit deployment; application startup applies neither.
+Migrations 1-30 are the completed remote baseline. Phase 9C adds no migration.
+Its updated `alaga-ai` Edge Function requires a separate explicit deployment;
+application startup does not deploy it automatically.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),
@@ -172,6 +174,7 @@ See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [AI assistant architecture](docs/architecture/AI_ASSISTANT.md),
 [AI safety](docs/security/AI_SAFETY.md),
 [AI navigation](docs/workflows/AI_NAVIGATION.md),
+[AI user guide](docs/workflows/AI_USER_GUIDE.md),
 [Gemini AI deployment](docs/deployment/GEMINI_AI.md),
 [Announcements and notifications](docs/workflows/ANNOUNCEMENTS_NOTIFICATIONS.md),
 [Resident inquiries](docs/workflows/RESIDENT_INQUIRIES.md),

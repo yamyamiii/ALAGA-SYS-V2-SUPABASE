@@ -59,7 +59,16 @@ navigation has a second frontend allowlist. No resident, appointment, clinical,
 maternal/child, report, contact, inquiry, notification, or audit data is
 exposed, and no mutation capability is added.
 
-## Phase 9C — Advanced AI capabilities (future)
+## Phase 9C — Final AI UX, grounding quality, and security polish
+
+Deterministic trusted responses for health-center hours, services, and current
+announcements; English/Filipino/Taglish matching; role-aware starters; compact
+source provenance; copy/retry/confirmed reset controls; responsive and
+accessible chat behavior; fixed client error messages; and duplicate-request,
+source, and action defenses. No new data source, mutation, or clinical
+capability is introduced.
+
+## Advanced AI capabilities (future)
 
 Any report generation, clinical/resident-data use, database mutation, external
 knowledge retrieval, or autonomous action requires a separately approved
