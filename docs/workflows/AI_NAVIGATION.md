@@ -57,5 +57,19 @@ defense in depth but is not the authorization authority.
 - Actions only open existing pages. They cannot submit, approve, archive,
   cancel, sign, export, or mutate anything.
 
+## Supported resident phrasing
+
+The deterministic parser recognizes concise English, Filipino, and Taglish
+navigation commands. Resident appointment examples include `Open appointments`,
+`Buksan ang appointments ko`, `Punta sa appointments ko`, `Tingnan ang mga
+appointment ko`, `My appointments`, and `Appointment requests ko`. They all use
+the existing `open_appointments` action and the resident-facing label **Open My
+Appointments**.
+
+Common Filipino/Taglish commands are also recognized for resident-safe
+notifications, announcements, FAQs, health-center information, and inquiries.
+This matching does not broaden permissions: incoming appointment requests, the
+staff queue, and the staff calendar remain unavailable to residents.
+
 Both allowlists must be updated and tested when an approved route is added.
 Never add a generic `navigate(url)` action or accept model-generated paths.

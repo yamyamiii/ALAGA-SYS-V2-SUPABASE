@@ -29,6 +29,24 @@ describe("ALAGA AI frontend navigation boundary", () => {
     });
   });
 
+  it("uses the resident-specific label for the existing appointments action", () => {
+    expect(
+      resolveAiNavigationAction(
+        navigate("open_appointments"),
+        USER_ROLES.RESIDENT,
+      ),
+    ).toEqual({
+      actionId: "open_appointments",
+      label: "Open My Appointments",
+      route: ROUTES.appointments,
+      requiresConfirmation: false,
+    });
+    expect(
+      resolveAiNavigationAction(navigate("open_appointments"), USER_ROLES.NURSE)
+        ?.label,
+    ).toBe("Open Appointments");
+  });
+
   it("does not allow residents to open reports", () => {
     expect(
       resolveAiNavigationAction(navigate("open_reports"), USER_ROLES.RESIDENT),

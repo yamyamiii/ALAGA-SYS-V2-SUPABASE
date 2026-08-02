@@ -6,6 +6,7 @@ import {
   groundingSourceTypesFor,
   MAX_CONVERSATION_TURNS,
   MAX_MESSAGE_CHARACTERS,
+  navigationActionIdsForRole,
   navigationResponseFor,
   parseAllowedOrigins,
   parsePositiveInteger,
@@ -200,6 +201,40 @@ Deno.test("enforces role-specific symbolic navigation", () => {
   assertEquals(
     navigationResponseFor("Open https://evil.example", "admin")?.category,
     "navigation_rejected",
+  );
+});
+
+Deno.test("matches English Filipino and Taglish resident appointments", () => {
+  for (const phrase of [
+    "Open appointments",
+    "Buksan ang appointments ko",
+    "Punta sa appointments ko",
+    "Tingnan ang mga appointment ko",
+    "My appointments",
+    "Appointment requests ko",
+  ]) {
+    const response = navigationResponseFor(phrase, "resident");
+    assertEquals(response?.actions[0]?.actionId, "open_appointments");
+    assertEquals(response?.actions[0]?.label, "Open My Appointments");
+  }
+});
+
+Deno.test("keeps staff appointment destinations away from residents", () => {
+  const residentActions = navigationActionIdsForRole("resident");
+  assert(!residentActions.includes("open_appointment_requests"));
+  assert(!residentActions.includes("open_appointment_queue"));
+  assertEquals(
+    navigationResponseFor("Open incoming appointment requests", "resident")
+      ?.actions,
+    [],
+  );
+  assertEquals(
+    navigationResponseFor("Buksan ang appointment queue", "resident")?.actions,
+    [],
+  );
+  assertEquals(
+    navigationResponseFor("Open appointment calendar", "resident")?.actions,
+    [],
   );
 });
 

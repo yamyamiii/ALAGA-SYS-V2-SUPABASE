@@ -11,6 +11,7 @@ export const AI_NAVIGATION_TARGETS = Object.freeze({
   },
   open_appointments: {
     label: "Open Appointments",
+    roleLabels: { [USER_ROLES.RESIDENT]: "Open My Appointments" },
     route: ROUTES.appointments,
     roles: ALL_ROLES,
   },
@@ -126,7 +127,7 @@ export function resolveAiNavigationAction(action, role) {
   if (!target || !target.roles.includes(role)) return null;
   return {
     actionId: action.actionId,
-    label: target.label,
+    label: target.roleLabels?.[role] ?? target.label,
     route: target.route,
     requiresConfirmation: action.requiresConfirmation === true,
   };

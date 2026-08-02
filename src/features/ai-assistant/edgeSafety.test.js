@@ -161,6 +161,10 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(domain).toMatch(/navigation_rejected/);
     expect(domain).not.toMatch(/route:\s*["'`]\//);
     expect(index).toMatch(/navigationResponseFor\(/);
+    expect(index.indexOf("const navigationResponse")).toBeGreaterThan(-1);
+    expect(index.indexOf("const navigationResponse")).toBeLessThan(
+      index.indexOf("const ai = new GoogleGenAI"),
+    );
   });
 
   it("returns structured metadata without returning grounding content", () => {

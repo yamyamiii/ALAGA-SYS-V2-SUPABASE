@@ -243,6 +243,53 @@ describe("floating ALAGA AI assistant", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("renders the resident appointments action with its safe local label", async () => {
+    vi.spyOn(aiAssistantService, "send").mockResolvedValue({
+      content: "Maaari kong buksan ang iyong appointments page.",
+      sources: [],
+      actions: [
+        {
+          type: "navigate",
+          actionId: "open_appointments",
+          label: "Untrusted server label",
+          requiresConfirmation: false,
+        },
+      ],
+    });
+    const client = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/"]}>
+          <FloatingAiAssistant profile={resident} />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Open ALAGA AI Assistant" }),
+    );
+    await user.type(
+      screen.getByLabelText("Message ALAGA AI Assistant"),
+      "Buksan ang appointments ko",
+    );
+    await user.click(screen.getByRole("button", { name: /send/i }));
+
+    const action = await screen.findByRole("button", {
+      name: "Open My Appointments",
+    });
+    expect(
+      screen.queryByRole("button", { name: "Untrusted server label" }),
+    ).not.toBeInTheDocument();
+    await user.click(action);
+    expect(screen.getByLabelText("Current route")).toHaveTextContent(
+      "/appointments",
+    );
+  });
+
   it("disables navigation actions while offline", async () => {
     vi.spyOn(aiAssistantService, "send").mockResolvedValue({
       content: "Open Notifications when you are online.",

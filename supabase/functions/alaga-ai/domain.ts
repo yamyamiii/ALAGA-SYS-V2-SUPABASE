@@ -50,6 +50,7 @@ const ALL_ROLES = [
 
 type NavigationDefinition = {
   label: string;
+  roleLabels?: Partial<Record<CanonicalRole, string>>;
   roles: readonly CanonicalRole[];
   patterns: readonly RegExp[];
 };
@@ -63,8 +64,13 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
     },
     open_appointments: {
       label: "Open Appointments",
+      roleLabels: { resident: "Open My Appointments" },
       roles: ALL_ROLES,
-      patterns: [/\bappointments?\b/i, /\bbooking(?:s)?\b/i],
+      patterns: [
+        /\bappointments?\b/i,
+        /\bbooking(?:s)?\b/i,
+        /\b(?:mga\s+)?appointment(?:s)?\s+ko\b/i,
+      ],
     },
     open_appointment_requests: {
       label: "Open Incoming Appointment Requests",
@@ -79,17 +85,29 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
     open_notifications: {
       label: "Open Notifications",
       roles: ALL_ROLES,
-      patterns: [/\bnotifications?\b/i, /\balerts?\b/i],
+      patterns: [
+        /\bnotifications?\b/i,
+        /\balerts?\b/i,
+        /\b(?:mga\s+)?notipikasyon(?:\s+ko)?\b/i,
+      ],
     },
     open_announcements: {
       label: "Open Announcements",
       roles: ALL_ROLES,
-      patterns: [/\bannouncements?\b/i, /\badvisor(?:y|ies)\b/i],
+      patterns: [
+        /\bannouncements?\b/i,
+        /\badvisor(?:y|ies)\b/i,
+        /\b(?:mga\s+)?(?:anunsyo|pabatid)\b/i,
+      ],
     },
     open_faq: {
       label: "Open FAQ",
       roles: ALL_ROLES,
-      patterns: [/\bfaq(?:s)?\b/i, /\bfrequently asked questions?\b/i],
+      patterns: [
+        /\bfaq(?:s)?\b/i,
+        /\bfrequently asked questions?\b/i,
+        /\bmadalas (?:na )?itanong\b/i,
+      ],
     },
     open_health_center: {
       label: "Open Health Center Information",
@@ -97,12 +115,17 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
       patterns: [
         /\bhealth[- ]?center(?: information)?\b/i,
         /\bclinic information\b/i,
+        /\bimpormasyon (?:ng|sa) (?:barangay )?health[- ]?center\b/i,
       ],
     },
     open_inquiries: {
       label: "Open Inquiries",
       roles: ["admin", "barangay_health_worker", "resident"],
-      patterns: [/\binquir(?:y|ies)\b/i, /\bcontact(?: us)?\b/i],
+      patterns: [
+        /\binquir(?:y|ies)\b/i,
+        /\bcontact(?: us)?\b/i,
+        /\bmakipag-ugnayan\b/i,
+      ],
     },
     open_residents: {
       label: "Open Residents",
@@ -451,6 +474,19 @@ export function navigationActionIdsForRole(role: CanonicalRole) {
     .map(([actionId]) => actionId);
 }
 
+function navigationLabel(
+  definition: NavigationDefinition,
+  role: CanonicalRole,
+) {
+  return definition.roleLabels?.[role] ?? definition.label;
+}
+
+const EXPLICIT_NAVIGATION_INTENT =
+  /\b(?:open|show|view|go to|take me to|navigate to|bring me to|buksan(?: mo)?|punta sa|pumunta sa|tingnan|tignan|ipakita|dalhin ako sa)\b/i;
+
+const TERSE_NAVIGATION_REQUEST =
+  /^\s*(?:(?:my|mga)\s+)?(?:appointments?|appointment requests?|notifications?|notipikasyon|announcements?|anunsyo|pabatid|faqs?|frequently asked questions?|madalas (?:na )?itanong|health[- ]?center(?: information)?|clinic information|impormasyon (?:ng|sa) (?:barangay )?health[- ]?center|inquir(?:y|ies)|contact(?: us)?|makipag-ugnayan)(?:\s+ko)?\s*[.!?]*\s*$/i;
+
 export function sanitizeNavigationActions(
   candidates: unknown,
   role: CanonicalRole,
@@ -479,7 +515,7 @@ export function sanitizeNavigationActions(
     actions.push({
       type: "navigate",
       actionId,
-      label: definition.label,
+      label: navigationLabel(definition, role),
       requiresConfirmation: candidate.requiresConfirmation === true,
     });
   }
@@ -491,9 +527,8 @@ export function navigationResponseFor(
   role: CanonicalRole,
 ): { category: string; message: string; actions: NavigationAction[] } | null {
   const navigationIntent =
-    /\b(?:open|show|view|go to|take me to|navigate to|bring me to)\b/i.test(
-      message,
-    );
+    EXPLICIT_NAVIGATION_INTENT.test(message) ||
+    TERSE_NAVIGATION_REQUEST.test(message);
   if (!navigationIntent) return null;
 
   if (/(?:https?:\/\/|www\.|\bjavascript:|\bdata:)/i.test(message)) {
@@ -501,6 +536,17 @@ export function navigationResponseFor(
       category: "navigation_rejected",
       message:
         "I cannot open raw links. Ask for a known ALAGA-SYS destination by name.",
+      actions: [],
+    };
+  }
+
+  if (
+    role === "resident" &&
+    /\b(?:appointment|staff|schedule) calendar\b/i.test(message)
+  ) {
+    return {
+      category: "navigation_unauthorized",
+      message: "That destination is not available to your account role.",
       actions: [],
     };
   }
@@ -558,7 +604,13 @@ export function navigationResponseFor(
     category: ambiguous ? "navigation_clarification" : "navigation_suggestion",
     message: ambiguous
       ? "Which permitted destination would you like to open?"
-      : `Select “${actions[0].label}” to continue.`,
+      : role === "resident" && actions[0].actionId === "open_appointments"
+        ? /\b(?:buksan|punta|pumunta|tingnan|tignan|ipakita|ko|mga)\b/i.test(
+            message,
+          )
+          ? "Maaari kong buksan ang iyong appointments page."
+          : "I can open your appointments page."
+        : `Select “${actions[0].label}” to continue.`,
     actions,
   };
 }

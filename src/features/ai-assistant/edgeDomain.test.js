@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProviderInput,
   groundingSourceTypesFor,
+  navigationActionIdsForRole,
   navigationResponseFor,
   requiresLiveGrounding,
   sanitizeGroundingSources,
@@ -69,6 +70,73 @@ describe("ALAGA AI server grounding and navigation domain", () => {
       navigationResponseFor("Open reports", "barangay_health_worker")
         ?.actions[0],
     ).toMatchObject({ type: "navigate", actionId: "open_reports" });
+  });
+
+  it.each([
+    "Open appointments",
+    "Buksan ang appointments ko",
+    "Punta sa appointments ko",
+    "Tingnan ang mga appointment ko",
+    "My appointments",
+    "Appointment requests ko",
+  ])("resolves resident appointment command: %s", (phrase) => {
+    expect(navigationResponseFor(phrase, "resident")).toMatchObject({
+      category: "navigation_suggestion",
+      actions: [
+        {
+          type: "navigate",
+          actionId: "open_appointments",
+          label: "Open My Appointments",
+          requiresConfirmation: false,
+        },
+      ],
+    });
+  });
+
+  it("keeps staff-only appointment destinations unavailable to residents", () => {
+    expect(navigationActionIdsForRole("resident")).not.toEqual(
+      expect.arrayContaining([
+        "open_appointment_requests",
+        "open_appointment_queue",
+      ]),
+    );
+    expect(
+      navigationResponseFor("Open incoming appointment requests", "resident")
+        ?.actions,
+    ).toEqual([]);
+    expect(
+      navigationResponseFor("Buksan ang appointment queue", "resident")
+        ?.actions,
+    ).toEqual([]);
+    expect(
+      navigationResponseFor("Open appointment calendar", "resident")?.actions,
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["Buksan ang notifications ko", "open_notifications"],
+    ["Punta sa mga anunsyo", "open_announcements"],
+    ["Tingnan ang madalas itanong", "open_faq"],
+    ["Buksan ang impormasyon ng health center", "open_health_center"],
+    ["Punta sa inquiries ko", "open_inquiries"],
+  ])("resolves resident-safe Filipino command: %s", (phrase, actionId) => {
+    expect(
+      navigationResponseFor(phrase, "resident")?.actions[0]?.actionId,
+    ).toBe(actionId);
+  });
+
+  it("does not fabricate unknown actions and preserves staff mappings", () => {
+    expect(
+      navigationResponseFor("Buksan ang laboratory inventory", "resident"),
+    ).toMatchObject({ category: "navigation_unknown", actions: [] });
+    expect(
+      navigationResponseFor("Open today's queue", "nurse")?.actions[0]
+        ?.actionId,
+    ).toBe("open_appointment_queue");
+    expect(
+      navigationResponseFor("Open user management", "admin")?.actions[0]
+        ?.actionId,
+    ).toBe("open_user_management");
   });
 
   it("rejects raw URLs, unknown IDs, routes, and unauthorized actions", () => {
