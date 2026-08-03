@@ -325,6 +325,55 @@ Deno.test("resolves role-authorized nested destinations", () => {
   }
 });
 
+Deno.test(
+  "offers every maternal and child care section to every viewing role",
+  () => {
+    const destinations: Array<[string, string]> = [
+      ["Pregnancies", "open_pregnancies"],
+      ["Prenatal Visits", "open_prenatal_visits"],
+      ["Deliveries", "open_deliveries"],
+      ["Postnatal Care", "open_postnatal_care"],
+      ["Child Profiles", "open_child_records"],
+      ["Growth Monitoring", "open_growth_monitoring"],
+      ["Immunizations", "open_immunizations"],
+    ];
+    const roles: CanonicalRole[] = [
+      "admin",
+      "barangay_health_worker",
+      "nurse",
+      "midwife",
+      "resident",
+    ];
+
+    for (const role of roles) {
+      for (const [phrase, actionId] of destinations) {
+        assertEquals(
+          navigationResponseFor(phrase, role)?.actions[0]?.actionId,
+          actionId,
+        );
+      }
+    }
+  },
+);
+
+Deno.test("matches Filipino maternal and child destinations", () => {
+  const examples: Array<[string, string]> = [
+    ["Buksan ang mga pagbubuntis", "open_pregnancies"],
+    ["Buksan ang prenatal checkups", "open_prenatal_visits"],
+    ["Punta sa panganganak", "open_deliveries"],
+    ["Tingnan ang postnatal visits", "open_postnatal_care"],
+    ["Buksan ang mga rekord ng bata", "open_child_records"],
+    ["Tingnan ang paglaki ng bata", "open_growth_monitoring"],
+    ["Punta sa mga bakuna", "open_immunizations"],
+  ];
+  for (const [phrase, actionId] of examples) {
+    assertEquals(
+      navigationResponseFor(phrase, "resident")?.actions[0]?.actionId,
+      actionId,
+    );
+  }
+});
+
 Deno.test("nested destinations preserve resident restrictions", () => {
   for (const phrase of [
     "Open Calendar",

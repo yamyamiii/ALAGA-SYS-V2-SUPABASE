@@ -206,13 +206,42 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
     },
     open_pregnancies: {
       label: "Open Pregnancies",
-      roles: ["admin", "midwife"],
-      patterns: [/\bpregnanc(?:y|ies)\b/i, /\bprenatal care\b/i],
+      roles: ALL_ROLES,
+      patterns: [/\bpregnanc(?:y|ies)\b/i, /\bmga pagbubuntis\b/i],
+    },
+    open_prenatal_visits: {
+      label: "Open Prenatal Visits",
+      roles: ALL_ROLES,
+      patterns: [
+        /\bprenatal (?:visits?|care|check-?ups?)\b/i,
+        /\bantenatal visits?\b/i,
+      ],
+    },
+    open_deliveries: {
+      label: "Open Deliveries",
+      roles: ALL_ROLES,
+      patterns: [
+        /\bdeliver(?:y|ies)\b/i,
+        /\bdelivery outcomes?\b/i,
+        /\bpanganganak\b/i,
+      ],
+    },
+    open_postnatal_care: {
+      label: "Open Postnatal Care",
+      roles: ALL_ROLES,
+      patterns: [
+        /\bpostnatal (?:care|visits?)\b/i,
+        /\bpostpartum (?:care|visits?)\b/i,
+      ],
     },
     open_immunizations: {
       label: "Open Immunizations",
-      roles: ["admin", "midwife"],
-      patterns: [/\bimmuni[sz]ations?\b/i, /\bvaccination records?\b/i],
+      roles: ALL_ROLES,
+      patterns: [
+        /\bimmuni[sz]ations?\b/i,
+        /\bvaccination records?\b/i,
+        /\b(?:mga )?(?:bakuna|pagbabakuna)\b/i,
+      ],
     },
     open_child_records: {
       label: "Open Child Records",
@@ -220,6 +249,15 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
       patterns: [
         /\bchild (?:records?|profiles?)\b/i,
         /\bmga rekord ng bata\b/i,
+      ],
+    },
+    open_growth_monitoring: {
+      label: "Open Growth Monitoring",
+      roles: ALL_ROLES,
+      patterns: [
+        /\bgrowth (?:monitoring|measurements?)\b/i,
+        /\bchild growth\b/i,
+        /\bpaglaki ng bata\b/i,
       ],
     },
     open_reports: {
@@ -570,6 +608,9 @@ const EXPLICIT_NAVIGATION_INTENT =
 const TERSE_NAVIGATION_REQUEST =
   /^\s*(?:(?:my|mga)\s+)?(?:appointments?|appointment requests?|notifications?|notipikasyon|announcements?|anunsyo|pabatid|faqs?|frequently asked questions?|madalas (?:na )?itanong|health[- ]?center(?: information)?|clinic information|impormasyon (?:ng|sa) (?:barangay )?health[- ]?center|inquir(?:y|ies)|contact(?: us)?|makipag-ugnayan)(?:\s+ko)?\s*[.!?]*\s*$/i;
 
+const MATERNAL_CHILD_TERSE_NAVIGATION_REQUEST =
+  /^\s*(?:(?:my|mga)\s+)?(?:pregnanc(?:y|ies)|pagbubuntis|prenatal (?:visits?|care|check-?ups?)|antenatal visits?|deliver(?:y|ies)|delivery outcomes?|panganganak|postnatal (?:care|visits?)|postpartum (?:care|visits?)|child (?:records?|profiles?)|rekord ng bata|growth (?:monitoring|measurements?)|child growth|paglaki ng bata|immuni[sz]ations?|vaccination records?|bakuna|pagbabakuna)\s*[.!?]*\s*$/i;
+
 export type ResponseLanguage = "english" | "filipino" | "taglish";
 
 const FILIPINO_LANGUAGE_MARKERS =
@@ -670,7 +711,8 @@ export function navigationResponseFor(
 ): { category: string; message: string; actions: NavigationAction[] } | null {
   const navigationIntent =
     EXPLICIT_NAVIGATION_INTENT.test(message) ||
-    TERSE_NAVIGATION_REQUEST.test(message);
+    TERSE_NAVIGATION_REQUEST.test(message) ||
+    MATERNAL_CHILD_TERSE_NAVIGATION_REQUEST.test(message);
   if (!navigationIntent) return null;
 
   if (/(?:https?:\/\/|www\.|\bjavascript:|\bdata:)/i.test(message)) {
@@ -708,8 +750,12 @@ export function navigationResponseFor(
     open_health_record_encounters: ["open_health_records"],
     open_health_record_vital_signs: ["open_health_records"],
     open_pregnancies: ["open_maternal_child_care"],
+    open_prenatal_visits: ["open_maternal_child_care"],
+    open_deliveries: ["open_maternal_child_care"],
+    open_postnatal_care: ["open_maternal_child_care"],
     open_immunizations: ["open_maternal_child_care"],
     open_child_records: ["open_maternal_child_care"],
+    open_growth_monitoring: ["open_maternal_child_care"],
     open_appointment_reports: ["open_appointments", "open_reports"],
     open_monthly_reports: ["open_reports"],
   };

@@ -16,7 +16,12 @@ describe("ALAGA AI nested destination safety", () => {
       "/health-records?section=encounters",
       "/health-records?section=vital-signs",
       "/maternal-child-care?section=pregnancies",
+      "/maternal-child-care?section=prenatal",
+      "/maternal-child-care?section=deliveries",
+      "/maternal-child-care?section=postnatal",
       "/maternal-child-care?section=children",
+      "/maternal-child-care?section=growth",
+      "/maternal-child-care?section=immunizations",
       "/reports?category=appointments",
       "/reports?category=overview&period=month",
     ]) {

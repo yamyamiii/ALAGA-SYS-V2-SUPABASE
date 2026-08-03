@@ -134,7 +134,12 @@ describe("ALAGA AI frontend navigation boundary", () => {
     ["open_health_record_encounters", ROUTES.healthRecordEncounters],
     ["open_health_record_vital_signs", ROUTES.healthRecordVitalSigns],
     ["open_pregnancies", ROUTES.maternalPregnancies],
+    ["open_prenatal_visits", ROUTES.maternalPrenatalVisits],
+    ["open_deliveries", ROUTES.maternalDeliveries],
+    ["open_postnatal_care", ROUTES.maternalPostnatalCare],
     ["open_child_records", ROUTES.maternalChildRecords],
+    ["open_growth_monitoring", ROUTES.maternalGrowthMonitoring],
+    ["open_immunizations", ROUTES.maternalImmunizations],
     ["open_appointment_reports", ROUTES.appointmentReports],
     ["open_monthly_reports", ROUTES.monthlyReports],
   ])("maps nested action %s to its fixed route", (actionId, route) => {
@@ -142,6 +147,33 @@ describe("ALAGA AI frontend navigation boundary", () => {
       resolveAiNavigationAction(navigate(actionId), USER_ROLES.ADMINISTRATOR)
         ?.route,
     ).toBe(route);
+  });
+
+  it("allows every existing maternal/child tab for every viewing role", () => {
+    const actionIds = [
+      "open_pregnancies",
+      "open_prenatal_visits",
+      "open_deliveries",
+      "open_postnatal_care",
+      "open_child_records",
+      "open_growth_monitoring",
+      "open_immunizations",
+    ];
+    const roles = [
+      USER_ROLES.ADMINISTRATOR,
+      USER_ROLES.BARANGAY_HEALTH_WORKER,
+      USER_ROLES.NURSE,
+      USER_ROLES.MIDWIFE,
+      USER_ROLES.RESIDENT,
+    ];
+
+    for (const role of roles) {
+      for (const actionId of actionIds) {
+        expect(
+          resolveAiNavigationAction(navigate(actionId), role),
+        ).not.toBeNull();
+      }
+    }
   });
 
   it("keeps staff-only nested destinations unavailable to residents", () => {

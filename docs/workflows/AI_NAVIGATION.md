@@ -29,17 +29,16 @@ unknown IDs, unexpected fields, and role-incompatible actions.
 ## Role-aware destinations
 
 All roles may open the dashboard, their appointment view, notifications,
-announcements, FAQs, and health-center information. Additional actions are
-allowed only where the existing route permissions allow them:
+announcements, FAQs, health-center information, and the existing read-only
+Maternal and Child Care sections. Additional actions are allowed only where the
+existing route permissions allow them:
 
 - Administrator: queue, inquiries, residents, households, health records,
-  maternal/child care, pregnancies, immunizations, reports, user management,
-  and audit logs.
+  maternal/child care, reports, user management, and audit logs.
 - Barangay Health Worker: appointment requests, queue, inquiries, residents,
   households, and reports.
 - Nurse: queue, health records, and reports.
-- Midwife: queue, health records, maternal/child care, pregnancies,
-  immunizations, and reports.
+- Midwife: queue, health records, maternal/child care, and reports.
 - Resident: own appointment/request view and the common resident information
   destinations.
 
@@ -87,7 +86,8 @@ The same symbolic-action boundary supports these existing child views:
 - Appointments: Appointment Calendar and Daily Queue.
 - Health Records: Clinical Encounters and the Vital Signs encounter context.
 - Reports: Appointment Reports and Monthly Reports.
-- Maternal and Child Care: Pregnancies and Child Records.
+- Maternal and Child Care: Pregnancies, Prenatal Visits, Deliveries, Postnatal
+  Care, Child Profiles, Growth Monitoring, and Immunizations.
 
 Each action maps to a fixed route or an allowlisted query parameter in the
 frontend registry. Report categories, reporting periods, and maternal/child or
@@ -95,6 +95,12 @@ health-record sections are validated by their destination page. The Vital Signs
 action opens the authorized encounter list and asks the user to select a record;
 it never fabricates or accepts an encounter identifier. Existing role checks and
 database row-level security still apply.
+
+All five supported roles may open the seven Maternal and Child Care sections
+because the existing page permission permits read access for each role. The
+trusted list RPCs and RLS continue to limit residents to their linked records
+and nurses to their authorized assignments. Navigation does not grant create,
+edit, archive, or clinical-documentation permissions.
 
 ## Resident appointment request form action
 

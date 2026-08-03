@@ -109,16 +109,36 @@ export const AI_NAVIGATION_TARGETS = Object.freeze({
   open_pregnancies: {
     label: "Open Pregnancies",
     route: ROUTES.maternalPregnancies,
-    roles: [USER_ROLES.ADMINISTRATOR, USER_ROLES.MIDWIFE],
+    roles: ALL_ROLES,
+  },
+  open_prenatal_visits: {
+    label: "Open Prenatal Visits",
+    route: ROUTES.maternalPrenatalVisits,
+    roles: ALL_ROLES,
+  },
+  open_deliveries: {
+    label: "Open Deliveries",
+    route: ROUTES.maternalDeliveries,
+    roles: ALL_ROLES,
+  },
+  open_postnatal_care: {
+    label: "Open Postnatal Care",
+    route: ROUTES.maternalPostnatalCare,
+    roles: ALL_ROLES,
   },
   open_immunizations: {
     label: "Open Immunizations",
     route: ROUTES.maternalImmunizations,
-    roles: [USER_ROLES.ADMINISTRATOR, USER_ROLES.MIDWIFE],
+    roles: ALL_ROLES,
   },
   open_child_records: {
     label: "Open Child Records",
     route: ROUTES.maternalChildRecords,
+    roles: ALL_ROLES,
+  },
+  open_growth_monitoring: {
+    label: "Open Growth Monitoring",
+    route: ROUTES.maternalGrowthMonitoring,
     roles: ALL_ROLES,
   },
   open_reports: {

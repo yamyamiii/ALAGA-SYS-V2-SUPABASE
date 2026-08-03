@@ -273,6 +273,47 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     ]);
   });
 
+  it("offers every maternal and child care section to every viewing role", () => {
+    const destinations = [
+      ["Pregnancies", "open_pregnancies"],
+      ["Prenatal Visits", "open_prenatal_visits"],
+      ["Deliveries", "open_deliveries"],
+      ["Postnatal Care", "open_postnatal_care"],
+      ["Child Profiles", "open_child_records"],
+      ["Growth Monitoring", "open_growth_monitoring"],
+      ["Immunizations", "open_immunizations"],
+    ];
+    const roles = [
+      "admin",
+      "barangay_health_worker",
+      "nurse",
+      "midwife",
+      "resident",
+    ];
+
+    for (const role of roles) {
+      for (const [phrase, actionId] of destinations) {
+        expect(navigationResponseFor(phrase, role)?.actions).toEqual([
+          expect.objectContaining({ actionId }),
+        ]);
+      }
+    }
+  });
+
+  it.each([
+    ["Buksan ang mga pagbubuntis", "open_pregnancies"],
+    ["Buksan ang prenatal checkups", "open_prenatal_visits"],
+    ["Punta sa panganganak", "open_deliveries"],
+    ["Tingnan ang postnatal visits", "open_postnatal_care"],
+    ["Buksan ang mga rekord ng bata", "open_child_records"],
+    ["Tingnan ang paglaki ng bata", "open_growth_monitoring"],
+    ["Punta sa mga bakuna", "open_immunizations"],
+  ])("resolves maternal/child Filipino phrase: %s", (phrase, actionId) => {
+    expect(
+      navigationResponseFor(phrase, "resident")?.actions[0]?.actionId,
+    ).toBe(actionId);
+  });
+
   it("does not broaden nested appointment or report permissions", () => {
     for (const phrase of [
       "Open Calendar",

@@ -12,7 +12,7 @@ begin;
 
 do $$
 declare
-  target_user_id constant uuid := '00000000-0000-0000-0000-000000000000';
+  target_user_id constant uuid := 'bacf224b-d337-485c-83a9-dc91ee12285a';
   target_email text;
   target_profile public.profiles%rowtype;
 begin
