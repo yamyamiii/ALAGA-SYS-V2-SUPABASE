@@ -230,6 +230,14 @@ export function AppRouter() {
                 </RoleGuard>
               }
             />
+            <Route
+              path={ROUTES.settings}
+              element={
+                <RoleGuard permission={PERMISSIONS.MANAGE_SETTINGS}>
+                  <ComingSoonPage />
+                </RoleGuard>
+              }
+            />
             {moduleRoutes.map((route) => (
               <Route
                 key={route.path}

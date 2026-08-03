@@ -25,6 +25,16 @@ import { canCreateMaternalChildProfile } from "@/features/maternal-child-care/pe
 import { RegistryPagination } from "@/features/registry/RegistryPagination";
 import { useDebouncedValue } from "@/features/registry/useDebouncedValue";
 
+const RESIDENT_TAB_LABELS = Object.freeze({
+  pregnancies: "My Pregnancies",
+  prenatal: "My Prenatal Visits",
+  deliveries: "My Deliveries",
+  postnatal: "My Postnatal Care",
+  children: "My Child Health Records",
+  growth: "My Growth Monitoring",
+  immunizations: "My Immunizations",
+});
+
 export default function MaternalChildCarePage() {
   const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -43,6 +53,10 @@ export default function MaternalChildCarePage() {
   );
   const query = useMaternalChildList(tab.kind, effectiveFilters);
   const records = query.data?.items ?? [];
+  const residentView = profile.role === "resident";
+  const displayTabLabel = residentView
+    ? RESIDENT_TAB_LABELS[tab.id]
+    : tab.label;
 
   function updateFilter(name, value) {
     setFilters((current) => ({ ...current, [name]: value, page: 1 }));
@@ -57,8 +71,16 @@ export default function MaternalChildCarePage() {
     <ContentContainer className="space-y-6">
       <PageHeading
         eyebrow="Longitudinal community care"
-        title="Maternal and Child Care"
-        description="Pregnancy, prenatal, delivery, postnatal, growth, child visits, and immunization timelines for Brgy. Bagongpook."
+        title={
+          residentView
+            ? "My Maternal and Child Care"
+            : "Maternal and Child Care"
+        }
+        description={
+          residentView
+            ? "Review only the maternal and child care records already authorized for your linked resident account. Parent or guardian access is not expanded here."
+            : "Pregnancy, prenatal, delivery, postnatal, growth, child visits, and immunization timelines for Brgy. Bagongpook."
+        }
         actions={
           canCreateMaternalChildProfile(profile.role) ? (
             <div className="flex flex-wrap gap-2">
@@ -85,30 +107,35 @@ export default function MaternalChildCarePage() {
             aria-current={item.id === tabId ? "page" : undefined}
             onClick={() => changeTab(item)}
           >
-            {item.label}
+            {residentView ? RESIDENT_TAB_LABELS[item.id] : item.label}
           </Button>
         ))}
       </nav>
 
       <section className="space-y-4 rounded-xl border bg-card p-4">
         <div>
-          <h2 className="font-heading font-semibold">{tab.label}</h2>
+          <h2 className="font-heading font-semibold">{displayTabLabel}</h2>
           <p className="text-sm text-muted-foreground">
-            Select a record to view its authorized {tab.label.toLowerCase()}{" "}
-            timeline.
+            {residentView
+              ? `Select one of your authorized ${tab.label.toLowerCase()} records to view its timeline.`
+              : `Select a record to view its authorized ${tab.label.toLowerCase()} timeline.`}
           </p>
         </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="relative md:col-span-2">
-            <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              value={filters.search}
-              onChange={(event) => updateFilter("search", event.target.value)}
-              placeholder="Search record number, resident number, or name"
-              aria-label={`Search ${tab.label.toLowerCase()}`}
-            />
-          </div>
+        <div
+          className={`grid gap-3 ${residentView ? "md:grid-cols-1" : "md:grid-cols-3"}`}
+        >
+          {!residentView ? (
+            <div className="relative md:col-span-2">
+              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                value={filters.search}
+                onChange={(event) => updateFilter("search", event.target.value)}
+                placeholder="Search record number, resident number, or name"
+                aria-label={`Search ${tab.label.toLowerCase()}`}
+              />
+            </div>
+          ) : null}
           {tab.kind === "pregnancy" ? (
             <select
               className="h-10 rounded-lg border bg-background px-3 text-sm"
@@ -160,8 +187,16 @@ export default function MaternalChildCarePage() {
         />
       ) : records.length === 0 ? (
         <EmptyState
-          title={`No ${tab.label.toLowerCase()} found`}
-          description="Adjust the filters or create an authorized record."
+          title={
+            residentView
+              ? `No ${tab.label.toLowerCase()} available`
+              : `No ${tab.label.toLowerCase()} found`
+          }
+          description={
+            residentView
+              ? "No records in this section are currently authorized for your linked resident account."
+              : "Adjust the filters or create an authorized record."
+          }
         />
       ) : (
         <section className="overflow-hidden rounded-xl border bg-card">
@@ -173,12 +208,16 @@ export default function MaternalChildCarePage() {
                     <p className="font-semibold">
                       {record.pregnancy_number ?? record.child_number}
                     </p>
-                    <p className="mt-1 text-sm">
-                      {record.resident_name ?? record.child_name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {record.resident_number}
-                    </p>
+                    {!residentView ? (
+                      <>
+                        <p className="mt-1 text-sm">
+                          {record.resident_name ?? record.child_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {record.resident_number}
+                        </p>
+                      </>
+                    ) : null}
                   </div>
                   <Badge variant="outline">
                     {record.status ??
@@ -202,7 +241,9 @@ export default function MaternalChildCarePage() {
               <thead className="border-b bg-muted/40 text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3">Record</th>
-                  <th className="px-4 py-3">Resident</th>
+                  {!residentView ? (
+                    <th className="px-4 py-3">Resident</th>
+                  ) : null}
                   <th className="px-4 py-3">
                     {tab.kind === "pregnancy"
                       ? "Expected delivery"
@@ -218,12 +259,14 @@ export default function MaternalChildCarePage() {
                     <td className="px-4 py-3 font-semibold">
                       {record.pregnancy_number ?? record.child_number}
                     </td>
-                    <td className="px-4 py-3">
-                      <p>{record.resident_name ?? record.child_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {record.resident_number}
-                      </p>
-                    </td>
+                    {!residentView ? (
+                      <td className="px-4 py-3">
+                        <p>{record.resident_name ?? record.child_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {record.resident_number}
+                        </p>
+                      </td>
+                    ) : null}
                     <td className="px-4 py-3">
                       {record.estimated_delivery_date ?? record.birth_date}
                     </td>

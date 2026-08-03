@@ -36,6 +36,7 @@ const expectedMigrations = [
   "20260720002900_ai_assistant_rate_limit.sql",
   "20260720003000_ai_grounding_context.sql",
   "20260720003100_printable_healthcare_documents.sql",
+  "20260720003200_outbound_notification_foundation.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -102,6 +103,8 @@ const reviewedPendingMigrationHashes = {
     "911a4ac9e22d94d10b97b7febe2aed6ca35543556b6c356d05f595609a89d979",
   "20260720003100_printable_healthcare_documents.sql":
     "63462f37fb2c67f9e0971935742e934b8a8834cbe3f1c9d29f588fe11c5d4847",
+  "20260720003200_outbound_notification_foundation.sql":
+    "cbce86c0bd20e74aeec8d9ab51ceb66dc6e6e44330e629cf73dd3f8045e23929",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -125,6 +128,10 @@ const expectedTables = [
   "maternal_postnatal_visits",
   "maternal_pregnancies",
   "maternal_prenatal_visits",
+  "notification_delivery_attempts",
+  "notification_preferences",
+  "outbound_notification_channel_status",
+  "outbound_notification_jobs",
   "profiles",
   "puroks",
   "resident_allergies",
@@ -190,7 +197,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly thirty-one expected migrations exist in lexical order",
+  "Exactly thirty-two expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -1387,6 +1394,85 @@ check(
       printableDocumentsMigration,
     ),
   "Printable-document RPC grants do not restore direct clinical table access",
+);
+
+const notificationMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("outbound_notification_foundation"),
+  )?.sql ?? "";
+const notificationDeclarationAudit = auditPlpgsqlIntoTargets(
+  notificationMigration,
+);
+check(
+  notificationDeclarationAudit.functionCount > 15 &&
+    notificationDeclarationAudit.undeclared.length === 0,
+  "Every outbound-notification PL/pgSQL SELECT/RETURNING INTO target is declared",
+);
+check(
+  /create\s+table\s+public\.notification_preferences/i.test(
+    notificationMigration,
+  ) &&
+    /create\s+table\s+public\.outbound_notification_jobs/i.test(
+      notificationMigration,
+    ) &&
+    /create\s+table\s+public\.notification_delivery_attempts/i.test(
+      notificationMigration,
+    ) &&
+    /alter\s+table\s+public\.outbound_notification_jobs\s+enable\s+row\s+level\s+security/i.test(
+      notificationMigration,
+    ),
+  "Outbound notification preferences, jobs, attempts, and RLS are installed",
+);
+check(
+  /unique\s*\(recipient_profile_id,\s*channel,\s*event_key\)/i.test(
+    notificationMigration,
+  ) &&
+    /for\s+update\s+of\s+job\s+skip\s+locked/i.test(notificationMigration) &&
+    /stale_lock_recovered/i.test(notificationMigration) &&
+    /pg_advisory_xact_lock/i.test(notificationMigration),
+  "Notification enqueue and processing are idempotent and concurrency-safe",
+);
+check(
+  /exception\s+when\s+others\s+then\s+return\s+new/i.test(
+    notificationMigration,
+  ) &&
+    /notification_schedule_appointment_reminder/i.test(notificationMigration) &&
+    /interval\s+'24 hours'/i.test(notificationMigration) &&
+    /time zone\s+'Asia\/Manila'/i.test(notificationMigration),
+  "External delivery is best-effort and appointment reminders use Manila scheduling",
+);
+check(
+  /auth\.role\(\)\s+is\s+distinct\s+from\s+'service_role'/i.test(
+    notificationMigration,
+  ) &&
+    /revoke\s+all\s+on\s+table\s+public\.notification_preferences,[\s\S]*public\.outbound_notification_jobs,[\s\S]*from\s+public,\s*anon,\s*authenticated/i.test(
+      notificationMigration,
+    ) &&
+    !/grant\s+(?:select|insert|update|delete)[^;]*outbound_notification_jobs[^;]*authenticated/i.test(
+      notificationMigration,
+    ),
+  "Browser roles cannot access or process the outbound job queue directly",
+);
+check(
+  /array\['date',\s*'time'\]/i.test(notificationMigration) &&
+    /array\['status'\]/i.test(notificationMigration) &&
+    /notification_template_variables_valid\(template_key, safe_variables\)/i.test(
+      notificationMigration,
+    ) &&
+    !/chief_complaint|diagnosis|treatment_plan|vital_sign|pregnancy_risk|appointment_reason/i.test(
+      notificationMigration,
+    ),
+  "Notification job variables use a strict non-clinical allowlist",
+);
+check(
+  /manual_retry_count\s+smallint\s+not\s+null\s+default\s+0/i.test(
+    notificationMigration,
+  ) &&
+    /manual_retry_count\s+>=\s+2/i.test(notificationMigration) &&
+    /power\(2,\s*least\(next_attempt\s*-\s*1,\s*6\)\)/i.test(
+      notificationMigration,
+    ),
+  "Notification retries and exponential backoff are explicitly bounded",
 );
 
 const functionBlocks = [

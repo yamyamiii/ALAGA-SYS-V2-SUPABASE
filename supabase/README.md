@@ -1,13 +1,13 @@
 # Supabase database and trusted-function foundation
 
 This directory contains the reviewable PostgreSQL and Edge Function source for
-ALAGA-SYS through Phase 9B.
+ALAGA-SYS through the release-candidate outbound notification foundation.
 
 ```text
 supabase/
   bootstrap/   Reviewed manual first-administrator transaction
-  functions/   Trusted Auth Admin and ALAGA AI Edge Functions
-  migrations/  Thirty ordered forward-only migrations
+  functions/   Trusted Auth Admin, ALAGA AI, and notification Edge Functions
+  migrations/  Thirty-two ordered forward-only migrations
   policies/     Reserved for supplementary reviewed policy notes/fragments
   seed.sql      Optional fictional development reference data
 ```
@@ -54,10 +54,11 @@ deterministic UUIDs cannot collide while labels are being evacuated.
 Migrations 18 through 28 add the reviewed appointment, clinical,
 resident-request, maternal/child, reporting, and general-assistance foundations.
 Migration 29 adds a metadata-only, service-role AI rate-limit table and atomic
-consume function. Migrations 1 through 29 are the applied remote baseline.
-Pending Migration 30 adds a service-role-only, read-only grounding RPC whose
-explicit output is limited to approved public operational text. It creates no
-content store and returns no database identifiers or author/contact fields.
+consume function. Migration 30 adds a service-role-only, read-only grounding
+RPC whose explicit output is limited to approved public operational text. It
+creates no content store and returns no database identifiers or author/contact
+fields. Migration 31 adds printable healthcare documents. Migrations 1 through
+31 are the applied remote baseline; Migration 32 remains pending.
 
 The `alaga-ai` Edge Function revalidates the Supabase user and active profile,
 derives role context from the database, enforces the server rate limit, loads
@@ -65,6 +66,15 @@ only approved grounding through Migration 30, and calls Gemini with provider
 storage disabled. Deterministic symbolic navigation is role checked before the
 provider. It does not query application healthcare data and must be deployed
 separately after Migration 30.
+
+Migration 31 adds the reviewed printable-document and clinical-referral
+boundary. Migration 32 adds opt-in notification preferences, an RLS-protected
+outbound job queue, minimized delivery attempts, best-effort workflow triggers,
+Manila-aware appointment reminders, and service-role claim/completion RPCs.
+The `process-notification-jobs` Edge Function resolves confirmed Auth contacts
+server-side and uses provider-neutral email/SMS adapters. SMS is disabled by
+default. Migration, function, scheduler, and provider activation remain manual;
+see [`docs/deployment/EMAIL_SMS.md`](../docs/deployment/EMAIL_SMS.md).
 
 ## Applying migrations
 
@@ -120,6 +130,11 @@ historical references.
   announcement fields.
 - AI prompt and response content is not stored in PostgreSQL or application
   logs. Provider-side interaction storage is explicitly disabled per request.
+- Notification job tables have no browser grants. Recipients are resolved from
+  trusted relationships and confirmed Auth contacts, and logs contain only
+  masked operational metadata.
+- Email/SMS API keys and `NOTIFICATION_PROCESSOR_TOKEN` are server-only Edge
+  Function secrets. `SMS_ENABLED` remains false until explicit approval.
 
 ## Migration authoring rules
 

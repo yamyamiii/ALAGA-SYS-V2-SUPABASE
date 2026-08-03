@@ -12,7 +12,6 @@ import {
   Megaphone,
   MessageSquare,
   Package,
-  Settings,
   ShieldCheck,
   Users,
   UsersRound,
@@ -117,11 +116,5 @@ export const navigationItems = [
     path: ROUTES.userManagement,
     icon: ShieldCheck,
     permission: PERMISSIONS.MANAGE_USERS,
-  },
-  {
-    label: "Settings",
-    path: ROUTES.settings,
-    icon: Settings,
-    permission: PERMISSIONS.MANAGE_SETTINGS,
   },
 ];

@@ -24,6 +24,7 @@ import {
 import { useAuth } from "@/features/auth/authContext";
 import { PERMISSIONS } from "@/features/auth/permissions";
 import { RegistryPagination } from "@/features/registry/RegistryPagination";
+import { formatManilaDateTime } from "@/lib/dateTime";
 import { assistanceService } from "@/services/assistanceService";
 
 export default function AnnouncementsPage() {
@@ -162,10 +163,10 @@ export default function AnnouncementsPage() {
                   {item.content}
                 </p>
                 <p className="mt-4 text-xs text-muted-foreground">
-                  Published {new Date(item.publish_at).toLocaleString("en-PH")}
+                  Published {formatManilaDateTime(item.publish_at)}
                   {item.creator_name ? ` by ${item.creator_name}` : ""}
                   {item.expires_at
-                    ? ` · Expires ${new Date(item.expires_at).toLocaleString("en-PH")}`
+                    ? ` · Expires ${formatManilaDateTime(item.expires_at)}`
                     : ""}
                 </p>
                 {canManage && !item.archived_at ? (

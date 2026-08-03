@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useActivity } from "@/features/assistance/hooks";
 import { RegistryPagination } from "@/features/registry/RegistryPagination";
+import { formatManilaDateTime } from "@/lib/dateTime";
 
 export default function ActivityPage() {
   const [filters, setFilters] = useState({ page: 1, page_size: 20 });
@@ -51,7 +52,7 @@ export default function ActivityPage() {
                     {item.summary}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    {new Date(item.occurred_at).toLocaleString("en-PH")}
+                    {formatManilaDateTime(item.occurred_at)}
                   </p>
                   {item.action_path ? (
                     <Button

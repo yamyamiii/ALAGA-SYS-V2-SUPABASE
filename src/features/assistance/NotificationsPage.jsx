@@ -19,8 +19,14 @@ import {
 } from "@/features/assistance/hooks";
 import { RegistryPagination } from "@/features/registry/RegistryPagination";
 import { assistanceService } from "@/services/assistanceService";
+import { NotificationPreferencesCard } from "@/features/notifications/NotificationPreferencesCard";
+import { NotificationDeliveryDashboard } from "@/features/notifications/NotificationDeliveryDashboard";
+import { useAuth } from "@/features/auth/authContext";
+import { USER_ROLES } from "@/features/auth/permissions";
+import { formatManilaDateTime } from "@/lib/dateTime";
 
 export default function NotificationsPage() {
+  const { profile } = useAuth();
   const [filters, setFilters] = useState({
     unread_only: false,
     page: 1,
@@ -84,6 +90,10 @@ export default function NotificationsPage() {
         </label>
         <Badge variant="secondary">{query.data?.unread ?? 0} unread</Badge>
       </div>
+      <NotificationPreferencesCard />
+      <NotificationDeliveryDashboard
+        enabled={profile.role === USER_ROLES.ADMINISTRATOR}
+      />
       <Card>
         {query.isLoading ? (
           <LoadingState title="Loading notifications" />
@@ -118,7 +128,7 @@ export default function NotificationsPage() {
                   <p className="mt-2 text-xs text-muted-foreground">
                     {NOTIFICATION_LABELS[item.notification_type] ??
                       item.notification_type}{" "}
-                    · {new Date(item.available_at).toLocaleString("en-PH")}
+                    · {formatManilaDateTime(item.available_at)}
                   </p>
                   <div className="mt-3 flex gap-2">
                     {item.action_path ? (

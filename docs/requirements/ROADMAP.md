@@ -81,6 +81,19 @@ Medical certificates, prescriptions, laboratory results, health certificates,
 barangay clearances, automated clinical conclusions, and AI-generated document
 content remain out of scope.
 
+## Release candidate — UAT and outbound notification foundation
+
+Final role-aware UI corrections hide the placeholder Settings navigation and
+present resident clinical pages without barangay-wide search affordances.
+Provider-neutral, opt-in email and SMS infrastructure wraps existing trusted
+events without making workflows depend on delivery. Email operates only when a
+reviewed HTTP gateway is configured; SMS remains disabled by default. External
+templates contain only minimized operational fields and no clinical detail.
+
+Administrator Settings, Backup/Restore, mandatory-delivery policies, provider
+webhooks, contact-verification workflows beyond Supabase Auth, and paid SMS
+activation remain future enhancements.
+
 ## Advanced AI capabilities (future)
 
 Any report generation, clinical/resident-data use, database mutation, external
@@ -89,6 +102,6 @@ threat model, narrow authorization design, audit model, and privacy review.
 
 ## Future phases
 
-Medicine inventory, dispensing, laboratory integrations, external notification
-delivery, backup/restore operations, advanced AI capabilities, and final
-deployment hardening remain out of scope until separately approved.
+Medicine inventory, dispensing, laboratory integrations, backup/restore
+operations, advanced AI capabilities, provider-specific delivery webhooks, and
+final deployment hardening remain out of scope until separately approved.

@@ -381,6 +381,13 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/alaga-ai/index.ts"
 
+[functions.process-notification-jobs]
+enabled = true
+# This function is not browser-facing. It validates a dedicated scheduler token
+# before creating a service-role database client.
+verify_jwt = false
+entrypoint = "./functions/process-notification-jobs/index.ts"
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

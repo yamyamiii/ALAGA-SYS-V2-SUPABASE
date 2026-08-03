@@ -76,6 +76,7 @@ export default function HealthRecordsPage() {
     profile.role !== "resident",
   );
   const records = query.data?.items ?? [];
+  const residentView = profile.role === "resident";
   const staff = useMemo(() => staffQuery.data?.items ?? [], [staffQuery.data]);
 
   function updateFilter(name, value) {
@@ -87,18 +88,24 @@ export default function HealthRecordsPage() {
       <PageHeading
         eyebrow="Clinical documentation"
         title={
-          showVitalSignsContext
-            ? "Vital Signs"
-            : showEncounterContext
-              ? "Clinical Encounters"
-              : "Health Records"
+          residentView
+            ? showVitalSignsContext
+              ? "My Vital Signs"
+              : "My Health Records"
+            : showVitalSignsContext
+              ? "Vital Signs"
+              : showEncounterContext
+                ? "Clinical Encounters"
+                : "Health Records"
         }
         description={
-          showVitalSignsContext
-            ? "Select an authorized encounter to view its vital signs or, when permitted, document them. Record access remains protected by role permissions and row-level security."
-            : showEncounterContext
-              ? "Review the clinical encounters authorized for your role. Operational appointment notes remain separate."
-              : "Secure clinical encounters, vital signs, allergies, and relevant history. Operational appointment notes remain separate."
+          residentView
+            ? "Review only the signed health-center records linked to your resident account. Other residents and barangay-wide clinical records are never searchable here."
+            : showVitalSignsContext
+              ? "Select an authorized encounter to view its vital signs or, when permitted, document them. Record access remains protected by role permissions and row-level security."
+              : showEncounterContext
+                ? "Review the clinical encounters authorized for your role. Operational appointment notes remain separate."
+                : "Secure clinical encounters, vital signs, allergies, and relevant history. Operational appointment notes remain separate."
         }
         actions={
           canCreateEncounter(profile.role) ? (
@@ -110,17 +117,25 @@ export default function HealthRecordsPage() {
       />
 
       <section className="space-y-4 rounded-xl border bg-card p-4">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-9"
-            value={filters.search}
-            onChange={(event) => updateFilter("search", event.target.value)}
-            placeholder="Search encounter number, resident number, or resident name"
-            aria-label="Search health records"
-          />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {!residentView ? (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              value={filters.search}
+              onChange={(event) => updateFilter("search", event.target.value)}
+              placeholder="Search encounter number, resident number, or resident name"
+              aria-label="Search health records"
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Filter your own records by date, status, or encounter type.
+          </p>
+        )}
+        <div
+          className={`grid gap-3 sm:grid-cols-2 ${residentView ? "lg:grid-cols-4" : "lg:grid-cols-5"}`}
+        >
           <Input
             type="date"
             aria-label="Encounter date from"
@@ -161,21 +176,23 @@ export default function HealthRecordsPage() {
               </option>
             ))}
           </select>
-          <select
-            className="h-10 rounded-lg border bg-background px-3 text-sm"
-            value={filters.attending_staff_id}
-            onChange={(event) =>
-              updateFilter("attending_staff_id", event.target.value)
-            }
-            aria-label="Attending clinical staff"
-          >
-            <option value="">All attending staff</option>
-            {staff.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.staff_name}
-              </option>
-            ))}
-          </select>
+          {!residentView ? (
+            <select
+              className="h-10 rounded-lg border bg-background px-3 text-sm"
+              value={filters.attending_staff_id}
+              onChange={(event) =>
+                updateFilter("attending_staff_id", event.target.value)
+              }
+              aria-label="Attending clinical staff"
+            >
+              <option value="">All attending staff</option>
+              {staff.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.staff_name}
+                </option>
+              ))}
+            </select>
+          ) : null}
         </div>
         {profile.role === "admin" ? (
           <label className="flex items-center gap-2 text-sm">
@@ -209,8 +226,14 @@ export default function HealthRecordsPage() {
         />
       ) : records.length === 0 ? (
         <EmptyState
-          title="No health records found"
-          description="Adjust the filters or create an authorized draft encounter."
+          title={
+            residentView ? "No health records yet" : "No health records found"
+          }
+          description={
+            residentView
+              ? "No signed health records are currently available for your linked resident account."
+              : "Adjust the filters or create an authorized draft encounter."
+          }
         />
       ) : (
         <section className="overflow-hidden rounded-xl border bg-card">
@@ -220,10 +243,14 @@ export default function HealthRecordsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold">{record.encounter_number}</p>
-                    <p className="mt-1 text-sm">{record.resident_name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {record.resident_number}
-                    </p>
+                    {!residentView ? (
+                      <>
+                        <p className="mt-1 text-sm">{record.resident_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {record.resident_number}
+                        </p>
+                      </>
+                    ) : null}
                   </div>
                   <Status status={record.status} />
                 </div>
@@ -254,7 +281,9 @@ export default function HealthRecordsPage() {
               <thead className="border-b bg-muted/40 text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3">Encounter</th>
-                  <th className="px-4 py-3">Resident</th>
+                  {!residentView ? (
+                    <th className="px-4 py-3">Resident</th>
+                  ) : null}
                   <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Attending staff</th>
@@ -268,12 +297,14 @@ export default function HealthRecordsPage() {
                     <td className="px-4 py-3 font-semibold">
                       {record.encounter_number}
                     </td>
-                    <td className="px-4 py-3">
-                      <p>{record.resident_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {record.resident_number}
-                      </p>
-                    </td>
+                    {!residentView ? (
+                      <td className="px-4 py-3">
+                        <p>{record.resident_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {record.resident_number}
+                        </p>
+                      </td>
+                    ) : null}
                     <td className="px-4 py-3">
                       {formatManilaDate(record.encounter_date)}
                     </td>

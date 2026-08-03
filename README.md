@@ -27,10 +27,13 @@ cards, copy/retry/confirmed-reset controls, and stricter client safety handling.
 Phase 10 adds authorized A4 previews, browser printing, and local selectable-text
 PDF downloads for appointment slips, consultation summaries, clinician-authored
 referrals, prenatal summaries, and child health summaries.
+The release-candidate foundation adds role-aware UAT corrections and optional,
+provider-neutral email/SMS delivery. External channels are opt-in, use only
+minimized templates, and never make core workflows depend on provider success.
 
 Inventory, prescription dispensing, laboratory integrations, birth
-registration, external notification delivery, AI mutations, and AI access to
-clinical or resident data are not implemented.
+registration, provider-specific delivery webhooks, AI mutations, and AI access
+to clinical or resident data are not implemented. SMS is disabled by default.
 
 ## Technology stack
 
@@ -105,6 +108,10 @@ The ALAGA AI gateway requires server-only Gemini secrets configured through
 Supabase. They must never use the `VITE_` prefix. See
 [Gemini AI deployment](docs/deployment/GEMINI_AI.md) for the complete setup.
 
+Outbound providers and the queue processor also use server-only secrets. See
+[Email and SMS deployment](docs/deployment/EMAIL_SMS.md). Never place provider
+keys or the notification processor token in Vite configuration.
+
 The reusable client boundary is `src/lib/supabase/client.js`. Calling
 `getSupabaseClient()` without both public variables throws a clear
 `SupabaseConfigurationError`. Authentication pages use the auth service and do
@@ -140,6 +147,13 @@ npm run preview
 
 ## Current phase
 
+The release candidate hides the unfinished Settings navigation, removes broad
+resident-search affordances from resident clinical views, and adds own-profile
+notification preferences plus a privacy-minimized administrator delivery
+summary. In-app notifications remain authoritative. Email works only after a
+reviewed generic HTTP gateway is configured; SMS and scheduling remain
+manually disabled until separately activated.
+
 Phase 10 provides a reusable printable-document boundary backed by narrow,
 server-authorized RPCs. Protected data is revalidated for every preview and is
 never stored in browser storage, uploaded, or sent to AI or an external PDF
@@ -163,16 +177,16 @@ narratives.
 Registry locality remains Brgy. Bagongpook with Purok 1 through Purok 7.
 Household latitude/longitude columns remain in the database for compatibility
 but are not selected, collected, submitted, or displayed by the frontend.
-Phase 5.5 adds RPC-only resident appointment requests. Requested times are
-preferences until staff assignment and confirmation; no SMS, email, or push
-delivery is implemented.
+Phase 5.5 adds RPC-only resident appointment requests. Requested times remain
+preferences until staff assignment and confirmation.
 
 ## Deployment note
 
-Migrations 1-30 are the existing baseline. Phase 10 adds pending forward-only
-migration `20260720003100_printable_healthcare_documents.sql`; review and apply
-it manually before deploying the Phase 10 frontend. Application startup does
-not push migrations automatically.
+Migrations 1-31 are the existing baseline. The release candidate adds pending
+forward-only migration `20260720003200_outbound_notification_foundation.sql`;
+review and apply it manually before deploying the notification processor and
+frontend. Application startup does not push migrations, functions, schedules,
+or provider configuration automatically.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),
@@ -187,6 +201,11 @@ See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [AI navigation](docs/workflows/AI_NAVIGATION.md),
 [AI user guide](docs/workflows/AI_USER_GUIDE.md),
 [Printable documents architecture](docs/architecture/PRINTABLE_DOCUMENTS.md),
+[Outbound notifications](docs/architecture/OUTBOUND_NOTIFICATIONS.md),
+[Notification privacy](docs/security/NOTIFICATION_PRIVACY.md),
+[Notification preferences](docs/workflows/NOTIFICATION_PREFERENCES.md),
+[Appointment reminders](docs/workflows/APPOINTMENT_REMINDERS.md),
+[Email and SMS deployment](docs/deployment/EMAIL_SMS.md),
 [Document privacy](docs/security/DOCUMENT_PRIVACY.md),
 [Print design system](docs/ui/PRINT_DESIGN_SYSTEM.md),
 [Appointment Slip](docs/workflows/APPOINTMENT_SLIP.md),

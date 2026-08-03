@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { Navigation } from "@/components/layout/Navigation";
 import { AuthContext } from "@/features/auth/authContext";
-import { PERMISSIONS } from "@/features/auth/permissions";
+import {
+  hasPermission,
+  PERMISSIONS,
+  USER_ROLES,
+} from "@/features/auth/permissions";
 
 function renderNavigation(can) {
   render(
@@ -27,5 +31,36 @@ describe("permission-based navigation", () => {
       vi.fn((permission) => permission === PERMISSIONS.VIEW_DASHBOARD),
     );
     expect(screen.queryByText("User Management")).not.toBeInTheDocument();
+  });
+
+  it("shows residents only the approved release-candidate destinations", () => {
+    renderNavigation((permission) =>
+      hasPermission(USER_ROLES.RESIDENT, permission),
+    );
+    for (const label of [
+      "Dashboard",
+      "Appointments",
+      "Health Records",
+      "Maternal and Child Care",
+      "Announcements",
+      "Notifications",
+      "Activity",
+      "Health Center",
+      "FAQ",
+      "Contact",
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    for (const label of [
+      "Households",
+      "Residents",
+      "Medicine Inventory",
+      "Reports",
+      "Audit Logs",
+      "User Management",
+      "Settings",
+    ]) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument();
+    }
   });
 });

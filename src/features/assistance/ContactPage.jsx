@@ -26,6 +26,7 @@ import {
 import { useAuth } from "@/features/auth/authContext";
 import { PERMISSIONS } from "@/features/auth/permissions";
 import { RegistryPagination } from "@/features/registry/RegistryPagination";
+import { formatManilaDateTime } from "@/lib/dateTime";
 import { assistanceService } from "@/services/assistanceService";
 
 export default function ContactPage() {
@@ -120,7 +121,7 @@ export default function ContactPage() {
                   </div>
                 ) : null}
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Updated {new Date(item.updated_at).toLocaleString("en-PH")}
+                  Updated {formatManilaDateTime(item.updated_at)}
                 </p>
                 {canManage && item.status !== "closed" ? (
                   <Button
