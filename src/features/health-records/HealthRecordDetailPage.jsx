@@ -1,6 +1,8 @@
 import {
   Archive,
   ArrowLeft,
+  ClipboardPlus,
+  FileText,
   FilePenLine,
   FileSignature,
   HeartPulse,
@@ -22,6 +24,15 @@ import {
   formatManilaTimestamp,
 } from "@/features/appointments/timezone";
 import { useAuth } from "@/features/auth/authContext";
+import { DocumentPreviewDialog } from "@/features/documents/DocumentPreviewDialog";
+import { DOCUMENT_TYPES } from "@/features/documents/constants";
+import { useReferralForEncounter } from "@/features/documents/hooks";
+import {
+  canCreateReferral,
+  canPrintConsultationSummary,
+  canQueryReferral,
+} from "@/features/documents/permissions";
+import { ReferralDialog } from "@/features/documents/ReferralDialog";
 import { ClinicalHistoryManager } from "@/features/health-records/ClinicalHistoryManager";
 import { EncounterActionDialog } from "@/features/health-records/EncounterActionDialog";
 import { EncounterClinicalFormDialog } from "@/features/health-records/EncounterClinicalFormDialog";
@@ -85,6 +96,8 @@ export default function HealthRecordDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [vitalsOpen, setVitalsOpen] = useState(false);
   const [action, setAction] = useState(null);
+  const [consultationPrintOpen, setConsultationPrintOpen] = useState(false);
+  const [referralOpen, setReferralOpen] = useState(false);
   const encounter = query.data;
   const clinicalVisible = Boolean(encounter?.clinical);
   const allergies = useResidentAllergies(
@@ -95,6 +108,8 @@ export default function HealthRecordDetailPage() {
     encounter?.resident_id,
     clinicalVisible,
   );
+  const referralEligible = canQueryReferral(profile.role, encounter);
+  const referral = useReferralForEncounter(encounter?.id, referralEligible);
 
   if (query.isLoading) {
     return (
@@ -131,6 +146,17 @@ export default function HealthRecordDetailPage() {
   const canArchive = canArchiveEncounter(profile.role, encounter);
   const canVitals = canRecordVitals(profile.role, encounter, profile.id);
   const canManageHistory = canManageClinicalHistory(profile.role);
+  const canPrintConsultation = canPrintConsultationSummary(
+    profile.role,
+    encounter,
+  );
+  const canCreateEncounterReferral = canCreateReferral(
+    profile.role,
+    encounter,
+    profile.id,
+  );
+  const showReferralAction =
+    canCreateEncounterReferral || Boolean(referral.data);
   const vitals = encounter.vital_signs;
   const missingSignFields = missingEncounterSignFields(encounter);
   const signReady = missingSignFields.length === 0;
@@ -148,6 +174,20 @@ export default function HealthRecordDetailPage() {
         description={`${ENCOUNTER_TYPE_LABELS[encounter.encounter_type]} · ${formatManilaDate(encounter.encounter_date)}`}
         actions={
           <div className="flex flex-wrap gap-2">
+            {canPrintConsultation ? (
+              <Button
+                variant="outline"
+                onClick={() => setConsultationPrintOpen(true)}
+              >
+                <FileText /> Print Consultation Summary
+              </Button>
+            ) : null}
+            {showReferralAction ? (
+              <Button variant="outline" onClick={() => setReferralOpen(true)}>
+                <ClipboardPlus />
+                {referral.data ? "View Referral Form" : "Create Referral Form"}
+              </Button>
+            ) : null}
             {canEdit ? (
               <Button variant="outline" onClick={() => setEditOpen(true)}>
                 <FilePenLine /> Edit draft
@@ -394,6 +434,21 @@ export default function HealthRecordDetailPage() {
           }
         }}
       />
+      {referralOpen ? (
+        <ReferralDialog
+          encounter={encounter}
+          open
+          onOpenChange={setReferralOpen}
+        />
+      ) : null}
+      {consultationPrintOpen ? (
+        <DocumentPreviewDialog
+          documentType={DOCUMENT_TYPES.CONSULTATION_SUMMARY}
+          recordId={encounterId}
+          open
+          onOpenChange={setConsultationPrintOpen}
+        />
+      ) : null}
     </ContentContainer>
   );
 }

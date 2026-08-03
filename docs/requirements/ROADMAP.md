@@ -68,6 +68,19 @@ accessible chat behavior; fixed client error messages; and duplicate-request,
 source, and action defenses. No new data source, mutation, or clinical
 capability is introduced.
 
+## Phase 10 — Printable forms and document exports
+
+Reusable authorized A4 previews, browser printing, and local selectable-text
+PDF downloads for Appointment Slips, signed/amended Consultation Summaries,
+controlled clinician-authored Referral Forms, Prenatal Summaries, and Child
+Health Summaries. Narrow RPCs preserve ownership, assignment, clinical masking,
+and record-state rules. Generated content remains in memory and is never sent
+to AI or an external PDF service.
+
+Medical certificates, prescriptions, laboratory results, health certificates,
+barangay clearances, automated clinical conclusions, and AI-generated document
+content remain out of scope.
+
 ## Advanced AI capabilities (future)
 
 Any report generation, clinical/resident-data use, database mutation, external

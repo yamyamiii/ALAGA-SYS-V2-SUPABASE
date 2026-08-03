@@ -1,4 +1,4 @@
-import { CalendarClock, Pencil } from "lucide-react";
+import { CalendarClock, FileText, Pencil } from "lucide-react";
 import { useState } from "react";
 
 import { ErrorState, LoadingState } from "@/components/common/StateDisplay";
@@ -30,6 +30,9 @@ import {
 } from "@/features/appointments/timezone";
 import { useAuth } from "@/features/auth/authContext";
 import { USER_ROLES } from "@/features/auth/permissions";
+import { DocumentPreviewDialog } from "@/features/documents/DocumentPreviewDialog";
+import { DOCUMENT_TYPES } from "@/features/documents/constants";
+import { canPrintAppointmentSlip } from "@/features/documents/permissions";
 import { AppointmentEncounterAction } from "@/features/health-records/AppointmentEncounterAction";
 import { formatPersonName } from "@/features/registry/formatters";
 
@@ -58,8 +61,10 @@ export function AppointmentDetailDialog({
     resident: residentView,
   });
   const [action, setAction] = useState(null);
+  const [printOpen, setPrintOpen] = useState(false);
   const appointment = query.data;
   const actions = getAppointmentActions(profile.role, appointment, profile.id);
+  const printable = canPrintAppointmentSlip(appointment);
 
   return (
     <>
@@ -236,8 +241,17 @@ export function AppointmentDetailDialog({
                 </dl>
               </section>
 
-              {actions.length ? (
+              {actions.length || printable ? (
                 <div className="flex flex-wrap gap-2 border-t pt-5">
+                  {printable ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setPrintOpen(true)}
+                    >
+                      <FileText /> Print Appointment Slip
+                    </Button>
+                  ) : null}
                   {actions.map((availableAction) => (
                     <Button
                       key={availableAction}
@@ -288,6 +302,14 @@ export function AppointmentDetailDialog({
         appointment={appointment}
         onSuccess={() => query.refetch()}
       />
+      {printOpen ? (
+        <DocumentPreviewDialog
+          documentType={DOCUMENT_TYPES.APPOINTMENT_SLIP}
+          recordId={appointmentId}
+          open
+          onOpenChange={setPrintOpen}
+        />
+      ) : null}
     </>
   );
 }

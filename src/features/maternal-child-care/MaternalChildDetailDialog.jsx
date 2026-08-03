@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,8 @@ import { ErrorState, LoadingState } from "@/components/common/StateDisplay";
 import { useMaternalChildDetail } from "@/features/maternal-child-care/hooks";
 import { MaternalChildEventDialog } from "@/features/maternal-child-care/MaternalChildEventDialog";
 import { useAuth } from "@/features/auth/authContext";
+import { DocumentPreviewDialog } from "@/features/documents/DocumentPreviewDialog";
+import { DOCUMENT_TYPES } from "@/features/documents/constants";
 import {
   canArchiveMaternalChildCare,
   canCreateMaternalChildProfile,
@@ -62,6 +65,7 @@ export function MaternalChildDetailDialog({
 }) {
   const { profile } = useAuth();
   const [eventType, setEventType] = useState(null);
+  const [printOpen, setPrintOpen] = useState(false);
   const query = useMaternalChildDetail(kind, recordId, open);
   const transition = useMaternalChildMutation(({ current, target }) =>
     maternalChildService.transitionPregnancy(current, target),
@@ -97,145 +101,170 @@ export function MaternalChildDetailDialog({
     }
   }
 
+  const documentType =
+    kind === "pregnancy"
+      ? DOCUMENT_TYPES.PRENATAL_SUMMARY
+      : DOCUMENT_TYPES.CHILD_HEALTH_SUMMARY;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>{title ?? "Care record details"}</DialogTitle>
-          <DialogDescription>
-            Role-shaped details from the trusted maternal and child care
-            service.
-          </DialogDescription>
-        </DialogHeader>
-        {record && canAddEvent ? (
-          <Button className="w-fit" onClick={() => setEventType(sectionEvent)}>
-            Add {sectionEvent === "visit" ? "child visit" : sectionEvent}
-          </Button>
-        ) : null}
-        {record?.type === "pregnancy" ? (
-          <div className="flex flex-wrap gap-2">
-            {canCreateMaternalChildProfile(profile.role) &&
-            record.status === "active" ? (
-              <Button
-                variant="outline"
-                disabled={transition.isPending}
-                onClick={() => changePregnancyStatus("delivered")}
-              >
-                Mark delivered
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{title ?? "Care record details"}</DialogTitle>
+            <DialogDescription>
+              Role-shaped details from the trusted maternal and child care
+              service.
+            </DialogDescription>
+          </DialogHeader>
+          {record ? (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setPrintOpen(true)}>
+                <FileText />
+                {kind === "pregnancy"
+                  ? "Print Prenatal Summary"
+                  : "Print Child Health Summary"}
               </Button>
-            ) : null}
-            {canCreateMaternalChildProfile(profile.role) &&
-            record.status === "delivered" ? (
-              <Button
-                variant="outline"
-                disabled={transition.isPending}
-                onClick={() => changePregnancyStatus("completed")}
-              >
-                Mark completed
-              </Button>
-            ) : null}
-            {canArchiveMaternalChildCare(profile.role) &&
-            record.status !== "archived" ? (
-              <Button
-                variant="destructive"
-                disabled={transition.isPending}
-                onClick={() => changePregnancyStatus("archived")}
-              >
-                Archive pregnancy
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-        {query.isLoading ? (
-          <LoadingState
-            compact
-            title="Loading care record"
-            description="Checking your clinical access…"
+              {canAddEvent ? (
+                <Button onClick={() => setEventType(sectionEvent)}>
+                  Add {sectionEvent === "visit" ? "child visit" : sectionEvent}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+          {record?.type === "pregnancy" ? (
+            <div className="flex flex-wrap gap-2">
+              {canCreateMaternalChildProfile(profile.role) &&
+              record.status === "active" ? (
+                <Button
+                  variant="outline"
+                  disabled={transition.isPending}
+                  onClick={() => changePregnancyStatus("delivered")}
+                >
+                  Mark delivered
+                </Button>
+              ) : null}
+              {canCreateMaternalChildProfile(profile.role) &&
+              record.status === "delivered" ? (
+                <Button
+                  variant="outline"
+                  disabled={transition.isPending}
+                  onClick={() => changePregnancyStatus("completed")}
+                >
+                  Mark completed
+                </Button>
+              ) : null}
+              {canArchiveMaternalChildCare(profile.role) &&
+              record.status !== "archived" ? (
+                <Button
+                  variant="destructive"
+                  disabled={transition.isPending}
+                  onClick={() => changePregnancyStatus("archived")}
+                >
+                  Archive pregnancy
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+          {query.isLoading ? (
+            <LoadingState
+              compact
+              title="Loading care record"
+              description="Checking your clinical access…"
+            />
+          ) : query.isError ? (
+            <ErrorState
+              compact
+              title={
+                query.error.code === "not_found"
+                  ? "Record not found"
+                  : "Care record unavailable"
+              }
+              description={query.error.message}
+              actionLabel="Try again"
+              onAction={() => query.refetch()}
+            />
+          ) : record ? (
+            <div className="space-y-6">
+              <section className="grid gap-3 rounded-xl border bg-muted/20 p-4 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Resident</p>
+                  <p className="font-semibold">{person}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {record.resident_number}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <Badge variant="outline">{record.status ?? "Active"}</Badge>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    {kind === "pregnancy" ? "Expected delivery" : "Birth date"}
+                  </p>
+                  <p>
+                    {kind === "pregnancy"
+                      ? record.estimated_delivery_date
+                      : record.birth_date}
+                  </p>
+                </div>
+              </section>
+              {kind === "pregnancy" ? (
+                <>
+                  <Timeline
+                    title="Prenatal timeline"
+                    items={record.prenatal_visits ?? []}
+                    dateKey="visit_date"
+                    empty="No prenatal visits are available for your role."
+                  />
+                  <Timeline
+                    title="Postnatal timeline"
+                    items={record.postnatal_visits ?? []}
+                    dateKey="visit_date"
+                    empty="No postnatal visits are available for your role."
+                  />
+                </>
+              ) : (
+                <>
+                  <Timeline
+                    title="Growth timeline"
+                    items={record.growth_measurements ?? []}
+                    dateKey="measured_at"
+                    empty="No growth measurements are available for your role."
+                  />
+                  <Timeline
+                    title="Immunization timeline"
+                    items={record.immunizations ?? []}
+                    dateKey="administered_date"
+                    empty="No immunizations are available for your role."
+                  />
+                  <Timeline
+                    title="Child visit timeline"
+                    items={record.child_visits ?? []}
+                    dateKey="visit_date"
+                    empty="No child visits are available for your role."
+                  />
+                </>
+              )}
+            </div>
+          ) : null}
+          <MaternalChildEventDialog
+            key={eventType}
+            open={Boolean(eventType)}
+            onOpenChange={(next) => !next && setEventType(null)}
+            type={eventType ?? "prenatal"}
+            parentId={recordId}
           />
-        ) : query.isError ? (
-          <ErrorState
-            compact
-            title={
-              query.error.code === "not_found"
-                ? "Record not found"
-                : "Care record unavailable"
-            }
-            description={query.error.message}
-            actionLabel="Try again"
-            onAction={() => query.refetch()}
-          />
-        ) : record ? (
-          <div className="space-y-6">
-            <section className="grid gap-3 rounded-xl border bg-muted/20 p-4 sm:grid-cols-3">
-              <div>
-                <p className="text-xs text-muted-foreground">Resident</p>
-                <p className="font-semibold">{person}</p>
-                <p className="text-xs text-muted-foreground">
-                  {record.resident_number}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Status</p>
-                <Badge variant="outline">{record.status ?? "Active"}</Badge>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  {kind === "pregnancy" ? "Expected delivery" : "Birth date"}
-                </p>
-                <p>
-                  {kind === "pregnancy"
-                    ? record.estimated_delivery_date
-                    : record.birth_date}
-                </p>
-              </div>
-            </section>
-            {kind === "pregnancy" ? (
-              <>
-                <Timeline
-                  title="Prenatal timeline"
-                  items={record.prenatal_visits ?? []}
-                  dateKey="visit_date"
-                  empty="No prenatal visits are available for your role."
-                />
-                <Timeline
-                  title="Postnatal timeline"
-                  items={record.postnatal_visits ?? []}
-                  dateKey="visit_date"
-                  empty="No postnatal visits are available for your role."
-                />
-              </>
-            ) : (
-              <>
-                <Timeline
-                  title="Growth timeline"
-                  items={record.growth_measurements ?? []}
-                  dateKey="measured_at"
-                  empty="No growth measurements are available for your role."
-                />
-                <Timeline
-                  title="Immunization timeline"
-                  items={record.immunizations ?? []}
-                  dateKey="administered_date"
-                  empty="No immunizations are available for your role."
-                />
-                <Timeline
-                  title="Child visit timeline"
-                  items={record.child_visits ?? []}
-                  dateKey="visit_date"
-                  empty="No child visits are available for your role."
-                />
-              </>
-            )}
-          </div>
-        ) : null}
-        <MaternalChildEventDialog
-          key={eventType}
-          open={Boolean(eventType)}
-          onOpenChange={(next) => !next && setEventType(null)}
-          type={eventType ?? "prenatal"}
-          parentId={recordId}
+        </DialogContent>
+      </Dialog>
+      {printOpen ? (
+        <DocumentPreviewDialog
+          documentType={documentType}
+          recordId={recordId}
+          open
+          onOpenChange={setPrintOpen}
         />
-      </DialogContent>
-    </Dialog>
+      ) : null}
+    </>
   );
 }

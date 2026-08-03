@@ -35,6 +35,7 @@ const expectedMigrations = [
   "20260720002800_final_qa_fixes.sql",
   "20260720002900_ai_assistant_rate_limit.sql",
   "20260720003000_ai_grounding_context.sql",
+  "20260720003100_printable_healthcare_documents.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -99,6 +100,8 @@ const completedMigrationHashes = {
 const reviewedPendingMigrationHashes = {
   "20260720003000_ai_grounding_context.sql":
     "911a4ac9e22d94d10b97b7febe2aed6ca35543556b6c356d05f595609a89d979",
+  "20260720003100_printable_healthcare_documents.sql":
+    "63462f37fb2c67f9e0971935742e934b8a8834cbe3f1c9d29f588fe11c5d4847",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -113,6 +116,7 @@ const expectedTables = [
   "child_health_profiles",
   "child_health_visits",
   "child_immunizations",
+  "clinical_referrals",
   "faq_entries",
   "health_center_information",
   "health_encounters",
@@ -186,7 +190,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly thirty expected migrations exist in lexical order",
+  "Exactly thirty-one expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -1257,6 +1261,132 @@ check(
       aiGroundingFunction,
     ),
   "AI grounding is read-only and excludes author, contact, and staff fields",
+);
+
+const printableDocumentsMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("printable_healthcare_documents"),
+  )?.sql ?? "";
+const printableDocumentsDeclarationAudit = auditPlpgsqlIntoTargets(
+  printableDocumentsMigration,
+);
+check(
+  printableDocumentsDeclarationAudit.functionCount === 12 &&
+    printableDocumentsDeclarationAudit.undeclared.length === 0,
+  "Every printable-document PL/pgSQL SELECT/RETURNING INTO target is declared",
+);
+check(
+  /create\s+table\s+public\.clinical_referrals/i.test(
+    printableDocumentsMigration,
+  ) &&
+    /alter\s+table\s+public\.clinical_referrals\s+enable\s+row\s+level\s+security/i.test(
+      printableDocumentsMigration,
+    ) &&
+    /revoke\s+all\s+on\s+table\s+public\.clinical_referrals\s+from\s+public,\s*anon,\s*authenticated/i.test(
+      printableDocumentsMigration,
+    ) &&
+    !/create\s+policy[^;]*on\s+public\.clinical_referrals/i.test(
+      printableDocumentsMigration,
+    ),
+  "Clinical referrals are RLS-enabled and RPC-only for browser roles",
+);
+check(
+  /nextval\('public\.referral_number_seq'\)/i.test(
+    printableDocumentsMigration,
+  ) &&
+    /clinical_referrals_request_unique/i.test(printableDocumentsMigration) &&
+    /pg_advisory_xact_lock/i.test(printableDocumentsMigration) &&
+    /request key was reused with different data/i.test(
+      printableDocumentsMigration,
+    ) &&
+    /referral_record\.version is distinct from p_expected_version/i.test(
+      printableDocumentsMigration,
+    ),
+  "Referral creation is atomic, idempotent, and optimistic-version protected",
+);
+check(
+  /finalized referrals are immutable/i.test(printableDocumentsMigration) &&
+    /status = 'finalized'::public\.referral_status[\s\S]*finalized_at = statement_timestamp\(\)/i.test(
+      printableDocumentsMigration,
+    ) &&
+    /only the referring clinician can archive a finalized referral/i.test(
+      printableDocumentsMigration,
+    ),
+  "Finalized referrals are immutable and use controlled clinician archival",
+);
+check(
+  /encounter_record\.attending_staff_id is distinct from actor_id/i.test(
+    printableDocumentsMigration,
+  ) &&
+    !/referral_save\([\s\S]*?p_resident_id/i.test(
+      printableDocumentsMigration,
+    ) &&
+    /encounter_record\.status not in \([\s\S]*?'signed'[\s\S]*?'amended'/i.test(
+      printableDocumentsMigration,
+    ),
+  "Referral authorship derives resident and clinical scope from a signed encounter",
+);
+check(
+  /document_appointment_slip[\s\S]*appointment_record\.status not in \([\s\S]*?'confirmed'[\s\S]*?'completed'/i.test(
+    printableDocumentsMigration,
+  ) &&
+    /document_appointment_slip[\s\S]*public\.current_resident_id\(\)/i.test(
+      printableDocumentsMigration,
+    ) &&
+    !/document_appointment_slip[\s\S]*?'operational_notes'/i.test(
+      printableDocumentsMigration,
+    ),
+  "Appointment slips enforce valid state and ownership without operational notes",
+);
+check(
+  /document_consultation_summary[\s\S]*encounter_record\.status not in \([\s\S]*?'signed'[\s\S]*?'amended'/i.test(
+    printableDocumentsMigration,
+  ) &&
+    /document_consultation_summary[\s\S]*actor_role <> 'nurse'/i.test(
+      printableDocumentsMigration,
+    ) &&
+    !/document_consultation_summary[\s\S]*?'subjective_notes'/i.test(
+      printableDocumentsMigration,
+    ),
+  "Consultation summaries are final-record-only and preserve clinical masking",
+);
+check(
+  /document_prenatal_summary[\s\S]*limit 50/i.test(
+    printableDocumentsMigration,
+  ) &&
+    /document_child_health_summary[\s\S]*limit 12[\s\S]*limit 100/i.test(
+      printableDocumentsMigration,
+    ) &&
+    !/document_(?:prenatal|child_health)_summary[\s\S]*?'(?:risk_notes|findings|developmental_notes|notes)'/i.test(
+      printableDocumentsMigration,
+    ),
+  "Maternal and child documents return bounded facts without narratives or interpretation",
+);
+const referralAuditFunction = printableDocumentsMigration.slice(
+  printableDocumentsMigration.indexOf(
+    "create or replace function public.audit_clinical_referral_change",
+  ),
+  printableDocumentsMigration.indexOf(
+    "create trigger clinical_referrals_set_number",
+  ),
+);
+check(
+  /referral\.(?:created|updated|finalized|archived)/i.test(
+    referralAuditFunction,
+  ) &&
+    !/receiving_facility|reason_for_referral|clinical_summary/i.test(
+      referralAuditFunction,
+    ),
+  "Referral audits are semantic and exclude document narratives",
+);
+check(
+  /grant\s+execute\s+on\s+function[\s\S]*document_appointment_slip[\s\S]*to\s+authenticated,\s*service_role/i.test(
+    printableDocumentsMigration,
+  ) &&
+    !/grant\s+(?:select|insert|update|delete)[^;]*clinical_referrals[^;]*authenticated/i.test(
+      printableDocumentsMigration,
+    ),
+  "Printable-document RPC grants do not restore direct clinical table access",
 );
 
 const functionBlocks = [

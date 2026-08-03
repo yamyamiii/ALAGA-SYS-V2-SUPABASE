@@ -24,6 +24,9 @@ and deterministic, role-checked, read-only navigation using symbolic actions.
 Phase 9C adds deterministic trusted answers for hours, services, and current
 announcements plus multilingual matching, role-aware starters, compact source
 cards, copy/retry/confirmed-reset controls, and stricter client safety handling.
+Phase 10 adds authorized A4 previews, browser printing, and local selectable-text
+PDF downloads for appointment slips, consultation summaries, clinician-authored
+referrals, prenatal summaries, and child health summaries.
 
 Inventory, prescription dispensing, laboratory integrations, birth
 registration, external notification delivery, AI mutations, and AI access to
@@ -38,6 +41,7 @@ clinical or resident data are not implemented.
 - TanStack React Query
 - React Hook Form, Zod, and Hook Form resolvers
 - date-fns
+- jsPDF, lazy-loaded only for local protected-document downloads
 - Supabase JavaScript client with persisted authentication
 - Supabase Edge Functions with the server-only Google GenAI SDK
 - Vitest, Testing Library, ESLint, and Prettier
@@ -136,6 +140,12 @@ npm run preview
 
 ## Current phase
 
+Phase 10 provides a reusable printable-document boundary backed by narrow,
+server-authorized RPCs. Protected data is revalidated for every preview and is
+never stored in browser storage, uploaded, or sent to AI or an external PDF
+service. The new referral workflow is clinician-authored, encounter-derived,
+idempotent, versioned, and immutable after finalization.
+
 Phase 9C completes the floating authenticated assistant experience with live, read-only
 grounding from active FAQs, health-center name/address/hours/services, and
 current announcements. Deterministic navigation runs before Gemini and returns
@@ -159,9 +169,10 @@ delivery is implemented.
 
 ## Deployment note
 
-Migrations 1-30 are the completed remote baseline. Phase 9C adds no migration.
-Its updated `alaga-ai` Edge Function requires a separate explicit deployment;
-application startup does not deploy it automatically.
+Migrations 1-30 are the existing baseline. Phase 10 adds pending forward-only
+migration `20260720003100_printable_healthcare_documents.sql`; review and apply
+it manually before deploying the Phase 10 frontend. Application startup does
+not push migrations automatically.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),
@@ -175,6 +186,14 @@ See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [AI safety](docs/security/AI_SAFETY.md),
 [AI navigation](docs/workflows/AI_NAVIGATION.md),
 [AI user guide](docs/workflows/AI_USER_GUIDE.md),
+[Printable documents architecture](docs/architecture/PRINTABLE_DOCUMENTS.md),
+[Document privacy](docs/security/DOCUMENT_PRIVACY.md),
+[Print design system](docs/ui/PRINT_DESIGN_SYSTEM.md),
+[Appointment Slip](docs/workflows/APPOINTMENT_SLIP.md),
+[Consultation Summary](docs/workflows/CONSULTATION_SUMMARY.md),
+[Referral Form](docs/workflows/REFERRAL_FORM.md),
+[Prenatal Summary](docs/workflows/PRENATAL_SUMMARY.md),
+[Child Health Summary](docs/workflows/CHILD_HEALTH_SUMMARY.md),
 [Gemini AI deployment](docs/deployment/GEMINI_AI.md),
 [Announcements and notifications](docs/workflows/ANNOUNCEMENTS_NOTIFICATIONS.md),
 [Resident inquiries](docs/workflows/RESIDENT_INQUIRIES.md),
