@@ -8,6 +8,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { OfficialLogo } from "@/components/common/OfficialLogo";
 import {
@@ -29,6 +30,7 @@ import {
 import { ReportFilters } from "@/features/reports/ReportFilters";
 import {
   initialReportFilters,
+  quickRange,
   validateReportFilters,
 } from "@/features/reports/schemas";
 import { useReport } from "@/features/reports/hooks";
@@ -172,18 +174,32 @@ function Summary({ category, data, loading }) {
 
 export default function ReportsPage() {
   const { profile } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const categories = useMemo(
     () => categoriesForRole(profile.role),
     [profile.role],
   );
-  const [category, setCategory] = useState(categories[0]?.id ?? "");
+  const requestedCategory = searchParams.get("category");
+  const category = categories.some((item) => item.id === requestedCategory)
+    ? requestedCategory
+    : (categories[0]?.id ?? "");
+  const requestedPeriod = searchParams.get("period");
+  const period = ["today", "week", "month", "quarter", "year"].includes(
+    requestedPeriod,
+  )
+    ? requestedPeriod
+    : null;
   const [draft, setDraft] = useState(() => initialReportFilters());
   const [filters, setFilters] = useState(() => initialReportFilters());
+  const activeDraft = period ? { ...draft, ...quickRange(period) } : draft;
+  const activeFilters = period
+    ? { ...filters, ...quickRange(period) }
+    : filters;
   const [filterError, setFilterError] = useState("");
   const [exporting, setExporting] = useState("");
   const [exportError, setExportError] = useState("");
   const puroks = usePuroks();
-  const query = useReport(category, filters, Boolean(category));
+  const query = useReport(category, activeFilters, Boolean(category));
   const categoryLabel =
     categories.find((item) => item.id === category)?.label ?? "Report";
   const showPurok = !["overview", "staff_workload"].includes(category);
@@ -197,12 +213,17 @@ export default function ReportsPage() {
   ].includes(category);
 
   const applyFilters = () => {
-    const result = validateReportFilters(draft);
+    const result = validateReportFilters(activeDraft);
     setFilterError(result.error ?? "");
-    if (result.data) setFilters(result.data);
+    if (result.data) {
+      setSearchParams({ category });
+      setDraft(result.data);
+      setFilters(result.data);
+    }
   };
   const reset = () => {
     const next = initialReportFilters();
+    setSearchParams({ category });
     setDraft(next);
     setFilters(next);
     setFilterError("");
@@ -215,7 +236,7 @@ export default function ReportsPage() {
       status: "",
       staff_id: "",
     };
-    setCategory(nextCategory);
+    setSearchParams({ category: nextCategory });
     setDraft(nextFilters);
     setFilters(nextFilters);
     setFilterError("");
@@ -225,7 +246,11 @@ export default function ReportsPage() {
     setExporting(format);
     setExportError("");
     try {
-      const result = await reportService.exportRows(category, filters, format);
+      const result = await reportService.exportRows(
+        category,
+        activeFilters,
+        format,
+      );
       if (format === "print" || format === "pdf") {
         window.print();
       } else {
@@ -235,8 +260,8 @@ export default function ReportsPage() {
           result.rows,
           {
             category,
-            startDate: filters.start_date,
-            endDate: filters.end_date,
+            startDate: activeFilters.start_date,
+            endDate: activeFilters.end_date,
           },
           format,
         );
@@ -302,7 +327,8 @@ export default function ReportsPage() {
         <div className="mt-3">
           <p>Report: {categoryLabel}</p>
           <p>
-            Reporting period: {filters.start_date} to {filters.end_date}
+            Reporting period: {activeFilters.start_date} to{" "}
+            {activeFilters.end_date}
           </p>
           <p>Generated in Asia/Manila: {formatManilaDateTime(new Date())}</p>
         </div>
@@ -331,8 +357,11 @@ export default function ReportsPage() {
       </nav>
 
       <ReportFilters
-        value={draft}
-        onChange={setDraft}
+        value={activeDraft}
+        onChange={(next) => {
+          setSearchParams({ category });
+          setDraft(next);
+        }}
         onApply={applyFilters}
         onReset={reset}
         puroks={puroks.data ?? []}

@@ -16,8 +16,10 @@ import {
   sanitizeNavigationActions,
   validateConversationPayload,
   withWorkflowGrounding,
+  workflowResponseFor,
   workflowGrounding,
 } from "./domain.ts";
+import type { CanonicalRole } from "./domain.ts";
 
 function assert(condition: unknown, message = "Assertion failed") {
   if (!condition) throw new Error(message);
@@ -237,6 +239,101 @@ Deno.test("keeps staff appointment destinations away from residents", () => {
     navigationResponseFor("Open appointment calendar", "resident")?.actions,
     [],
   );
+});
+
+Deno.test("answers the approved appointment request workflow", () => {
+  const response = workflowResponseFor(
+    "Paano mag-request ng appointment?",
+    "resident",
+    true,
+  );
+  assertEquals(response?.category, "workflow_appointment_request");
+  assert(response?.message.includes("1. Buksan ang Appointments module."));
+  assert(
+    response?.message.includes(
+      "5. Hintayin ang review at approval ng Barangay Health Center.",
+    ),
+  );
+  assertEquals(response?.sources[0]?.type, "workflow");
+  assertEquals(response?.actions[0], {
+    type: "ui_action",
+    actionId: "open_appointment_request_form",
+    label: "Request an Appointment",
+    requiresConfirmation: false,
+  });
+});
+
+Deno.test("matches resident appointment form request phrases", () => {
+  for (const phrase of [
+    "Paano mag-request ng appointment?",
+    "Paano ako magpapa-appointment?",
+    "Gusto kong magpa-appointment.",
+    "Mag-request ako ng appointment.",
+    "Book an appointment.",
+    "Request an appointment.",
+  ]) {
+    assertEquals(
+      workflowResponseFor(phrase, "resident", true)?.actions[0]?.actionId,
+      "open_appointment_request_form",
+    );
+  }
+});
+
+Deno.test(
+  "withholds resident form actions without canonical eligibility",
+  () => {
+    assertEquals(
+      workflowResponseFor("Request an appointment", "resident", false)?.actions,
+      [],
+    );
+    for (const role of [
+      "admin",
+      "barangay_health_worker",
+      "nurse",
+      "midwife",
+    ] as const) {
+      assertEquals(
+        workflowResponseFor("Request an appointment", role, true)?.actions,
+        [],
+      );
+    }
+  },
+);
+
+Deno.test("resolves role-authorized nested destinations", () => {
+  const examples: Array<[string, CanonicalRole, string]> = [
+    ["Open Calendar", "admin", "open_appointment_calendar"],
+    ["Open Appointment Calendar", "nurse", "open_appointment_calendar"],
+    ["Open Daily Queue", "midwife", "open_appointment_queue"],
+    [
+      "Open Appointment Queue",
+      "barangay_health_worker",
+      "open_appointment_queue",
+    ],
+    ["Open Encounters", "resident", "open_health_record_encounters"],
+    ["Open Vital Signs", "nurse", "open_health_record_vital_signs"],
+    ["Open Appointment Reports", "admin", "open_appointment_reports"],
+    ["Open Monthly Reports", "midwife", "open_monthly_reports"],
+    ["Open Pregnancies", "midwife", "open_pregnancies"],
+    ["Open Child Records", "resident", "open_child_records"],
+  ];
+  for (const [phrase, role, actionId] of examples) {
+    assertEquals(
+      navigationResponseFor(phrase, role)?.actions[0]?.actionId,
+      actionId,
+    );
+  }
+});
+
+Deno.test("nested destinations preserve resident restrictions", () => {
+  for (const phrase of [
+    "Open Calendar",
+    "Open Daily Queue",
+    "Open Appointment Reports",
+    "Open Monthly Reports",
+  ]) {
+    assertEquals(navigationResponseFor(phrase, "resident")?.actions, []);
+  }
 });
 
 Deno.test("rejects unknown, unauthorized, and route-bearing actions", () => {

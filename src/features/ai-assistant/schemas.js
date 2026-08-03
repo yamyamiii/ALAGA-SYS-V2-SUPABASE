@@ -64,17 +64,29 @@ const aiSourceSchema = z
   })
   .strict();
 
-const aiActionSchema = z
-  .object({
-    type: z.literal("navigate"),
-    actionId: z
-      .string()
-      .trim()
-      .regex(/^[a-z][a-z0-9_]{2,79}$/),
-    label: z.string().trim().min(1).max(100),
-    requiresConfirmation: z.boolean(),
-  })
-  .strict();
+const actionIdSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z][a-z0-9_]{2,79}$/);
+
+const aiActionSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("navigate"),
+      actionId: actionIdSchema,
+      label: z.string().trim().min(1).max(100),
+      requiresConfirmation: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("ui_action"),
+      actionId: actionIdSchema,
+      label: z.string().trim().min(1).max(100),
+      requiresConfirmation: z.boolean(),
+    })
+    .strict(),
+]);
 
 const aiResponseSchema = z
   .object({

@@ -21,9 +21,10 @@ import {
   validateConversationPayload,
   withWorkflowGrounding,
   uncertaintyMessageFor,
+  workflowResponseFor,
+  type AssistantAction,
   type CanonicalRole,
   type GroundingSource,
-  type NavigationAction,
 } from "./domain.ts";
 
 type SupabaseClient = ReturnType<typeof createClient>;
@@ -190,7 +191,28 @@ async function activeProfile(admin: SupabaseClient, callerId: string) {
       403,
     );
   }
-  return { id: data.id as string, role: data.role as CanonicalRole };
+  let hasActiveResidentLink = false;
+  if (data.role === "resident") {
+    const { count: residentCount, error: residentError } = await admin
+      .from("residents")
+      .select("linked_profile_id", { count: "exact", head: true })
+      .eq("linked_profile_id", data.id)
+      .eq("status", "active")
+      .is("archived_at", null);
+    if (residentError || residentCount === null || residentCount > 1) {
+      throw new AiAssistantError(
+        "authorization_unavailable",
+        "Resident account linking could not be verified. Try again later.",
+        503,
+      );
+    }
+    hasActiveResidentLink = residentCount === 1;
+  }
+  return {
+    id: data.id as string,
+    role: data.role as CanonicalRole,
+    hasActiveResidentLink,
+  };
 }
 
 async function consumeRateLimit(
@@ -239,7 +261,7 @@ async function loadApprovedGrounding(
 function assistantData(
   message: string,
   sources: GroundingSource[] = [],
-  actions: NavigationAction[] = [],
+  actions: AssistantAction[] = [],
 ) {
   return {
     message,
@@ -451,6 +473,33 @@ Deno.serve(async (request) => {
             navigationResponse.message,
             [],
             navigationResponse.actions,
+          ),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+
+    const workflowResponse = workflowResponseFor(
+      finalUserMessage,
+      profile.role,
+      profile.hasActiveResidentLink,
+    );
+    if (workflowResponse) {
+      logRequest(
+        requestId,
+        profile.id,
+        profile.role,
+        workflowResponse.category,
+        startedAt,
+      );
+      return jsonResponse(
+        {
+          data: assistantData(
+            workflowResponse.message,
+            workflowResponse.sources,
+            workflowResponse.actions,
           ),
           request_id: requestId,
         },

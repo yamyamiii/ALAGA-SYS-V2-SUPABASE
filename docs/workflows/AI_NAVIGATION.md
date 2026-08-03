@@ -79,3 +79,38 @@ Never add a generic `navigate(url)` action or accept model-generated paths.
 Phase 9C also recognizes common Filipino module nouns for the staff queue,
 health records, maternal/child care, reports, user management, and audit logs.
 These phrase additions do not change any role allowlist.
+
+## Registered child destinations
+
+The same symbolic-action boundary supports these existing child views:
+
+- Appointments: Appointment Calendar and Daily Queue.
+- Health Records: Clinical Encounters and the Vital Signs encounter context.
+- Reports: Appointment Reports and Monthly Reports.
+- Maternal and Child Care: Pregnancies and Child Records.
+
+Each action maps to a fixed route or an allowlisted query parameter in the
+frontend registry. Report categories, reporting periods, and maternal/child or
+health-record sections are validated by their destination page. The Vital Signs
+action opens the authorized encounter list and asks the user to select a record;
+it never fabricates or accepts an encounter identifier. Existing role checks and
+database row-level security still apply.
+
+## Resident appointment request form action
+
+For an active Resident account linked to an active resident record, approved
+appointment-request phrases may return the fixed `ui_action` ID
+`open_appointment_request_form`. Staff roles and unlinked resident accounts do
+not receive it. The Edge Function verifies the canonical profile and link before
+constructing the action; Gemini cannot create it.
+
+The client maps the symbolic ID to the existing resident Appointments route. A
+single-use opaque token is held only in memory and carried in React Router state.
+The resident page consumes and removes the token before opening the existing
+request dialog. Refresh, back/forward navigation, logout, unmount, or a profile
+role change cannot replay it. The action carries no route, component name,
+resident identifier, form value, or appointment data.
+
+The action never submits or pre-populates the form. The resident must review and
+submit the existing form manually, and its validation plus the trusted resident
+appointment RPC remain authoritative.

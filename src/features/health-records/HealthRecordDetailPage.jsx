@@ -59,9 +59,12 @@ function Value({ label, children, wide = false }) {
   );
 }
 
-function Section({ title, description, children, plain = false }) {
+function Section({ id, title, description, children, plain = false }) {
   return (
-    <section className="rounded-xl border bg-card p-4 sm:p-5">
+    <section
+      id={id}
+      className="scroll-mt-6 rounded-xl border bg-card p-4 sm:p-5"
+    >
       <SectionHeading title={title} description={description} />
       {plain ? (
         <div className="mt-4">{children}</div>
@@ -254,6 +257,7 @@ export default function HealthRecordDetailPage() {
       </Section>
 
       <Section
+        id="vital-signs"
         title="4. Vital Signs"
         description="BMI is calculated from the recorded height and weight."
       >

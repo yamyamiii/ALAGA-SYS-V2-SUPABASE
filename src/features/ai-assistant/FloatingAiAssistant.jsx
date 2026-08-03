@@ -1,5 +1,5 @@
 import { MessageCircleMore } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,11 @@ import {
   createWelcomeMessage,
 } from "@/features/ai-assistant/constants";
 import { useAiAssistantMutation } from "@/features/ai-assistant/hooks";
-import { resolveAiNavigationAction } from "@/features/ai-assistant/navigation";
+import { resolveAiAction } from "@/features/ai-assistant/navigation";
+import {
+  clearPendingAiUiActions,
+  queueAiUiAction,
+} from "@/features/ai-assistant/uiActions";
 
 function messageId() {
   return globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}`;
@@ -30,6 +34,8 @@ export function FloatingAiAssistant({ profile }) {
     (message) => !message.local && message.role === "user",
   ).length;
   const turnLimitReached = userTurns >= AI_MAX_CONVERSATION_TURNS;
+
+  useEffect(() => () => clearPendingAiUiActions(), []);
 
   const completeRequest = (requestMessages) => {
     if (requestInFlightRef.current) return;
@@ -92,9 +98,17 @@ export function FloatingAiAssistant({ profile }) {
 
   const followAction = (action) => {
     if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-    const target = resolveAiNavigationAction(action, profile.role);
+    const target = resolveAiAction(action, profile.role);
     if (!target) return;
-    navigate(target.route);
+    if (target.type === "ui_action") {
+      const token = queueAiUiAction(target.actionId, profile.role);
+      if (!token) return;
+      navigate(target.route, {
+        state: { alagaAiUiActionToken: token },
+      });
+    } else {
+      navigate(target.route);
+    }
     setOpen(false);
   };
 

@@ -1,6 +1,6 @@
 import { Eye, FilePlus2, Search } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { ContentContainer } from "@/components/common/ContentContainer";
 import { PageHeading } from "@/components/common/PageHeading";
@@ -51,6 +51,13 @@ function Status({ status }) {
 export default function HealthRecordsPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedSection = searchParams.get("section");
+  const section = ["encounters", "vital-signs"].includes(requestedSection)
+    ? requestedSection
+    : "encounters";
+  const showEncounterContext = requestedSection === "encounters";
+  const showVitalSignsContext = section === "vital-signs";
   const [filters, setFilters] = useState(INITIAL_HEALTH_RECORD_FILTERS);
   const [createOpen, setCreateOpen] = useState(false);
   const debouncedSearch = useDebouncedValue(filters.search.trim(), 350);
@@ -79,8 +86,20 @@ export default function HealthRecordsPage() {
     <ContentContainer className="space-y-6">
       <PageHeading
         eyebrow="Clinical documentation"
-        title="Health Records"
-        description="Secure clinical encounters, vital signs, allergies, and relevant history. Operational appointment notes remain separate."
+        title={
+          showVitalSignsContext
+            ? "Vital Signs"
+            : showEncounterContext
+              ? "Clinical Encounters"
+              : "Health Records"
+        }
+        description={
+          showVitalSignsContext
+            ? "Select an authorized encounter to view its vital signs or, when permitted, document them. Record access remains protected by role permissions and row-level security."
+            : showEncounterContext
+              ? "Review the clinical encounters authorized for your role. Operational appointment notes remain separate."
+              : "Secure clinical encounters, vital signs, allergies, and relevant history. Operational appointment notes remain separate."
+        }
         actions={
           canCreateEncounter(profile.role) ? (
             <Button onClick={() => setCreateOpen(true)}>
@@ -219,7 +238,11 @@ export default function HealthRecordsPage() {
                   </div>
                 </dl>
                 <Button asChild variant="outline" className="mt-4 w-full">
-                  <Link to={ROUTES.healthRecordDetail(record.id)}>
+                  <Link
+                    to={`${ROUTES.healthRecordDetail(record.id)}${
+                      showVitalSignsContext ? "#vital-signs" : ""
+                    }`}
+                  >
                     <Eye /> View details
                   </Link>
                 </Button>
@@ -263,7 +286,11 @@ export default function HealthRecordsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Button asChild variant="ghost" size="sm">
-                        <Link to={ROUTES.healthRecordDetail(record.id)}>
+                        <Link
+                          to={`${ROUTES.healthRecordDetail(record.id)}${
+                            showVitalSignsContext ? "#vital-signs" : ""
+                          }`}
+                        >
                           <Eye /> View
                         </Link>
                       </Button>

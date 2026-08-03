@@ -23,6 +23,10 @@ const tabs = fs.readFileSync(
   "src/features/appointments/AppointmentTabs.jsx",
   "utf8",
 );
+const aiUiActions = fs.readFileSync(
+  "src/features/ai-assistant/uiActions.js",
+  "utf8",
+);
 
 describe("appointment UI boundaries", () => {
   it("uses separate route permissions for resident-safe and staff-only views", () => {
@@ -48,6 +52,19 @@ describe("appointment UI boundaries", () => {
     expect(residentPage).toMatch(/Pending = awaiting confirmation/i);
     expect(residentPage).toMatch(/ErrorState[\s\S]*refetch/i);
     expect(residentPage).not.toMatch(/Register walk-in|Daily queue/i);
+  });
+
+  it("opens the existing blank request dialog through a one-time AI token", () => {
+    expect(residentPage).toMatch(/consumeAiUiAction/);
+    expect(residentPage).toMatch(/alagaAiUiActionToken/);
+    expect(residentPage).toMatch(/replace: true, state: null/);
+    expect(aiUiActions).toMatch(/pendingActions\.delete\(token\)/);
+    expect(aiUiActions).not.toMatch(
+      /localStorage|sessionStorage|URLSearchParams|querySelector|dispatchEvent/,
+    );
+    expect(residentPage + aiUiActions).not.toMatch(
+      /resident_id|reason:|scheduled_date:|start_time:|service_type:/,
+    );
   });
 
   it("keeps Supabase calls outside route pages", () => {

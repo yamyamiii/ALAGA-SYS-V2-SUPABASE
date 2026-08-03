@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { resolveAiNavigationAction } from "@/features/ai-assistant/navigation";
+import { resolveAiAction } from "@/features/ai-assistant/navigation";
 import { formatManilaDate } from "@/lib/dateTime";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +21,7 @@ export function AiMessage({
   const actions =
     assistant && Array.isArray(message.actions)
       ? message.actions.flatMap((action) => {
-          const target = resolveAiNavigationAction(action, profileRole);
+          const target = resolveAiAction(action, profileRole);
           return target ? [{ action, target }] : [];
         })
       : [];

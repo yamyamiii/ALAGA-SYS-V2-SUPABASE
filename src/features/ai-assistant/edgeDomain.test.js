@@ -12,6 +12,7 @@ import {
   sanitizeNavigationActions,
   safetyResponseFor,
   withWorkflowGrounding,
+  workflowResponseFor,
   workflowGrounding,
 } from "../../../supabase/functions/alaga-ai/domain.ts";
 
@@ -38,6 +39,74 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     expect(groundingSourceTypesFor("Anong services ang available?")).toEqual([
       "health_center",
     ]);
+  });
+
+  it("answers the approved appointment-request workflow before live grounding", () => {
+    const response = workflowResponseFor(
+      "Paano mag-request ng appointment?",
+      "resident",
+      true,
+    );
+
+    expect(requiresLiveGrounding("Paano mag-request ng appointment?")).toBe(
+      true,
+    );
+    expect(response).toMatchObject({
+      category: "workflow_appointment_request",
+      sources: [
+        {
+          type: "workflow",
+          title: "Appointment request workflow",
+        },
+      ],
+    });
+    expect(response?.message).toContain("1. Buksan ang Appointments module.");
+    expect(response?.message).toContain(
+      "5. Hintayin ang review at approval ng Barangay Health Center.",
+    );
+    expect(response?.message).toContain(
+      "Maaari ko ring buksan ang request form para sa iyo.",
+    );
+    expect(response?.actions).toEqual([
+      {
+        type: "ui_action",
+        actionId: "open_appointment_request_form",
+        label: "Request an Appointment",
+        requiresConfirmation: false,
+      },
+    ]);
+  });
+
+  it.each([
+    "Paano mag-request ng appointment?",
+    "Paano ako magpapa-appointment?",
+    "Gusto kong magpa-appointment.",
+    "Mag-request ako ng appointment.",
+    "Book an appointment.",
+    "Request an appointment.",
+  ])("offers the resident form action for supported phrase: %s", (phrase) => {
+    expect(workflowResponseFor(phrase, "resident", true)?.actions).toEqual([
+      expect.objectContaining({
+        type: "ui_action",
+        actionId: "open_appointment_request_form",
+      }),
+    ]);
+  });
+
+  it("withholds the request-form action from unlinked residents and staff", () => {
+    expect(
+      workflowResponseFor("Request an appointment", "resident", false)?.actions,
+    ).toEqual([]);
+    for (const role of [
+      "admin",
+      "barangay_health_worker",
+      "nurse",
+      "midwife",
+    ]) {
+      expect(
+        workflowResponseFor("Request an appointment", role, true)?.actions,
+      ).toEqual([]);
+    }
   });
 
   it("detects English, Filipino, and Taglish response language", () => {
@@ -181,6 +250,41 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     expect(
       navigationResponseFor("Open appointment calendar", "resident")?.actions,
     ).toEqual([]);
+  });
+
+  it.each([
+    ["Open Calendar", "admin", "open_appointment_calendar"],
+    ["Open Appointment Calendar", "nurse", "open_appointment_calendar"],
+    ["Open Daily Queue", "midwife", "open_appointment_queue"],
+    [
+      "Open Appointment Queue",
+      "barangay_health_worker",
+      "open_appointment_queue",
+    ],
+    ["Open Encounters", "resident", "open_health_record_encounters"],
+    ["Open Vital Signs", "nurse", "open_health_record_vital_signs"],
+    ["Open Appointment Reports", "admin", "open_appointment_reports"],
+    ["Open Monthly Reports", "midwife", "open_monthly_reports"],
+    ["Open Pregnancies", "midwife", "open_pregnancies"],
+    ["Open Child Records", "resident", "open_child_records"],
+  ])("resolves nested destination: %s", (phrase, role, actionId) => {
+    expect(navigationResponseFor(phrase, role)?.actions).toEqual([
+      expect.objectContaining({ actionId }),
+    ]);
+  });
+
+  it("does not broaden nested appointment or report permissions", () => {
+    for (const phrase of [
+      "Open Calendar",
+      "Open Daily Queue",
+      "Open Appointment Reports",
+      "Open Monthly Reports",
+    ]) {
+      expect(navigationResponseFor(phrase, "resident")).toMatchObject({
+        category: "navigation_unauthorized",
+        actions: [],
+      });
+    }
   });
 
   it.each([

@@ -50,7 +50,7 @@ export default function AppointmentListPage() {
   const { profile } = useAuth();
 
   if (profile.role === USER_ROLES.RESIDENT) {
-    return <ResidentAppointmentsPage />;
+    return <ResidentAppointmentsPage profile={profile} />;
   }
 
   return <StaffAppointmentListPage profile={profile} />;

@@ -23,6 +23,17 @@ the trusted live ALAGA-SYS records. If that information is missing, inactive,
 archived, unpublished, or expired, it says that verified information could not
 be found rather than guessing.
 
+`Paano mag-request ng appointment?` is answered from the approved, read-only
+ALAGA-SYS workflow guide: open Appointments, select Request Appointment,
+complete the required information, submit the request, and wait for Barangay
+Health Center review. This guidance does not query or reveal resident or
+appointment data.
+
+For an active linked Resident, the same answer can include a **Request an
+Appointment** button. Selecting it opens the existing blank request form on the
+resident Appointments page. It does not choose a service, date, time, reason, or
+resident record and never submits a request automatically.
+
 ## Sources and navigation
 
 Compact source cards show the trusted record type, a short title, and an
@@ -33,6 +44,12 @@ stored source body or identifier.
 Navigation suggestions are buttons with locally trusted labels. The assistant
 cannot invent a route or bypass your account role. It never navigates
 automatically, and ambiguous choices require you to select the intended page.
+
+Authorized users may also ask for registered child views such as `Open
+Calendar`, `Open Daily Queue`, `Open Vital Signs`, `Open Appointment Reports`,
+`Open Monthly Reports`, `Open Pregnancies`, or `Open Child Records`. These
+commands use fixed symbolic destinations and do not accept arbitrary URLs. The
+available buttons continue to depend on the signed-in role.
 
 ## Conversation controls
 

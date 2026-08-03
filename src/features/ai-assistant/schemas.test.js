@@ -113,6 +113,47 @@ describe("ALAGA AI conversation schemas", () => {
     });
   });
 
+  it("accepts and deduplicates the fixed appointment form action", () => {
+    const action = {
+      type: "ui_action",
+      actionId: "open_appointment_request_form",
+      label: "Request an Appointment",
+      requiresConfirmation: false,
+    };
+    expect(
+      parseAiResponse({
+        message: "I can open the request form.",
+        sources: [],
+        actions: [action, action],
+      }).actions,
+    ).toEqual([action]);
+  });
+
+  it("ignores unknown or parameterized UI actions", () => {
+    const parsed = parseAiResponse({
+      message: "Unsafe actions are ignored.",
+      sources: [],
+      actions: [
+        {
+          type: "ui_action",
+          actionId: "open_unknown_dialog",
+          label: "Unknown",
+          requiresConfirmation: false,
+        },
+        {
+          type: "ui_action",
+          actionId: "open_appointment_request_form",
+          label: "Request an Appointment",
+          requiresConfirmation: false,
+          route: "/appointments",
+          component: "ResidentAppointmentRequestDialog",
+          resident_id: "11111111-1111-4111-8111-111111111111",
+        },
+      ],
+    });
+    expect(parsed.actions).toEqual([]);
+  });
+
   it("ignores unknown, raw-route, and malformed response actions", () => {
     const parsed = parseAiResponse({
       message: "Choose a permitted destination.",

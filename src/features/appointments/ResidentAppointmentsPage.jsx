@@ -1,5 +1,6 @@
 import { CalendarPlus, Eye } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { EmptyState, ErrorState } from "@/components/common/StateDisplay";
 import { PageHeading } from "@/components/common/PageHeading";
@@ -21,8 +22,14 @@ import {
 } from "@/features/appointments/timezone";
 import { RegistryPagination } from "@/features/registry/RegistryPagination";
 import { RegistrySkeleton } from "@/features/registry/RegistrySkeleton";
+import {
+  APPOINTMENT_REQUEST_FORM_ACTION,
+  consumeAiUiAction,
+} from "@/features/ai-assistant/uiActions";
 
-export function ResidentAppointmentsPage() {
+export function ResidentAppointmentsPage({ profile }) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [requestOpen, setRequestOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
@@ -37,6 +44,30 @@ export function ResidentAppointmentsPage() {
   );
   const query = useAppointments(filters);
   const items = query.data?.items ?? [];
+
+  useEffect(() => {
+    const token = location.state?.alagaAiUiActionToken;
+    if (!token) return;
+    const actionId = consumeAiUiAction(token, profile.role);
+    navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+      },
+      { replace: true, state: null },
+    );
+    if (actionId === APPOINTMENT_REQUEST_FORM_ACTION) {
+      setRequestOpen(true);
+    }
+  }, [
+    location.hash,
+    location.pathname,
+    location.search,
+    location.state,
+    navigate,
+    profile.role,
+  ]);
 
   return (
     <div className="space-y-6">

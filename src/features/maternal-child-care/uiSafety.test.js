@@ -42,6 +42,12 @@ describe("maternal-child UI safety", () => {
     expect(page).toMatch(/hidden overflow-x-auto lg:block/);
   });
 
+  it("allows only registered child-section query values", () => {
+    expect(page).toMatch(/MATERNAL_CHILD_TABS\.some/);
+    expect(page).toMatch(/searchParams\.get\("section"\)/);
+    expect(page).toContain("setSearchParams({ section: next.id })");
+  });
+
   it("uses the trusted resident search and service boundary", () => {
     expect(form).toMatch(/AppointmentResidentField/);
     expect(page).toMatch(/useMaternalChildList/);

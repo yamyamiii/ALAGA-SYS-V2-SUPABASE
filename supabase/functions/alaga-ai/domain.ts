@@ -24,6 +24,15 @@ export type NavigationAction = {
   requiresConfirmation: boolean;
 };
 
+export type UiAction = {
+  type: "ui_action";
+  actionId: string;
+  label: string;
+  requiresConfirmation: boolean;
+};
+
+export type AssistantAction = NavigationAction | UiAction;
+
 export const SUPPORTED_ROLES = Object.freeze<CanonicalRole[]>([
   "admin",
   "barangay_health_worker",
@@ -47,6 +56,13 @@ const ALL_ROLES = [
   "midwife",
   "resident",
 ] as const;
+
+const UI_ACTION_DEFINITIONS = Object.freeze({
+  open_appointment_request_form: {
+    label: "Request an Appointment",
+    roles: ["resident"] as const,
+  },
+});
 
 type NavigationDefinition = {
   label: string;
@@ -76,6 +92,15 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
       label: "Open Incoming Appointment Requests",
       roles: ["admin", "barangay_health_worker"],
       patterns: [/\b(?:incoming|pending) appointment requests?\b/i],
+    },
+    open_appointment_calendar: {
+      label: "Open Appointment Calendar",
+      roles: ["admin", "barangay_health_worker", "nurse", "midwife"],
+      patterns: [
+        /\bappointment calendar\b/i,
+        /\bcalendar (?:ng|for) appointments?\b/i,
+        /\bcalendar\b/i,
+      ],
     },
     open_appointment_queue: {
       label: "Open Today's Queue",
@@ -150,6 +175,20 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
         /\b(?:mga )?rekord pangkalusugan\b/i,
       ],
     },
+    open_health_record_encounters: {
+      label: "Open Clinical Encounters",
+      roles: ALL_ROLES,
+      patterns: [
+        /\bclinical encounters?\b/i,
+        /\bhealth[- ]?record encounters?\b/i,
+        /\bencounters?\b/i,
+      ],
+    },
+    open_health_record_vital_signs: {
+      label: "Open Vital Signs",
+      roles: ALL_ROLES,
+      patterns: [/\bvital signs?\b/i, /\bvitals?\b/i],
+    },
     open_maternal_child_care: {
       label: "Open Maternal and Child Care",
       roles: [
@@ -175,10 +214,34 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
       roles: ["admin", "midwife"],
       patterns: [/\bimmuni[sz]ations?\b/i, /\bvaccination records?\b/i],
     },
+    open_child_records: {
+      label: "Open Child Records",
+      roles: ALL_ROLES,
+      patterns: [
+        /\bchild (?:records?|profiles?)\b/i,
+        /\bmga rekord ng bata\b/i,
+      ],
+    },
     open_reports: {
       label: "Open Reports",
       roles: ["admin", "barangay_health_worker", "nurse", "midwife"],
       patterns: [/\breports?\b/i, /\banalytics\b/i, /\b(?:mga )?ulat\b/i],
+    },
+    open_appointment_reports: {
+      label: "Open Appointment Reports",
+      roles: ["admin", "barangay_health_worker", "nurse", "midwife"],
+      patterns: [
+        /\bappointment reports?\b/i,
+        /\breports? (?:for|on) appointments?\b/i,
+      ],
+    },
+    open_monthly_reports: {
+      label: "Open Monthly Reports",
+      roles: ["admin", "barangay_health_worker", "nurse", "midwife"],
+      patterns: [
+        /\bmonthly reports?\b/i,
+        /\b(?:this|current) month(?:'s)? reports?\b/i,
+      ],
     },
     open_user_management: {
       label: "Open User Management",
@@ -638,16 +701,24 @@ export function navigationResponseFor(
     )
     .map(([actionId]) => actionId);
 
-  const specificReplacements: Record<string, string> = {
-    open_appointment_requests: "open_appointments",
-    open_appointment_queue: "open_appointments",
-    open_pregnancies: "open_maternal_child_care",
-    open_immunizations: "open_maternal_child_care",
+  const specificReplacements: Record<string, string[]> = {
+    open_appointment_requests: ["open_appointments"],
+    open_appointment_calendar: ["open_appointments"],
+    open_appointment_queue: ["open_appointments"],
+    open_health_record_encounters: ["open_health_records"],
+    open_health_record_vital_signs: ["open_health_records"],
+    open_pregnancies: ["open_maternal_child_care"],
+    open_immunizations: ["open_maternal_child_care"],
+    open_child_records: ["open_maternal_child_care"],
+    open_appointment_reports: ["open_appointments", "open_reports"],
+    open_monthly_reports: ["open_reports"],
   };
-  for (const [specific, generic] of Object.entries(specificReplacements)) {
+  for (const [specific, genericIds] of Object.entries(specificReplacements)) {
     if (matchedIds.includes(specific)) {
-      const genericIndex = matchedIds.indexOf(generic);
-      if (genericIndex >= 0) matchedIds.splice(genericIndex, 1);
+      for (const generic of genericIds) {
+        const genericIndex = matchedIds.indexOf(generic);
+        if (genericIndex >= 0) matchedIds.splice(genericIndex, 1);
+      }
     }
   }
 
@@ -879,6 +950,67 @@ export function groundedResponseFor(
   }
 
   return null;
+}
+
+const APPOINTMENT_REQUEST_WORKFLOW_QUESTION =
+  /\b(?:how (?:do|can|to) (?:i |a resident )?(?:request|book|schedule) (?:an )?appointment|appointment request (?:process|steps|workflow)|(?:book|request|schedule) (?:an )?appointment|paano (?:ako )?(?:(?:mag-?)?(?:request|book|schedule) (?:ng |ang )?appointment|magpapa-?appointment)|gusto kong magpa-?appointment|mag-?request ako (?:ng |ang )?appointment)\b/i;
+
+export function workflowResponseFor(
+  message: string,
+  role?: CanonicalRole,
+  hasActiveResidentLink = false,
+): {
+  category: string;
+  message: string;
+  sources: GroundingSource[];
+  actions: AssistantAction[];
+} | null {
+  if (!APPOINTMENT_REQUEST_WORKFLOW_QUESTION.test(message)) return null;
+
+  const language = detectResponseLanguage(message);
+  const actionDefinition = UI_ACTION_DEFINITIONS.open_appointment_request_form;
+  const canOpenRequestForm =
+    role === "resident" &&
+    hasActiveResidentLink &&
+    actionDefinition.roles.includes(role);
+  const instructions =
+    language === "english"
+      ? "To request an appointment:\n1. Open the Appointments module.\n2. Select Request Appointment.\n3. Complete the required information.\n4. Submit the request.\n5. Wait for review and approval from the Barangay Health Center."
+      : language === "taglish"
+        ? "Para mag-request ng appointment:\n1. Buksan ang Appointments module.\n2. Piliin ang Request Appointment.\n3. Kumpletuhin ang required information.\n4. I-submit ang request.\n5. Hintayin ang review at approval ng Barangay Health Center."
+        : "Para humiling ng appointment:\n1. Buksan ang Appointments module.\n2. Piliin ang Request Appointment.\n3. Kumpletuhin ang kinakailangang impormasyon.\n4. Isumite ang kahilingan.\n5. Hintayin ang pagsusuri at pag-apruba ng Barangay Health Center.";
+  const response = canOpenRequestForm
+    ? `${
+        language === "english"
+          ? "Here is the appointment request process. I can also open the request form for you."
+          : "Narito ang proseso ng pag-request ng appointment. Maaari ko ring buksan ang request form para sa iyo."
+      }\n\n${instructions}`
+    : instructions;
+
+  return {
+    category: "workflow_appointment_request",
+    message: response,
+    sources: [
+      {
+        type: "workflow",
+        label: "Workflow Guide",
+        title: "Appointment request workflow",
+        content:
+          "Open Appointments, select Request Appointment, complete the required information, submit, and wait for Barangay Health Center review.",
+        updatedAt: null,
+      },
+    ],
+    actions: canOpenRequestForm
+      ? [
+          {
+            type: "ui_action",
+            actionId: "open_appointment_request_form",
+            label: actionDefinition.label,
+            requiresConfirmation: false,
+          },
+        ]
+      : [],
+  };
 }
 
 export function workflowGrounding(role: CanonicalRole): GroundingSource {

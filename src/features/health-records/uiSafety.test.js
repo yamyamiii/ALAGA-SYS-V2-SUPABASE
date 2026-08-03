@@ -84,6 +84,13 @@ describe("health-record UI boundaries", () => {
     expect(appointmentConstants).toMatch(/STAFF_SEARCH_MAX_PAGE_SIZE\s*=\s*25/);
   });
 
+  it("uses a fixed vital-signs context without accepting a record ID", () => {
+    expect(pages[0]).toMatch(/\["encounters", "vital-signs"\]\.includes/);
+    expect(pages[0]).toContain('showVitalSignsContext ? "#vital-signs" : ""');
+    expect(detailPage).toContain('id="vital-signs"');
+    expect(pages[0]).not.toMatch(/searchParams\.get\(["'](?:id|encounterId)/);
+  });
+
   it("explains and enforces the required signing fields in the UI", () => {
     expect(clinicalForm).toMatch(
       /Chief complaint[\s\S]*required before signing/i,

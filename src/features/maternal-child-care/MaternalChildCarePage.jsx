@@ -1,5 +1,6 @@
 import { Eye, Plus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { ContentContainer } from "@/components/common/ContentContainer";
 import { PageHeading } from "@/components/common/PageHeading";
@@ -26,7 +27,11 @@ import { useDebouncedValue } from "@/features/registry/useDebouncedValue";
 
 export default function MaternalChildCarePage() {
   const { profile } = useAuth();
-  const [tabId, setTabId] = useState("pregnancies");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedSection = searchParams.get("section");
+  const tabId = MATERNAL_CHILD_TABS.some((item) => item.id === requestedSection)
+    ? requestedSection
+    : "pregnancies";
   const [filters, setFilters] = useState(INITIAL_MATERNAL_CHILD_FILTERS);
   const [formKind, setFormKind] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
@@ -44,7 +49,7 @@ export default function MaternalChildCarePage() {
   }
 
   function changeTab(next) {
-    setTabId(next.id);
+    setSearchParams({ section: next.id });
     setFilters(INITIAL_MATERNAL_CHILD_FILTERS);
   }
 

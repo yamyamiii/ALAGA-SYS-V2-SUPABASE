@@ -47,6 +47,17 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(index).toMatch(/select\("id, role, account_status"\)/);
   });
 
+  it("verifies an active resident link before offering resident UI actions", () => {
+    expect(index).toMatch(/\.from\("residents"\)/);
+    expect(index).toMatch(/\.eq\("linked_profile_id", data\.id\)/);
+    expect(index).toMatch(/\.eq\("status", "active"\)/);
+    expect(index).toMatch(/\.is\("archived_at", null\)/);
+    expect(index).toMatch(/profile\.hasActiveResidentLink/);
+    expect(domain).toMatch(
+      /role === "resident"[\s\S]*hasActiveResidentLink[\s\S]*open_appointment_request_form/,
+    );
+  });
+
   it("uses exact-origin CORS and strict request validation", () => {
     expect(domain).toMatch(/!origin \|\| !allowedOrigins\.has\(origin\)/);
     expect(domain).toMatch(/values\.includes\("\*"\)/);
@@ -66,8 +77,13 @@ describe("ALAGA AI Edge Function security boundary", () => {
 
   it("never loads or sends application PHI context", () => {
     expect(index).not.toMatch(
-      /\.from\("(?:residents|appointments|health_encounters|vital_signs|maternal_|child_)"\)/i,
+      /\.from\("(?:appointments|health_encounters|vital_signs|maternal_|child_)"\)/i,
     );
+    expect(index.match(/\.from\("residents"\)/g)).toHaveLength(1);
+    expect(index).toMatch(
+      /\.from\("residents"\)\s*\.select\("linked_profile_id", \{ count: "exact", head: true \}\)/,
+    );
+    expect(index).not.toMatch(/const \{ data: resident/);
     expect(index).not.toMatch(
       /chief_complaint|diagnosis_text|treatment_notes|appointment_reason|pregnancy_number/i,
     );
@@ -165,6 +181,30 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(index.indexOf("const navigationResponse")).toBeLessThan(
       index.indexOf("const ai = new GoogleGenAI"),
     );
+  });
+
+  it("answers approved workflows before live grounding or Gemini", () => {
+    expect(domain).toMatch(/workflowResponseFor/);
+    expect(index).toMatch(
+      /workflowResponseFor\(\s*finalUserMessage,\s*profile\.role,\s*profile\.hasActiveResidentLink,\s*\)/,
+    );
+    expect(index.indexOf("const workflowResponse")).toBeGreaterThan(-1);
+    expect(index.indexOf("const workflowResponse")).toBeLessThan(
+      index.indexOf("const sourceTypes"),
+    );
+    expect(index.indexOf("const workflowResponse")).toBeLessThan(
+      index.indexOf("const ai = new GoogleGenAI"),
+    );
+  });
+
+  it("keeps UI actions deterministic and outside Gemini output", () => {
+    expect(domain).toMatch(/UI_ACTION_DEFINITIONS/);
+    expect(domain).toMatch(/type: "ui_action"/);
+    expect(domain).toMatch(/open_appointment_request_form/);
+    expect(index.indexOf("const workflowResponse")).toBeLessThan(
+      index.indexOf("const ai = new GoogleGenAI"),
+    );
+    expect(domain).not.toMatch(/route:\s*["'`]\/appointments/);
   });
 
   it("returns structured metadata without returning grounding content", () => {
