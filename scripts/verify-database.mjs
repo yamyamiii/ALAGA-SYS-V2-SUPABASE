@@ -37,6 +37,7 @@ const expectedMigrations = [
   "20260720003000_ai_grounding_context.sql",
   "20260720003100_printable_healthcare_documents.sql",
   "20260720003200_outbound_notification_foundation.sql",
+  "20260720003300_backup_restore_foundation.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -105,6 +106,8 @@ const reviewedPendingMigrationHashes = {
     "63462f37fb2c67f9e0971935742e934b8a8834cbe3f1c9d29f588fe11c5d4847",
   "20260720003200_outbound_notification_foundation.sql":
     "cbce86c0bd20e74aeec8d9ab51ceb66dc6e6e44330e629cf73dd3f8045e23929",
+  "20260720003300_backup_restore_foundation.sql":
+    "394793a2449680175e30134298bd35e8edbeeafd1fbef349b593853020ade519",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -114,6 +117,8 @@ const expectedTables = [
   "appointments",
   "assistance_notifications",
   "audit_logs",
+  "backup_configuration",
+  "backup_jobs",
   "barangays",
   "child_growth_measurements",
   "child_health_profiles",
@@ -138,6 +143,7 @@ const expectedTables = [
   "resident_inquiries",
   "resident_medical_history",
   "residents",
+  "restore_jobs",
   "vital_signs",
 ];
 
@@ -197,7 +203,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly thirty-two expected migrations exist in lexical order",
+  "Exactly thirty-three expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -1473,6 +1479,79 @@ check(
       notificationMigration,
     ),
   "Notification retries and exponential backoff are explicitly bounded",
+);
+
+const backupMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("backup_restore_foundation"),
+  )?.sql ?? "";
+const backupDeclarationAudit = auditPlpgsqlIntoTargets(backupMigration);
+const backupExportFunction = backupMigration.slice(
+  backupMigration.indexOf(
+    "create or replace function public.backup_export_snapshot",
+  ),
+  backupMigration.indexOf(
+    "create or replace function public.backup_complete_job",
+  ),
+);
+check(
+  backupDeclarationAudit.functionCount >= 18 &&
+    backupDeclarationAudit.undeclared.length === 0,
+  "Every backup/restore PL/pgSQL SELECT/RETURNING INTO target is declared",
+);
+check(
+  /create\s+table\s+public\.backup_jobs/i.test(backupMigration) &&
+    /create\s+table\s+public\.restore_jobs/i.test(backupMigration) &&
+    /'alaga-backups'[\s\S]*false[\s\S]*104857600/i.test(backupMigration),
+  "Backup history, restore staging, and the bounded private Storage bucket are installed",
+);
+check(
+  /backup_assert_admin[\s\S]*role is distinct from 'admin'/i.test(
+    backupMigration,
+  ) &&
+    /revoke all on table public\.backup_configuration,[\s\S]*from public, anon, authenticated/i.test(
+      backupMigration,
+    ),
+  "Backup administration is server-revalidated and tables remain browser-private",
+);
+check(
+  /backup_export_snapshot[\s\S]*jsonb_build_object\([\s\S]*'residents'[\s\S]*'notification_preferences'/i.test(
+    backupExportFunction,
+  ) &&
+    !/backup_export_snapshot[\s\S]*public\.(?:audit_logs|ai_request_rate_limits|outbound_notification_jobs|notification_delivery_attempts|assistance_notifications)/i.test(
+      backupExportFunction,
+    ),
+  "Application backup export uses the approved data allowlist and excludes runtime logs",
+);
+check(
+  /restore conflict in %[\s\S]*errcode = '40001'/i.test(backupMigration) &&
+    /backup_restore_apply[\s\S]*lock table[\s\S]*disable trigger user[\s\S]*enable trigger user/i.test(
+      backupMigration,
+    ),
+  "Restore conflicts abort one locked transaction while preserving foreign-key constraints",
+);
+check(
+  /row_number\(\) over \(order by b\.completed_at desc/i.test(
+    backupMigration,
+  ) &&
+    /ranked\.position > ranked\.retention_count/i.test(backupMigration) &&
+    /retention_count smallint not null default 7/i.test(backupMigration),
+  "Automatic backup retention is scheduler-ready, bounded, and defaults to seven",
+);
+check(
+  /backup_restore_confirm[\s\S]*digest\(p_confirmation_token, 'sha256'\)/i.test(
+    backupMigration,
+  ) &&
+    /confirmation_expires_at[\s\S]*statement_timestamp\(\) \+ interval '10 minutes'/i.test(
+      backupMigration,
+    ) &&
+    /grant execute on function public\.backup_restore_apply\(uuid, jsonb\) to service_role/i.test(
+      backupMigration,
+    ) &&
+    !/grant execute on function public\.backup_restore_apply\(uuid, jsonb\) to authenticated/i.test(
+      backupMigration,
+    ),
+  "Restore confirmation is expiring and mutation remains service-role-only",
 );
 
 const functionBlocks = [

@@ -30,6 +30,11 @@ referrals, prenatal summaries, and child health summaries.
 The release-candidate foundation adds role-aware UAT corrections and optional,
 provider-neutral email/SMS delivery. External channels are opt-in, use only
 minimized templates, and never make core workflows depend on provider success.
+Phase 12 adds administrator-only, application-aware backup and restore with
+private signed ZIP packages, per-file SHA-256 integrity, dry-run preview,
+transactional conflict rollback, history, and scheduler-ready retention. It
+does not export Auth/Storage internals, secrets, AI conversations, audit
+payloads, or notification delivery logs.
 
 Inventory, prescription dispensing, laboratory integrations, birth
 registration, provider-specific delivery webhooks, AI mutations, and AI access
@@ -111,6 +116,12 @@ Supabase. They must never use the `VITE_` prefix. See
 Outbound providers and the queue processor also use server-only secrets. See
 [Email and SMS deployment](docs/deployment/EMAIL_SMS.md). Never place provider
 keys or the notification processor token in Vite configuration.
+
+Backup workers require separate server-only signing and scheduler secrets. See
+[Backup deployment](docs/deployment/BACKUP_DEPLOYMENT.md), the
+[architecture](docs/architecture/BACKUP_AND_RESTORE.md), and the
+[security policy](docs/security/BACKUP_SECURITY.md). Phase 12 does not deploy a
+scheduler or apply Migration 33 automatically.
 
 The reusable client boundary is `src/lib/supabase/client.js`. Calling
 `getSupabaseClient()` without both public variables throws a clear

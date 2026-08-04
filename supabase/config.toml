@@ -388,6 +388,17 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/process-notification-jobs/index.ts"
 
+[functions.backup-admin]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/backup-admin/index.ts"
+
+[functions.process-backups]
+enabled = true
+# Scheduler-only endpoint. It authenticates a dedicated high-entropy token.
+verify_jwt = false
+entrypoint = "./functions/process-backups/index.ts"
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

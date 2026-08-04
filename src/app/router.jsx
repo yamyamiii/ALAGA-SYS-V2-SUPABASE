@@ -17,6 +17,9 @@ const AccountSettingsPage = lazy(() => import("@/pages/AccountSettingsPage"));
 const UserManagementPage = lazy(
   () => import("@/features/user-management/UserManagementPage"),
 );
+const BackupRestorePage = lazy(
+  () => import("@/features/backup/BackupRestorePage"),
+);
 const HouseholdRegistryPage = lazy(
   () => import("@/features/registry/HouseholdRegistryPage"),
 );
@@ -63,6 +66,7 @@ const moduleRoutes = navigationItems.filter(
   (item) =>
     item.path !== ROUTES.dashboard &&
     item.path !== ROUTES.userManagement &&
+    item.path !== ROUTES.backupRestore &&
     item.path !== ROUTES.households &&
     item.path !== ROUTES.residents &&
     item.path !== ROUTES.appointments &&
@@ -123,6 +127,14 @@ export function AppRouter() {
               element={
                 <RoleGuard permission={PERMISSIONS.MANAGE_USERS}>
                   <UserManagementPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.backupRestore}
+              element={
+                <RoleGuard permission={PERMISSIONS.MANAGE_BACKUPS}>
+                  <BackupRestorePage />
                 </RoleGuard>
               }
             />

@@ -30,6 +30,7 @@ export const ROUTES = Object.freeze({
   monthlyReports: "/reports?category=overview&period=month",
   auditLogs: "/audit-logs",
   userManagement: "/user-management",
+  backupRestore: "/backup-restore",
   settings: "/settings",
   account: "/account",
   accessDenied: "/access-denied",

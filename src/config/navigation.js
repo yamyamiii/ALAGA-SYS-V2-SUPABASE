@@ -2,6 +2,7 @@ import {
   Activity,
   Bell,
   Building2,
+  DatabaseBackup,
   CalendarDays,
   CircleHelp,
   ClipboardList,
@@ -116,5 +117,11 @@ export const navigationItems = [
     path: ROUTES.userManagement,
     icon: ShieldCheck,
     permission: PERMISSIONS.MANAGE_USERS,
+  },
+  {
+    label: "Backup & Restore",
+    path: ROUTES.backupRestore,
+    icon: DatabaseBackup,
+    permission: PERMISSIONS.MANAGE_BACKUPS,
   },
 ];
