@@ -1125,9 +1125,11 @@ const EMERGENCY_PATTERN =
 const MEDICAL_DECISION_PATTERN =
   /\b(?:diagnos(?:e|is)|prescrib(?:e|ing)|dosage|dose of|how many (?:mg|tablet)|am i pregnant|determine (?:if )?.*pregnant|interpret (?:my )?(?:lab|laboratory|test) results?|what disease do i have|what medicine should i take)\b/i;
 const SECURITY_BYPASS_PATTERN =
-  /\b(?:ignore (?:all |the )?(?:previous|system)|reveal (?:the )?(?:system prompt|instructions|secret|api key)|gemini_api_key|service[_ -]?role|execute (?:arbitrary )?sql|impersonate (?:a )?(?:doctor|nurse|midwife)|show (?:another|other) resident)\b/i;
+  /\b(?:ignore (?:all |the )?(?:previous|system)|reveal (?:the )?(?:system prompt|instructions|secret|api key)|show (?:the )?database|show residents|dump secrets?|gemini_api_key|service[_ -]?role|(?:execute|run) (?:arbitrary )?sql|impersonate (?:a )?(?:doctor|nurse|midwife)|show (?:another|other) resident)\b/i;
 const LIKELY_IDENTIFIER_PATTERN =
   /(?:\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b|\b09\d{9}\b|\b[0-9a-f]{8}-[0-9a-f-]{27,36}\b|\b(?:RES|ENC|APT|MAT|CHD|HH)-\d{4}-\d{6}\b)/i;
+const LIKELY_CLINICAL_DATA_PATTERN =
+  /\b(?:patient|resident)\s+(?:name|address)|\b(?:home|street)\s+address|\b(?:blood pressure|bp|heart rate|pulse|temperature|oxygen saturation|spo2)\s*(?::|is|=)?\s*\d|\b(?:diagnosis|assessment|treatment plan|clinical notes?|chief complaint|medical history|allerg(?:y|ies)|last menstrual period|lmp|estimated delivery date|edd|pregnancy details?|laboratory results?|report contents?|document contents?)\s*(?::|is|=)/i;
 
 export function safetyResponseFor(message: string) {
   if (EMERGENCY_PATTERN.test(message)) {
@@ -1156,6 +1158,13 @@ export function safetyResponseFor(message: string) {
       category: "data_minimization",
       response:
         "For privacy, remove email addresses, phone numbers, UUIDs, and ALAGA-SYS record numbers before asking for general guidance. Do not enter clinical details or another person's information in this chat.",
+    };
+  }
+  if (LIKELY_CLINICAL_DATA_PATTERN.test(message)) {
+    return {
+      category: "data_minimization",
+      response:
+        "For privacy, do not enter names, addresses, vital signs, diagnoses, pregnancy details, clinical notes, reports, or document contents in this chat. I can provide general ALAGA-SYS workflow guidance without personal health information.",
     };
   }
   return null;

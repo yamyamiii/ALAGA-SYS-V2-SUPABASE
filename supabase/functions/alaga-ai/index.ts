@@ -112,6 +112,8 @@ function jsonResponse(
       "Cache-Control": "no-store, max-age=0",
       "Content-Security-Policy": "default-src 'none'",
       "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     },
   });
 }
@@ -326,14 +328,12 @@ function mapProviderError(error: unknown) {
 
 function logRequest(
   requestId: string,
-  actorProfileId: string | null,
   role: CanonicalRole | null,
   category: string,
   startedAt: number,
 ) {
   console.log("alaga-ai request", {
     request_id: requestId,
-    actor_profile_id: actorProfileId,
     canonical_role: role,
     category,
     latency_ms: Math.max(0, Math.round(performance.now() - startedAt)),
@@ -353,7 +353,7 @@ Deno.serve(async (request) => {
     const env = environment();
     headers = exactOriginCorsHeaders(request, env.allowedOrigins);
     if (request.method === "OPTIONS") {
-      logRequest(requestId, null, null, "cors_preflight", startedAt);
+      logRequest(requestId, null, "cors_preflight", startedAt);
       return new Response(null, { status: 204, headers });
     }
     if (request.method !== "POST") {
@@ -438,13 +438,7 @@ Deno.serve(async (request) => {
     const finalUserMessage = messages.at(-1)?.content ?? "";
     const safetyResponse = safetyResponseFor(finalUserMessage);
     if (safetyResponse) {
-      logRequest(
-        requestId,
-        profile.id,
-        profile.role,
-        safetyResponse.category,
-        startedAt,
-      );
+      logRequest(requestId, profile.role, safetyResponse.category, startedAt);
       return jsonResponse(
         {
           data: assistantData(safetyResponse.response),
@@ -462,7 +456,6 @@ Deno.serve(async (request) => {
     if (navigationResponse) {
       logRequest(
         requestId,
-        profile.id,
         profile.role,
         navigationResponse.category,
         startedAt,
@@ -487,13 +480,7 @@ Deno.serve(async (request) => {
       profile.hasActiveResidentLink,
     );
     if (workflowResponse) {
-      logRequest(
-        requestId,
-        profile.id,
-        profile.role,
-        workflowResponse.category,
-        startedAt,
-      );
+      logRequest(requestId, profile.role, workflowResponse.category, startedAt);
       return jsonResponse(
         {
           data: assistantData(
@@ -513,13 +500,7 @@ Deno.serve(async (request) => {
       ? await loadApprovedGrounding(admin, profile.id, sourceTypes)
       : [];
     if (requiresLiveGrounding(finalUserMessage) && liveGrounding.length === 0) {
-      logRequest(
-        requestId,
-        profile.id,
-        profile.role,
-        "grounding_empty",
-        startedAt,
-      );
+      logRequest(requestId, profile.role, "grounding_empty", startedAt);
       return jsonResponse(
         {
           data: assistantData(uncertaintyMessageFor(finalUserMessage)),
@@ -534,13 +515,7 @@ Deno.serve(async (request) => {
       liveGrounding,
     );
     if (groundedResponse) {
-      logRequest(
-        requestId,
-        profile.id,
-        profile.role,
-        groundedResponse.category,
-        startedAt,
-      );
+      logRequest(requestId, profile.role, groundedResponse.category, startedAt);
       return jsonResponse(
         {
           data: assistantData(
@@ -575,7 +550,7 @@ Deno.serve(async (request) => {
     }
     const message = boundedResponse(interaction.output_text);
 
-    logRequest(requestId, profile.id, profile.role, "success", startedAt);
+    logRequest(requestId, profile.role, "success", startedAt);
     return jsonResponse(
       { data: assistantData(message, grounding), request_id: requestId },
       200,
@@ -591,7 +566,7 @@ Deno.serve(async (request) => {
             500,
           );
     failureCategory = safeError.code;
-    logRequest(requestId, actorProfileId, role, failureCategory, startedAt);
+    logRequest(requestId, role, failureCategory, startedAt);
     return jsonResponse(
       {
         error: { code: safeError.code, message: safeError.message },

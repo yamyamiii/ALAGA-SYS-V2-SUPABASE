@@ -111,7 +111,7 @@ describe("ALAGA AI Edge Function security boundary", () => {
       index.indexOf("Deno.serve"),
     );
     expect(logger).toMatch(/request_id/);
-    expect(logger).toMatch(/actor_profile_id/);
+    expect(logger).not.toMatch(/actor_profile_id/);
     expect(logger).toMatch(/canonical_role/);
     expect(logger).toMatch(/latency_ms/);
     expect(logger).not.toMatch(/message|token|apiKey|geminiApiKey|content/);

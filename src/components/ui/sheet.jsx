@@ -27,17 +27,17 @@ const SheetContent = React.forwardRef(
       <SheetPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed z-50 bg-background p-6 shadow-xl transition ease-in-out data-[state=closed]:duration-200 data-[state=open]:duration-300",
+          "fixed z-50 min-h-0 bg-background p-6 shadow-xl transition ease-in-out data-[state=closed]:duration-200 data-[state=open]:duration-300",
           side === "left" &&
-            "inset-y-0 left-0 h-full w-[86%] border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
+            "inset-y-0 left-0 h-dvh w-[86%] max-w-[calc(100%-2.5rem)] border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
           side === "right" &&
-            "inset-y-0 right-0 h-full w-[86%] border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
+            "inset-y-0 right-0 h-dvh w-[86%] max-w-[calc(100%-2.5rem)] border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
           className,
         )}
         {...props}
       >
         {children}
-        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring">
+        <SheetPrimitive.Close className="absolute right-[max(0.5rem,env(safe-area-inset-right))] top-[max(0.5rem,env(safe-area-inset-top))] flex h-10 w-10 touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:right-4 sm:top-4">
           <X className="h-5 w-5" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>

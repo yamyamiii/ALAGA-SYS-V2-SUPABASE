@@ -13,9 +13,12 @@ export class ErrorBoundary extends Component {
     return { hasError: true };
   }
 
-  componentDidCatch(error, info) {
+  componentDidCatch() {
     if (import.meta.env.DEV) {
-      console.error("ALAGA-SYS encountered an unexpected error.", error, info);
+      // Never write application data, clinical narratives, or stack contents
+      // to the browser console. Detailed diagnostics belong in a reviewed,
+      // redacted monitoring boundary.
+      console.error("ALAGA-SYS encountered a redacted render error.");
     }
   }
 

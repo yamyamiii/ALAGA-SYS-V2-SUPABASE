@@ -13,19 +13,19 @@ export function AppShell() {
   const { profile } = useAuth();
 
   return (
-    <div className="min-h-dvh bg-background">
+    <div className="min-h-dvh min-w-0 overflow-x-clip bg-background">
       <Sidebar
         collapsed={collapsed}
         onToggle={() => setCollapsed((value) => !value)}
       />
       <div
         className={cn(
-          "min-h-dvh transition-[padding] duration-200",
+          "min-h-dvh min-w-0 transition-[padding] duration-200",
           collapsed ? "lg:pl-[76px]" : "lg:pl-[264px]",
         )}
       >
         <Header />
-        <main className="bg-dashboard-pattern min-h-[calc(100dvh-72px)] p-4 sm:p-6 lg:p-8">
+        <main className="bg-dashboard-pattern min-h-[calc(100dvh-72px)] min-w-0 p-4 sm:p-6 lg:p-8">
           <ContentContainer>
             <Outlet />
           </ContentContainer>

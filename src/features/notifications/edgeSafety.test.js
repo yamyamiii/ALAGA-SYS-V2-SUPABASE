@@ -50,7 +50,13 @@ describe("outbound notification Edge Function safety", () => {
   });
 
   it("does not log provider secrets, full contacts, or message bodies", () => {
-    expect(index).toMatch(/maskedDestination/i);
+    const operationalLog = index.slice(
+      index.indexOf('console.log("outbound notification result"'),
+      index.indexOf("return Response.json(results"),
+    );
+    expect(operationalLog).not.toMatch(
+      /recipientProfileId|maskedDestination|destination/i,
+    );
     expect(index).not.toMatch(
       /console\.(?:log|warn|error)\([^;]*(?:apiKey|serviceKey|processorToken)/i,
     );

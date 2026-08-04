@@ -11,6 +11,47 @@ import {
 
 type Json = Record<string, unknown>;
 
+const SECURITY_HEADERS = {
+  "Cache-Control": "no-store",
+  "Content-Security-Policy": "default-src 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+};
+
+function parseAllowedOrigins(value: string) {
+  const origins = new Set<string>();
+  for (const candidate of value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)) {
+    let parsed: URL;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      throw new BackupPackageError(
+        "server_configuration_error",
+        "ALLOWED_ORIGINS contains an invalid origin.",
+        500,
+      );
+    }
+    if (
+      !["http:", "https:"].includes(parsed.protocol) ||
+      parsed.origin !== candidate ||
+      parsed.username ||
+      parsed.password
+    ) {
+      throw new BackupPackageError(
+        "server_configuration_error",
+        "ALLOWED_ORIGINS must contain exact origins without paths or credentials.",
+        500,
+      );
+    }
+    origins.add(parsed.origin);
+  }
+  return origins;
+}
+
 function env() {
   const url = Deno.env.get("SUPABASE_URL");
   const publishable =
@@ -20,12 +61,7 @@ function env() {
     Deno.env.get("SUPABASE_SECRET_KEY") ??
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const signingKey = Deno.env.get("BACKUP_SIGNING_KEY") ?? "";
-  const origins = new Set(
-    (Deno.env.get("ALLOWED_ORIGINS") ?? "")
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean),
-  );
+  const origins = parseAllowedOrigins(Deno.env.get("ALLOWED_ORIGINS") ?? "");
   if (
     !url ||
     !publishable ||
@@ -44,20 +80,20 @@ function env() {
 
 function cors(request: Request, origins: Set<string>) {
   const origin = request.headers.get("origin");
-  if (origin && !origins.has(origin))
+  if (!origin || !origins.has(origin))
     throw new BackupPackageError(
       "origin_not_allowed",
       "This application origin is not allowed.",
       403,
     );
   return {
-    ...(origin ? { "Access-Control-Allow-Origin": origin } : {}),
+    "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Max-Age": "600",
     Vary: "Origin",
-    "Cache-Control": "no-store",
+    ...SECURITY_HEADERS,
   };
 }
 
@@ -382,7 +418,7 @@ async function restore(
 }
 
 Deno.serve(async (request) => {
-  let headers: Record<string, string> = { "Cache-Control": "no-store" };
+  let headers: Record<string, string> = { ...SECURITY_HEADERS };
   try {
     const config = env();
     headers = cors(request, config.origins);

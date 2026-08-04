@@ -39,8 +39,9 @@ describe("trusted user-management migration", () => {
       /set_config\('app\.trusted_user_management',\s*'on',\s*true\)/i,
     );
     expect(bootstrap).toMatch(
-      /target_user_id constant uuid := '00000000-0000-0000-0000-000000000000'/i,
+      /target_user_id constant uuid := '(?:00000000-0000-0000-0000-000000000000|[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})'/i,
     );
+    expect(bootstrap).not.toMatch(/(?:service[_ -]?role|secret[_ -]?key|eyJ)/i);
     expect(bootstrap).toMatch(/bootstrap retired: an active administrator/i);
   });
 });

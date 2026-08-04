@@ -22,6 +22,14 @@ import {
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
+const SECURITY_HEADERS = {
+  "Cache-Control": "no-store",
+  "Content-Security-Policy": "default-src 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+};
+
 function environment() {
   const values = Object.fromEntries(
     [
@@ -280,8 +288,6 @@ Deno.serve(async (request) => {
         jobId: job.id,
         eventType: job.event_type,
         channel: job.channel,
-        recipientProfileId: job.recipient_profile_id,
-        maskedDestination: verified?.masked ?? "unavailable",
         resultCategory: delivery.category ?? delivery.outcome,
         latencyMs: Math.round(latency),
         timestamp: new Date().toISOString(),
@@ -289,11 +295,7 @@ Deno.serve(async (request) => {
     }
     return Response.json(results, {
       status: 200,
-      headers: {
-        "Cache-Control": "no-store",
-        "Content-Security-Policy": "default-src 'none'",
-        "X-Content-Type-Options": "nosniff",
-      },
+      headers: SECURITY_HEADERS,
     });
   } catch (error) {
     const safe =
@@ -312,11 +314,7 @@ Deno.serve(async (request) => {
       { error: safe.code, message: safe.message },
       {
         status: safe.status,
-        headers: {
-          "Cache-Control": "no-store",
-          "Content-Security-Policy": "default-src 'none'",
-          "X-Content-Type-Options": "nosniff",
-        },
+        headers: SECURITY_HEADERS,
       },
     );
   }

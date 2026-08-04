@@ -38,6 +38,7 @@ const expectedMigrations = [
   "20260720003100_printable_healthcare_documents.sql",
   "20260720003200_outbound_notification_foundation.sql",
   "20260720003300_backup_restore_foundation.sql",
+  "20260720003400_production_security_hardening.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -108,6 +109,8 @@ const reviewedPendingMigrationHashes = {
     "cbce86c0bd20e74aeec8d9ab51ceb66dc6e6e44330e629cf73dd3f8045e23929",
   "20260720003300_backup_restore_foundation.sql":
     "394793a2449680175e30134298bd35e8edbeeafd1fbef349b593853020ade519",
+  "20260720003400_production_security_hardening.sql":
+    "08643a1e9a2d2431de8ea2a88af85784f3f622572395ba28cda3ac17fb42e5de",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -203,7 +206,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly thirty-three expected migrations exist in lexical order",
+  "Exactly thirty-four expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -211,6 +214,55 @@ const migrationEntries = migrationFiles.map((file) => ({
   sql: fs.readFileSync(path.join(migrationsDirectory, file), "utf8"),
 }));
 const allSql = migrationEntries.map(({ sql }) => sql).join("\n");
+const securityHardeningMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("production_security_hardening"),
+  )?.sql ?? "";
+
+check(
+  /current_resident_id\(\)[\s\S]*p\.account_status = 'active'[\s\S]*p\.role = 'resident'[\s\S]*r\.status = 'active'[\s\S]*r\.archived_at is null/i.test(
+    securityHardeningMigration,
+  ) &&
+    /current_household_id\(\)[\s\S]*p\.account_status = 'active'[\s\S]*p\.role = 'resident'[\s\S]*r\.status = 'active'[\s\S]*r\.archived_at is null/i.test(
+      securityHardeningMigration,
+    ),
+  "Resident identity helpers require an active resident account and record",
+);
+check(
+  /create policy profiles_update_own[\s\S]*current_profile_role\(\) is not null[\s\S]*with check[\s\S]*current_profile_role\(\) is not null/i.test(
+    securityHardeningMigration,
+  ) &&
+    /create policy residents_select_own[\s\S]*id = public\.current_resident_id\(\)/i.test(
+      securityHardeningMigration,
+    ),
+  "Inactive accounts cannot mutate profiles or use resident self-read policies",
+);
+check(
+  (
+    securityHardeningMigration.match(
+      /actor_role public\.app_role := public\.current_profile_role\(\)/gi,
+    ) ?? []
+  ).length === 2 &&
+    (
+      securityHardeningMigration.match(
+        /actor_id is null or actor_role is null/gi,
+      ) ?? []
+    ).length === 2 &&
+    /errcode = '42501'/i.test(securityHardeningMigration),
+  "Notification preference RPCs explicitly reject inactive authenticated profiles",
+);
+check(
+  /alter function public\.report_validate_scope\([\s\S]*\) stable/i.test(
+    securityHardeningMigration,
+  ) &&
+    /alter function public\.admin_list_resident_link_candidates\([\s\S]*\) volatile/i.test(
+      securityHardeningMigration,
+    ) &&
+    /alter function public\.admin_get_resident_account\(uuid,uuid\) volatile/i.test(
+      securityHardeningMigration,
+    ),
+  "Function volatility matches read-only reports and context-setting admin lookups",
+);
 
 for (const [file, expectedHash] of Object.entries(completedMigrationHashes)) {
   const sql = fs.readFileSync(path.join(migrationsDirectory, file));

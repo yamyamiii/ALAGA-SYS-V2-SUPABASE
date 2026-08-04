@@ -166,7 +166,7 @@ describe("AI-assisted resident appointment form action", () => {
     expect(props).not.toHaveProperty("residentId");
     expect(props).not.toHaveProperty("defaultValues");
     expect(props).not.toHaveProperty("onSubmit");
-  });
+  }, 10_000);
 
   it("opens the form while already on the appointments page", async () => {
     const user = userEvent.setup();

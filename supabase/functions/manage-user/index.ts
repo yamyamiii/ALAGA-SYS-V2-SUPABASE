@@ -15,6 +15,47 @@ type SafeRecord = Record<string, unknown>;
 
 const MAX_BODY_BYTES = 32_768;
 
+const SECURITY_HEADERS = {
+  "Cache-Control": "no-store",
+  "Content-Security-Policy": "default-src 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+};
+
+function parseAllowedOrigins(value: string) {
+  const origins = new Set<string>();
+  for (const candidate of value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)) {
+    let parsed: URL;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      throw new ManageUserError(
+        "server_configuration_error",
+        "ALLOWED_ORIGINS contains an invalid origin.",
+        500,
+      );
+    }
+    if (
+      !["http:", "https:"].includes(parsed.protocol) ||
+      parsed.origin !== candidate ||
+      parsed.username ||
+      parsed.password
+    ) {
+      throw new ManageUserError(
+        "server_configuration_error",
+        "ALLOWED_ORIGINS must contain exact origins without paths or credentials.",
+        500,
+      );
+    }
+    origins.add(parsed.origin);
+  }
+  return origins;
+}
+
 function firstNamedKey(variableName: string): string | null {
   const raw = Deno.env.get(variableName);
   if (!raw) return null;
@@ -40,11 +81,8 @@ function environment() {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
     firstNamedKey("SUPABASE_SECRET_KEYS");
   const invitationRedirectUrl = Deno.env.get("INVITATION_REDIRECT_URL");
-  const allowedOrigins = new Set(
-    (Deno.env.get("ALLOWED_ORIGINS") ?? "")
-      .split(",")
-      .map((origin) => origin.trim())
-      .filter(Boolean),
+  const allowedOrigins = parseAllowedOrigins(
+    Deno.env.get("ALLOWED_ORIGINS") ?? "",
   );
 
   if (!url || !publishableKey || !secretKey) {
@@ -61,6 +99,27 @@ function environment() {
       500,
     );
   }
+  let invitationRedirect: URL;
+  try {
+    invitationRedirect = new URL(invitationRedirectUrl);
+  } catch {
+    throw new ManageUserError(
+      "server_configuration_error",
+      "INVITATION_REDIRECT_URL is invalid.",
+      500,
+    );
+  }
+  if (
+    !allowedOrigins.has(invitationRedirect.origin) ||
+    invitationRedirect.username ||
+    invitationRedirect.password
+  ) {
+    throw new ManageUserError(
+      "server_configuration_error",
+      "INVITATION_REDIRECT_URL must use a trusted application origin.",
+      500,
+    );
+  }
 
   return {
     url,
@@ -73,7 +132,7 @@ function environment() {
 
 function corsHeaders(request: Request, allowedOrigins: Set<string>) {
   const origin = request.headers.get("origin");
-  if (origin && !allowedOrigins.has(origin)) {
+  if (!origin || !allowedOrigins.has(origin)) {
     throw new ManageUserError(
       "origin_not_allowed",
       "This application origin is not allowed.",
@@ -81,7 +140,7 @@ function corsHeaders(request: Request, allowedOrigins: Set<string>) {
     );
   }
   return {
-    ...(origin ? { "Access-Control-Allow-Origin": origin } : {}),
+    "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -97,7 +156,7 @@ function jsonResponse(
 ) {
   return Response.json(body, {
     status,
-    headers: { ...headers, "Cache-Control": "no-store" },
+    headers: { ...headers, ...SECURITY_HEADERS },
   });
 }
 

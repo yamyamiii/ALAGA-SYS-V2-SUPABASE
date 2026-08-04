@@ -25,7 +25,7 @@ export function MobileNavigation({ children }) {
           </SheetDescription>
           <Brand />
         </SheetHeader>
-        <div className="flex-1 overflow-y-auto px-3 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5">
           <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Workspace
           </p>

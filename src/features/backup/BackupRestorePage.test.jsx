@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,6 +31,7 @@ function renderPage() {
 
 describe("BackupRestorePage", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     backupService.getDashboard.mockResolvedValue({
       configuration: { frequency: "disabled", retention_count: 7, version: 1 },
       backups: [],
@@ -88,5 +89,114 @@ describe("BackupRestorePage", () => {
     expect(
       screen.getByRole("button", { name: "Restore backup" }),
     ).toBeDisabled();
+  });
+
+  it.each([
+    [360, 800],
+    [390, 844],
+    [430, 932],
+    [768, 1024],
+    [1024, 768],
+    [1366, 768],
+    [1920, 1080],
+  ])("keeps responsive controls available at %ix%i", async (width, height) => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: width,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: height,
+    });
+    backupService.getDashboard.mockResolvedValue({
+      configuration: { frequency: "disabled", retention_count: 7, version: 1 },
+      backups: [
+        {
+          id: "backup-1",
+          backup_name:
+            "ALAGA_BACKUP_20260805_190000_WITH_A_VERY_LONG_MOBILE_FILENAME.zip",
+          status: "completed",
+          checksum_status: "verified",
+          mode: "manual",
+          backup_version: "1.0",
+          created_at: "2026-08-05T11:00:00.000Z",
+          size_bytes: 1024,
+        },
+      ],
+      restores: [],
+    });
+
+    renderPage();
+    const page = await screen.findByTestId("backup-restore-page");
+    fireEvent(window, new Event("resize"));
+
+    expect(page).toHaveClass("min-w-0");
+    expect(
+      screen
+        .getAllByText(/WITH_A_VERY_LONG/)
+        .every((element) => element.classList.contains("break-all")),
+    ).toBe(true);
+    expect(screen.getByRole("button", { name: "Create Backup" })).toHaveClass(
+      "w-full",
+      "min-h-11",
+    );
+    expect(screen.getByRole("button", { name: "Validate backup" })).toHaveClass(
+      "w-full",
+      "min-h-11",
+    );
+    expect(screen.getByRole("button", { name: "Download" })).toHaveClass(
+      "w-full",
+    );
+  });
+
+  it("preserves the restore preview and confirmation across focus and orientation changes", async () => {
+    const user = userEvent.setup();
+    backupService.validateRestore.mockResolvedValue({
+      confirmation_token: "memory-only-token",
+      restore: {
+        id: "restore-1",
+        backup_name: "ALAGA_BACKUP_20260805_190000.zip",
+        backup_version: "1.0",
+        application_version: "0.1.0",
+        schema_version: 33,
+        backup_created_at: "2026-08-05T11:00:00.000Z",
+        files: ["metadata.json", "checksums.json"],
+        preview_counts: { conflicts: 0, missing_auth_users: 0 },
+        warnings: [],
+      },
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "Backup & Restore" });
+    await user.upload(
+      screen.getByLabelText("Select an ALAGA-SYS backup ZIP file"),
+      new File(["package"], "ALAGA_BACKUP_20260805_190000.zip", {
+        type: "application/zip",
+      }),
+    );
+    const confirmation = await screen.findByLabelText(
+      "Type RESTORE to confirm",
+    );
+    await user.type(confirmation, "RESTORE");
+
+    fireEvent.blur(window);
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    fireEvent(document, new Event("visibilitychange"));
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    fireEvent(document, new Event("visibilitychange"));
+    fireEvent.focus(window);
+    fireEvent(window, new Event("orientationchange"));
+    fireEvent(window, new Event("resize"));
+
+    expect(screen.getByTestId("restore-preview-dialog")).toBeInTheDocument();
+    expect(confirmation).toHaveValue("RESTORE");
+    expect(
+      screen.getByRole("button", { name: "Restore backup" }),
+    ).toBeEnabled();
   });
 });

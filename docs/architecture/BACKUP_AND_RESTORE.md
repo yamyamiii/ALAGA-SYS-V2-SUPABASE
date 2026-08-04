@@ -46,3 +46,5 @@ Supabase Auth users must be independently recovered before profiles that referen
 ## Limits
 
 Archives are limited to 25 MiB compressed and 100 MiB expanded. Storage allows up to 100 MiB so future reviewed streaming work can raise the application limit. Very large deployments require a chunked/streaming Phase 12 follow-up.
+
+The administration UI is a responsive card layout rather than a desktop-only table. Long package names and report values wrap, narrow-screen actions become full width, restore confirmation stays in a dynamic-viewport scroll container, and uploaded package/confirmation state remains React memory across focus, visibility, resize, and orientation events. It is cleared on Cancel, explicit close, restore completion/failure, logout, or route unmount and is never persisted to local storage.

@@ -5,6 +5,14 @@ import {
   createBackupPackage,
 } from "../_shared/backup-domain.ts";
 
+const SECURITY_HEADERS = {
+  "Cache-Control": "no-store",
+  "Content-Security-Policy": "default-src 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+};
+
 function constantTimeEqual(left: string, right: string) {
   const a = new TextEncoder().encode(left);
   const b = new TextEncoder().encode(right);
@@ -32,6 +40,12 @@ function configuration() {
 
 Deno.serve(async (request) => {
   try {
+    if (request.headers.has("origin"))
+      throw new BackupPackageError(
+        "origin_not_allowed",
+        "Browser requests are not accepted by the backup processor.",
+        403,
+      );
     if (request.method !== "POST")
       throw new BackupPackageError(
         "method_not_allowed",
@@ -140,7 +154,7 @@ Deno.serve(async (request) => {
     }
     return Response.json(
       { processed: outcomes },
-      { headers: { "Cache-Control": "no-store" } },
+      { headers: SECURITY_HEADERS },
     );
   } catch (error) {
     const safe =
@@ -153,7 +167,7 @@ Deno.serve(async (request) => {
           );
     return Response.json(
       { error: { code: safe.code, message: safe.message } },
-      { status: safe.status, headers: { "Cache-Control": "no-store" } },
+      { status: safe.status, headers: SECURITY_HEADERS },
     );
   }
 });

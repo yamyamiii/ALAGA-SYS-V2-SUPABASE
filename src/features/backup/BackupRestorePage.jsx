@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { downloadBackupFile } from "@/features/backup/downloadBackup";
 import { backupService } from "@/services/backupService";
 
 const key = ["backup-administration"];
@@ -67,7 +68,7 @@ const badge = (status) =>
 
 function HistoryCard({ rows, onDownload, onRetry, downloading }) {
   return (
-    <Card className="xl:col-span-2">
+    <Card className="min-w-0 xl:col-span-2">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <History className="h-5 w-5" aria-hidden="true" />
@@ -88,10 +89,10 @@ function HistoryCard({ rows, onDownload, onRetry, downloading }) {
             {rows.map((row) => (
               <article
                 key={row.id}
-                className="grid gap-3 rounded-xl border p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+                className="grid min-w-0 gap-3 rounded-xl border p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">
+                  <p className="break-all text-sm font-semibold">
                     {row.backup_name}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -110,11 +111,12 @@ function HistoryCard({ rows, onDownload, onRetry, downloading }) {
                     </p>
                   ) : null}
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex w-full flex-wrap gap-2 md:w-auto md:justify-end">
                   {row.status === "completed" ? (
                     <Button
                       size="sm"
                       variant="outline"
+                      className="min-h-10 w-full touch-manipulation sm:w-auto"
                       disabled={downloading}
                       onClick={() => onDownload(row)}
                     >
@@ -126,6 +128,7 @@ function HistoryCard({ rows, onDownload, onRetry, downloading }) {
                     <Button
                       size="sm"
                       variant="outline"
+                      className="min-h-10 w-full touch-manipulation sm:w-auto"
                       onClick={() => onRetry(row)}
                     >
                       <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -159,27 +162,27 @@ function RestoreDialog({ preview, onClose, onRestore, restoring }) {
         if (!open && !restoring) onClose();
       }}
     >
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl" data-testid="restore-preview-dialog">
+        <DialogHeader className="pr-10">
           <DialogTitle>Confirm application restore</DialogTitle>
           <DialogDescription>
             Integrity checks passed. Review the dry-run preview. The transaction
             will stop and roll back on any conflict.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3 text-sm sm:grid-cols-2">
-          <p>
+        <div className="grid min-w-0 gap-3 text-sm sm:grid-cols-2">
+          <p className="min-w-0 break-words">
             <span className="text-muted-foreground">Backup:</span>
             <br />
             {restore.backup_name}
           </p>
-          <p>
+          <p className="min-w-0 break-words">
             <span className="text-muted-foreground">Versions:</span>
             <br />
             backup {restore.backup_version} · app {restore.application_version}{" "}
             · schema {restore.schema_version}
           </p>
-          <p>
+          <p className="min-w-0 break-words">
             <span className="text-muted-foreground">Backup date:</span>
             <br />
             {formatDate(restore.backup_created_at)}
@@ -197,7 +200,9 @@ function RestoreDialog({ preview, onClose, onRestore, restoring }) {
           <p className="text-sm font-medium">Verified files</p>
           <ul className="grid max-h-32 gap-1 overflow-y-auto rounded-lg border p-3 text-xs text-muted-foreground sm:grid-cols-2">
             {restore.files?.map((file) => (
-              <li key={file}>{file}</li>
+              <li key={file} className="break-all">
+                {file}
+              </li>
             ))}
           </ul>
         </div>
@@ -227,11 +232,17 @@ function RestoreDialog({ preview, onClose, onRestore, restoring }) {
             autoComplete="off"
           />
         </div>
-        <DialogFooter>
-          <Button variant="outline" disabled={restoring} onClick={onClose}>
+        <DialogFooter className="dialog-safe-footer sticky bottom-0 z-10 -mx-4 -mb-4 border-t bg-background px-4 pt-3 sm:-mx-6 sm:-mb-6 sm:px-6">
+          <Button
+            className="min-h-11 w-full touch-manipulation sm:w-auto"
+            variant="outline"
+            disabled={restoring}
+            onClick={onClose}
+          >
             Cancel
           </Button>
           <Button
+            className="min-h-11 w-full touch-manipulation sm:w-auto"
             variant="destructive"
             disabled={
               hasBlockingPrerequisites ||
@@ -295,8 +306,12 @@ export default function BackupRestorePage() {
   });
   const download = useMutation({
     mutationFn: (row) => backupService.downloadBackup(row.id),
-    onSuccess: (result) => {
-      window.location.assign(result.download_url);
+    onSuccess: (result, row) => {
+      try {
+        downloadBackupFile(result.download_url, row.backup_name);
+      } catch {
+        toast.error("The secure backup download could not be started.");
+      }
     },
     onError: (error) => toast.error(error.message),
   });
@@ -350,7 +365,7 @@ export default function BackupRestorePage() {
     [...(data.restores ?? [])].find((row) => row.status === "completed") ??
     [...data.backups].find((row) => row.status === "completed");
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6" data-testid="backup-restore-page">
       <PageHeading
         eyebrow="Administration"
         title="Backup & Restore"
@@ -363,8 +378,8 @@ export default function BackupRestorePage() {
           encrypted storage and follow the documented recovery procedure.
         </AlertDescription>
       </Alert>
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
+      <div className="grid min-w-0 gap-6 xl:grid-cols-2">
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DatabaseBackup className="h-5 w-5" aria-hidden="true" />
@@ -377,6 +392,7 @@ export default function BackupRestorePage() {
           </CardHeader>
           <CardContent>
             <Button
+              className="min-h-11 w-full touch-manipulation sm:w-auto"
               onClick={() => create.mutate()}
               disabled={
                 create.isPending ||
@@ -397,7 +413,7 @@ export default function BackupRestorePage() {
             </Button>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" aria-hidden="true" />
@@ -409,7 +425,11 @@ export default function BackupRestorePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <Label htmlFor="backup-restore-file" className="sr-only">
+              Select an ALAGA-SYS backup ZIP file
+            </Label>
             <input
+              id="backup-restore-file"
               ref={inputRef}
               type="file"
               className="sr-only"
@@ -421,6 +441,7 @@ export default function BackupRestorePage() {
               }}
             />
             <Button
+              className="min-h-11 w-full touch-manipulation sm:w-auto"
               variant="outline"
               disabled={validate.isPending}
               onClick={() => inputRef.current?.click()}
@@ -437,7 +458,7 @@ export default function BackupRestorePage() {
             </Button>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CalendarClock className="h-5 w-5" aria-hidden="true" />
@@ -484,7 +505,7 @@ export default function BackupRestorePage() {
               />
             </div>
             <Button
-              className="sm:col-span-2 sm:w-fit"
+              className="min-h-11 w-full touch-manipulation sm:col-span-2 sm:w-fit"
               variant="outline"
               disabled={updateSchedule.isPending}
               onClick={() => updateSchedule.mutate()}
@@ -493,7 +514,7 @@ export default function BackupRestorePage() {
             </Button>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileCheck2 className="h-5 w-5" aria-hidden="true" />
@@ -508,13 +529,13 @@ export default function BackupRestorePage() {
               <div className="space-y-2 text-sm">
                 <p>
                   <span className="text-muted-foreground">Package:</span>{" "}
-                  {latestReport.backup_name}
+                  <span className="break-all">{latestReport.backup_name}</span>
                 </p>
                 <p>
                   <span className="text-muted-foreground">Completed:</span>{" "}
                   {formatDate(latestReport.completed_at)}
                 </p>
-                <pre className="max-h-40 overflow-auto rounded-lg bg-muted p-3 text-xs">
+                <pre className="max-h-40 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-lg bg-muted p-3 text-xs">
                   {JSON.stringify(latestReport.report, null, 2)}
                 </pre>
               </div>
