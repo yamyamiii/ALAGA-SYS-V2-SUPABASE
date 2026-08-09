@@ -6,7 +6,7 @@ search engine, report generator, or record assistant.
 
 ## Starting a conversation
 
-Open **ALAGA AI** from the floating button. The first screen offers short
+Open **ALAGA AI** from the primary menu or floating button. The first screen offers short
 role-aware starter questions. You may select one or type in English, Filipino,
 or common Taglish. Press Enter to send and Shift+Enter for a new line.
 
@@ -47,9 +47,14 @@ automatically, and ambiguous choices require you to select the intended page.
 
 Authorized users may also ask for registered child views such as `Open
 Calendar`, `Open Daily Queue`, `Open Vital Signs`, `Open Appointment Reports`,
-`Open Monthly Reports`, `Open Pregnancies`, or `Open Child Records`. These
+or `Open Monthly Reports`. These
 commands use fixed symbolic destinations and do not accept arbitrary URLs. The
 available buttons continue to depend on the signed-in role.
+
+Maternal/child, referral, household, audit, backup, settings, and advanced
+clinical report destinations are not available through ALAGA AI. They are
+preserved as inactive future extensions and excluded from the approved final
+thesis scope.
 
 ## Conversation controls
 

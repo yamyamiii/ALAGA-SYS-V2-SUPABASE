@@ -113,7 +113,7 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
     },
     open_notifications: {
       label: "Open Notifications",
-      roles: ALL_ROLES,
+      roles: ["resident"],
       patterns: [
         /\bnotifications?\b/i,
         /\balerts?\b/i,
@@ -161,11 +161,6 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
       roles: ["admin", "barangay_health_worker"],
       patterns: [/\bresidents?\b/i, /\bresident registry\b/i],
     },
-    open_households: {
-      label: "Open Households",
-      roles: ["admin", "barangay_health_worker"],
-      patterns: [/\bhouseholds?\b/i, /\bhousehold registry\b/i],
-    },
     open_health_records: {
       label: "Open Health Records",
       roles: ALL_ROLES,
@@ -189,85 +184,14 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
       roles: ALL_ROLES,
       patterns: [/\bvital signs?\b/i, /\bvitals?\b/i],
     },
-    open_maternal_child_care: {
-      label: "Open Maternal and Child Care",
-      roles: [
-        "admin",
-        "barangay_health_worker",
-        "nurse",
-        "midwife",
-        "resident",
-      ],
-      patterns: [
-        /\bmaternal and child care\b/i,
-        /\bmaternal child care\b/i,
-        /\bpangangalaga sa ina at bata\b/i,
-      ],
-    },
-    open_pregnancies: {
-      label: "Open Pregnancies",
-      roles: ALL_ROLES,
-      patterns: [/\bpregnanc(?:y|ies)\b/i, /\bmga pagbubuntis\b/i],
-    },
-    open_prenatal_visits: {
-      label: "Open Prenatal Visits",
-      roles: ALL_ROLES,
-      patterns: [
-        /\bprenatal (?:visits?|care|check-?ups?)\b/i,
-        /\bantenatal visits?\b/i,
-      ],
-    },
-    open_deliveries: {
-      label: "Open Deliveries",
-      roles: ALL_ROLES,
-      patterns: [
-        /\bdeliver(?:y|ies)\b/i,
-        /\bdelivery outcomes?\b/i,
-        /\bpanganganak\b/i,
-      ],
-    },
-    open_postnatal_care: {
-      label: "Open Postnatal Care",
-      roles: ALL_ROLES,
-      patterns: [
-        /\bpostnatal (?:care|visits?)\b/i,
-        /\bpostpartum (?:care|visits?)\b/i,
-      ],
-    },
-    open_immunizations: {
-      label: "Open Immunizations",
-      roles: ALL_ROLES,
-      patterns: [
-        /\bimmuni[sz]ations?\b/i,
-        /\bvaccination records?\b/i,
-        /\b(?:mga )?(?:bakuna|pagbabakuna)\b/i,
-      ],
-    },
-    open_child_records: {
-      label: "Open Child Records",
-      roles: ALL_ROLES,
-      patterns: [
-        /\bchild (?:records?|profiles?)\b/i,
-        /\bmga rekord ng bata\b/i,
-      ],
-    },
-    open_growth_monitoring: {
-      label: "Open Growth Monitoring",
-      roles: ALL_ROLES,
-      patterns: [
-        /\bgrowth (?:monitoring|measurements?)\b/i,
-        /\bchild growth\b/i,
-        /\bpaglaki ng bata\b/i,
-      ],
-    },
     open_reports: {
       label: "Open Reports",
-      roles: ["admin", "barangay_health_worker", "nurse", "midwife"],
+      roles: ["admin", "barangay_health_worker"],
       patterns: [/\breports?\b/i, /\banalytics\b/i, /\b(?:mga )?ulat\b/i],
     },
     open_appointment_reports: {
       label: "Open Appointment Reports",
-      roles: ["admin", "barangay_health_worker", "nurse", "midwife"],
+      roles: ["admin", "barangay_health_worker"],
       patterns: [
         /\bappointment reports?\b/i,
         /\breports? (?:for|on) appointments?\b/i,
@@ -275,7 +199,7 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
     },
     open_monthly_reports: {
       label: "Open Monthly Reports",
-      roles: ["admin", "barangay_health_worker", "nurse", "midwife"],
+      roles: ["admin", "barangay_health_worker"],
       patterns: [
         /\bmonthly reports?\b/i,
         /\b(?:this|current) month(?:'s)? reports?\b/i,
@@ -290,23 +214,15 @@ const NAVIGATION_DEFINITIONS: Readonly<Record<string, NavigationDefinition>> =
         /\bpamamahala ng (?:mga )?users?\b/i,
       ],
     },
-    open_audit_logs: {
-      label: "Open Audit Logs",
-      roles: ["admin"],
-      patterns: [
-        /\baudit logs?\b/i,
-        /\baudit trail\b/i,
-        /\btalaan ng audit\b/i,
-      ],
-    },
   });
 
 const ROLE_MODULES: Record<CanonicalRole, readonly string[]> = Object.freeze({
   admin: [
     "dashboard",
     "user management",
-    "registry",
+    "resident registry",
     "appointments",
+    "health-record workflow",
     "reports",
     "announcements",
     "FAQs",
@@ -315,8 +231,9 @@ const ROLE_MODULES: Record<CanonicalRole, readonly string[]> = Object.freeze({
   ],
   barangay_health_worker: [
     "dashboard",
-    "resident and household registry",
+    "resident registry",
     "appointment review and queue",
+    "health-record workflow",
     "reports",
     "announcements",
     "health-center information",
@@ -328,17 +245,14 @@ const ROLE_MODULES: Record<CanonicalRole, readonly string[]> = Object.freeze({
     "assigned appointments",
     "daily queue",
     "health-record workflow",
-    "reports",
     "announcements",
     "health-center information",
     "FAQs",
   ],
   midwife: [
     "dashboard",
-    "assigned maternal and child care",
     "assigned appointments",
     "health-record workflow",
-    "reports",
     "announcements",
     "health-center information",
     "FAQs",
@@ -347,7 +261,7 @@ const ROLE_MODULES: Record<CanonicalRole, readonly string[]> = Object.freeze({
     "dashboard",
     "appointment requests",
     "notifications",
-    "signed health-record navigation",
+    "signed consultation-record navigation",
     "announcements",
     "FAQs",
     "health-center information",
@@ -361,9 +275,9 @@ const ROLE_WORKFLOW_GUIDANCE: Record<CanonicalRole, string> = Object.freeze({
   barangay_health_worker:
     "Barangay Health Workers manage permitted registry workflows, review incoming appointment requests and the daily queue, respond to inquiries, and view authorized aggregate reports.",
   nurse:
-    "Nurses use assigned appointments and the daily queue, document authorized health-record workflows, and view authorized aggregate reports.",
+    "Nurses use assigned appointments and the daily queue and document authorized consultation-record workflows.",
   midwife:
-    "Midwives use assigned appointments and the daily queue, document authorized maternal and child or health-record workflows, and view authorized aggregate reports.",
+    "Midwives use assigned appointments and the daily queue and document authorized consultation-record workflows.",
   resident:
     "Residents may submit a preferred appointment start time for health-center review, view their own permitted information, read announcements and notifications, consult FAQs, and submit inquiries.",
 });
@@ -608,9 +522,6 @@ const EXPLICIT_NAVIGATION_INTENT =
 const TERSE_NAVIGATION_REQUEST =
   /^\s*(?:(?:my|mga)\s+)?(?:appointments?|appointment requests?|notifications?|notipikasyon|announcements?|anunsyo|pabatid|faqs?|frequently asked questions?|madalas (?:na )?itanong|health[- ]?center(?: information)?|clinic information|impormasyon (?:ng|sa) (?:barangay )?health[- ]?center|inquir(?:y|ies)|contact(?: us)?|makipag-ugnayan)(?:\s+ko)?\s*[.!?]*\s*$/i;
 
-const MATERNAL_CHILD_TERSE_NAVIGATION_REQUEST =
-  /^\s*(?:(?:my|mga)\s+)?(?:pregnanc(?:y|ies)|pagbubuntis|prenatal (?:visits?|care|check-?ups?)|antenatal visits?|deliver(?:y|ies)|delivery outcomes?|panganganak|postnatal (?:care|visits?)|postpartum (?:care|visits?)|child (?:records?|profiles?)|rekord ng bata|growth (?:monitoring|measurements?)|child growth|paglaki ng bata|immuni[sz]ations?|vaccination records?|bakuna|pagbabakuna)\s*[.!?]*\s*$/i;
-
 export type ResponseLanguage = "english" | "filipino" | "taglish";
 
 const FILIPINO_LANGUAGE_MARKERS =
@@ -711,8 +622,7 @@ export function navigationResponseFor(
 ): { category: string; message: string; actions: NavigationAction[] } | null {
   const navigationIntent =
     EXPLICIT_NAVIGATION_INTENT.test(message) ||
-    TERSE_NAVIGATION_REQUEST.test(message) ||
-    MATERNAL_CHILD_TERSE_NAVIGATION_REQUEST.test(message);
+    TERSE_NAVIGATION_REQUEST.test(message);
   if (!navigationIntent) return null;
 
   if (/(?:https?:\/\/|www\.|\bjavascript:|\bdata:)/i.test(message)) {
@@ -749,13 +659,6 @@ export function navigationResponseFor(
     open_appointment_queue: ["open_appointments"],
     open_health_record_encounters: ["open_health_records"],
     open_health_record_vital_signs: ["open_health_records"],
-    open_pregnancies: ["open_maternal_child_care"],
-    open_prenatal_visits: ["open_maternal_child_care"],
-    open_deliveries: ["open_maternal_child_care"],
-    open_postnatal_care: ["open_maternal_child_care"],
-    open_immunizations: ["open_maternal_child_care"],
-    open_child_records: ["open_maternal_child_care"],
-    open_growth_monitoring: ["open_maternal_child_care"],
     open_appointment_reports: ["open_appointments", "open_reports"],
     open_monthly_reports: ["open_reports"],
   };

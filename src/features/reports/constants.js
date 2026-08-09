@@ -1,18 +1,28 @@
 import { USER_ROLES } from "@/features/auth/permissions";
+import { FINAL_SCOPE_REPORT_CATEGORIES } from "@/config/finalScope";
 
 export const REPORT_TIME_ZONE = "Asia/Manila";
 export const REPORT_MAX_RANGE_DAYS = 1826;
 export const REPORT_EXPORT_LIMIT = 5000;
 
-export const REPORT_CATEGORIES = Object.freeze([
-  { id: "overview", label: "Overview", group: "overview" },
-  { id: "residents", label: "Residents", group: "registry" },
-  { id: "appointments", label: "Appointments", group: "appointments" },
-  { id: "health_records", label: "Health records", group: "health" },
-  { id: "maternal_care", label: "Maternal care", group: "maternal" },
-  { id: "child_care", label: "Child care", group: "child" },
-  { id: "staff_workload", label: "Staff workload", group: "workload" },
-]);
+const reportCategoryMetadata = Object.freeze({
+  overview: { id: "overview", label: "Overview", group: "overview" },
+  residents: { id: "residents", label: "Resident summary", group: "registry" },
+  appointments: {
+    id: "appointments",
+    label: "Appointment reports",
+    group: "appointments",
+  },
+  staff_workload: {
+    id: "staff_workload",
+    label: "Appointment workload",
+    group: "workload",
+  },
+});
+
+export const REPORT_CATEGORIES = Object.freeze(
+  FINAL_SCOPE_REPORT_CATEGORIES.map((id) => reportCategoryMetadata[id]),
+);
 
 const roleCategories = Object.freeze({
   [USER_ROLES.ADMINISTRATOR]: REPORT_CATEGORIES.map(({ id }) => id),
@@ -20,22 +30,9 @@ const roleCategories = Object.freeze({
     "overview",
     "residents",
     "appointments",
-    "maternal_care",
-    "child_care",
   ],
-  [USER_ROLES.NURSE]: [
-    "overview",
-    "appointments",
-    "health_records",
-    "staff_workload",
-  ],
-  [USER_ROLES.MIDWIFE]: [
-    "overview",
-    "appointments",
-    "maternal_care",
-    "child_care",
-    "staff_workload",
-  ],
+  [USER_ROLES.NURSE]: [],
+  [USER_ROLES.MIDWIFE]: [],
   [USER_ROLES.RESIDENT]: [],
 });
 

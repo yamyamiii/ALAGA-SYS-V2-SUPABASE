@@ -4,63 +4,111 @@ import { describe, expect, it, vi } from "vitest";
 
 import { Navigation } from "@/components/layout/Navigation";
 import { AuthContext } from "@/features/auth/authContext";
-import {
-  hasPermission,
-  PERMISSIONS,
-  USER_ROLES,
-} from "@/features/auth/permissions";
+import { hasPermission, USER_ROLES } from "@/features/auth/permissions";
 
-function renderNavigation(can) {
+const expectedByRole = {
+  [USER_ROLES.ADMINISTRATOR]: [
+    "Dashboard",
+    "Appointments",
+    "Residents",
+    "Health Records",
+    "Announcements",
+    "ALAGA AI",
+    "Reports",
+    "User Management",
+  ],
+  [USER_ROLES.BARANGAY_HEALTH_WORKER]: [
+    "Dashboard",
+    "Appointments",
+    "Residents",
+    "Health Records",
+    "Announcements",
+    "ALAGA AI",
+    "Reports",
+  ],
+  [USER_ROLES.NURSE]: [
+    "Dashboard",
+    "Appointments",
+    "Health Records",
+    "Announcements",
+    "ALAGA AI",
+  ],
+  [USER_ROLES.MIDWIFE]: [
+    "Dashboard",
+    "Appointments",
+    "Health Records",
+    "Announcements",
+    "ALAGA AI",
+  ],
+  [USER_ROLES.RESIDENT]: [
+    "Dashboard",
+    "My Appointments",
+    "Announcements",
+    "Notifications",
+    "ALAGA AI",
+  ],
+};
+
+function renderNavigation(role, props = {}) {
   render(
-    <AuthContext.Provider value={{ can }}>
+    <AuthContext.Provider
+      value={{
+        can: (permission) => hasPermission(role, permission),
+        profile: { id: "profile-id", role },
+      }}
+    >
       <MemoryRouter>
-        <Navigation />
+        <Navigation {...props} />
       </MemoryRouter>
     </AuthContext.Provider>,
   );
 }
 
-describe("permission-based navigation", () => {
-  it("shows User Management only when the permission is present", () => {
-    renderNavigation(vi.fn(() => true));
-    expect(screen.getByText("User Management")).toBeInTheDocument();
-  });
+describe("final-scope primary navigation", () => {
+  it.each(Object.entries(expectedByRole))(
+    "shows the exact primary destinations for %s",
+    (role, labels) => {
+      renderNavigation(role);
+      expect(
+        screen.getByRole("navigation", { name: "Main navigation" }),
+      ).toHaveTextContent(labels.join(""));
+      expect(
+        screen.getAllByRole("link").map((link) => link.textContent),
+      ).toEqual(labels.filter((label) => label !== "ALAGA AI"));
+      expect(
+        screen.getByRole("button", { name: "ALAGA AI" }),
+      ).toBeInTheDocument();
+    },
+  );
 
-  it("hides User Management from non-administrators", () => {
-    renderNavigation(
-      vi.fn((permission) => permission === PERMISSIONS.VIEW_DASHBOARD),
-    );
-    expect(screen.queryByText("User Management")).not.toBeInTheDocument();
-  });
-
-  it("shows residents only the approved release-candidate destinations", () => {
-    renderNavigation((permission) =>
-      hasPermission(USER_ROLES.RESIDENT, permission),
-    );
+  it("does not expose out-of-scope modules in desktop or mobile navigation", () => {
+    renderNavigation(USER_ROLES.ADMINISTRATOR);
     for (const label of [
-      "Dashboard",
-      "Appointments",
-      "Health Records",
+      "Households",
       "Maternal and Child Care",
-      "Announcements",
-      "Notifications",
+      "Medicine Inventory",
       "Activity",
       "Health Center",
       "FAQ",
       "Contact",
-    ]) {
-      expect(screen.getByText(label)).toBeInTheDocument();
-    }
-    for (const label of [
-      "Households",
-      "Residents",
-      "Medicine Inventory",
-      "Reports",
       "Audit Logs",
-      "User Management",
+      "Backup & Restore",
+      "Notification Delivery",
       "Settings",
     ]) {
       expect(screen.queryByText(label)).not.toBeInTheDocument();
     }
+  });
+
+  it("closes the mobile drawer before opening the in-memory AI assistant", () => {
+    const onNavigate = vi.fn();
+    const dispatch = vi.spyOn(globalThis, "dispatchEvent");
+    renderNavigation(USER_ROLES.RESIDENT, { onNavigate });
+    screen.getByRole("button", { name: "ALAGA AI" }).click();
+    expect(onNavigate).toHaveBeenCalledOnce();
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "alaga:open-ai-assistant" }),
+    );
+    dispatch.mockRestore();
   });
 });

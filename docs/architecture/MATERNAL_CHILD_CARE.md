@@ -1,5 +1,9 @@
 # Maternal and Child Care Architecture
 
+> Preserved as an inactive future extension and excluded from the approved
+> final thesis scope. The route and user-facing actions are disabled while the
+> protected database architecture remains intact.
+
 Phase 6 adds longitudinal maternal and child care without changing appointment
 or electronic-health-record ownership boundaries.
 

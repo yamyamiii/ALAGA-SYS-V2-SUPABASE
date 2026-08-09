@@ -3,7 +3,10 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { LoadingState } from "@/components/common/StateDisplay";
 import { AppShell } from "@/components/layout/AppShell";
-import { navigationItems } from "@/config/navigation";
+import {
+  FINAL_SCOPE_REPORT_ROLES,
+  HIDDEN_FINAL_SCOPE_ROUTES,
+} from "@/config/finalScope";
 import { ROUTES } from "@/config/routes";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
 import { PERMISSIONS } from "@/features/auth/permissions";
@@ -11,17 +14,10 @@ import { RoleGuard } from "@/features/auth/RoleGuard";
 
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
-const ComingSoonPage = lazy(() => import("@/pages/ComingSoonPage"));
 const AccessDeniedPage = lazy(() => import("@/pages/AccessDeniedPage"));
 const AccountSettingsPage = lazy(() => import("@/pages/AccountSettingsPage"));
 const UserManagementPage = lazy(
   () => import("@/features/user-management/UserManagementPage"),
-);
-const BackupRestorePage = lazy(
-  () => import("@/features/backup/BackupRestorePage"),
-);
-const HouseholdRegistryPage = lazy(
-  () => import("@/features/registry/HouseholdRegistryPage"),
 );
 const ResidentRegistryPage = lazy(
   () => import("@/features/registry/ResidentRegistryPage"),
@@ -41,9 +37,6 @@ const HealthRecordsPage = lazy(
 const HealthRecordDetailPage = lazy(
   () => import("@/features/health-records/HealthRecordDetailPage"),
 );
-const MaternalChildCarePage = lazy(
-  () => import("@/features/maternal-child-care/MaternalChildCarePage"),
-);
 const ReportsPage = lazy(() => import("@/features/reports/ReportsPage"));
 const AnnouncementsPage = lazy(
   () => import("@/features/assistance/AnnouncementsPage"),
@@ -51,7 +44,6 @@ const AnnouncementsPage = lazy(
 const NotificationsPage = lazy(
   () => import("@/features/assistance/NotificationsPage"),
 );
-const ActivityPage = lazy(() => import("@/features/assistance/ActivityPage"));
 const HealthCenterPage = lazy(
   () => import("@/features/assistance/HealthCenterPage"),
 );
@@ -61,25 +53,6 @@ const ConfigurationErrorPage = lazy(
   () => import("@/pages/ConfigurationErrorPage"),
 );
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
-
-const moduleRoutes = navigationItems.filter(
-  (item) =>
-    item.path !== ROUTES.dashboard &&
-    item.path !== ROUTES.userManagement &&
-    item.path !== ROUTES.backupRestore &&
-    item.path !== ROUTES.households &&
-    item.path !== ROUTES.residents &&
-    item.path !== ROUTES.appointments &&
-    item.path !== ROUTES.healthRecords &&
-    item.path !== ROUTES.maternalChildCare &&
-    item.path !== ROUTES.reports &&
-    item.path !== ROUTES.announcements &&
-    item.path !== ROUTES.notifications &&
-    item.path !== ROUTES.activity &&
-    item.path !== ROUTES.healthCenter &&
-    item.path !== ROUTES.faq &&
-    item.path !== ROUTES.contact,
-);
 
 function RouteFallback() {
   return (
@@ -107,14 +80,6 @@ export function AppRouter() {
             <Route path={ROUTES.account} element={<AccountSettingsPage />} />
             <Route path={ROUTES.accessDenied} element={<AccessDeniedPage />} />
             <Route
-              path={ROUTES.households}
-              element={
-                <RoleGuard permission={PERMISSIONS.VIEW_HOUSEHOLDS}>
-                  <HouseholdRegistryPage />
-                </RoleGuard>
-              }
-            />
-            <Route
               path={ROUTES.residents}
               element={
                 <RoleGuard permission={PERMISSIONS.VIEW_RESIDENTS}>
@@ -127,14 +92,6 @@ export function AppRouter() {
               element={
                 <RoleGuard permission={PERMISSIONS.MANAGE_USERS}>
                   <UserManagementPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path={ROUTES.backupRestore}
-              element={
-                <RoleGuard permission={PERMISSIONS.MANAGE_BACKUPS}>
-                  <BackupRestorePage />
                 </RoleGuard>
               }
             />
@@ -179,17 +136,9 @@ export function AppRouter() {
               }
             />
             <Route
-              path={ROUTES.maternalChildCare}
-              element={
-                <RoleGuard permission={PERMISSIONS.VIEW_MATERNAL_CHILD_CARE}>
-                  <MaternalChildCarePage />
-                </RoleGuard>
-              }
-            />
-            <Route
               path={ROUTES.reports}
               element={
-                <RoleGuard permission={PERMISSIONS.VIEW_REPORTS}>
+                <RoleGuard roles={FINAL_SCOPE_REPORT_ROLES}>
                   <ReportsPage />
                 </RoleGuard>
               }
@@ -207,14 +156,6 @@ export function AppRouter() {
               element={
                 <RoleGuard permission={PERMISSIONS.VIEW_NOTIFICATIONS}>
                   <NotificationsPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path={ROUTES.activity}
-              element={
-                <RoleGuard permission={PERMISSIONS.VIEW_ACTIVITY}>
-                  <ActivityPage />
                 </RoleGuard>
               }
             />
@@ -242,23 +183,11 @@ export function AppRouter() {
                 </RoleGuard>
               }
             />
-            <Route
-              path={ROUTES.settings}
-              element={
-                <RoleGuard permission={PERMISSIONS.MANAGE_SETTINGS}>
-                  <ComingSoonPage />
-                </RoleGuard>
-              }
-            />
-            {moduleRoutes.map((route) => (
+            {HIDDEN_FINAL_SCOPE_ROUTES.map((path) => (
               <Route
-                key={route.path}
-                path={route.path}
-                element={
-                  <RoleGuard permission={route.permission}>
-                    <ComingSoonPage />
-                  </RoleGuard>
-                }
+                key={path}
+                path={path}
+                element={<Navigate to={ROUTES.accessDenied} replace />}
               />
             ))}
             <Route

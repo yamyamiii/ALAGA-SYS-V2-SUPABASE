@@ -1,5 +1,8 @@
 # Prenatal Summary
 
+> Preserved as an inactive future extension and excluded from the approved
+> final thesis scope. No Prenatal Summary action is visible in the application.
+
 The pregnancy detail dialog provides a role-authorized Prenatal Summary. Base
 obstetric fields follow the existing `maternal_child_get` visibility. Prenatal
 visit rows and risk level appear only for nurse/midwife roles already allowed

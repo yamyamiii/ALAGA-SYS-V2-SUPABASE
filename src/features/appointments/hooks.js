@@ -41,6 +41,7 @@ export function useAppointmentQueue(parameters, options = {}) {
     queryFn: () => appointmentService.listQueue(parameters),
     placeholderData: (previous) => previous,
     refetchInterval: options.poll ? 30_000 : false,
+    enabled: options.enabled ?? true,
   });
 }
 

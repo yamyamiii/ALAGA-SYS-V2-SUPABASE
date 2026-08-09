@@ -1,5 +1,9 @@
 # Child Health Summary
 
+> Preserved as an inactive future extension and excluded from the approved
+> final thesis scope. No Child Health Summary action is visible in the
+> application.
+
 The child profile detail dialog provides a role-authorized Child Health
 Summary. Residents can request only their own linked child record. Nurses retain
 assignment-scoped access, and the existing maternal/child authorization remains

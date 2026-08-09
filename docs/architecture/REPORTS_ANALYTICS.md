@@ -22,17 +22,23 @@ reasons, diagnoses, assessments, plans, or other clinical narratives.
 
 ## Role scope
 
-| Role                   | Available report categories                                     |
-| ---------------------- | --------------------------------------------------------------- |
-| Administrator          | All categories                                                  |
-| Barangay Health Worker | Overview, residents, appointments, maternal care, child care    |
-| Nurse                  | Overview, appointments, health records, own workload            |
-| Midwife                | Overview, appointments, maternal care, child care, own workload |
-| Resident               | None                                                            |
+| Role                   | Visible report categories                                             |
+| ---------------------- | --------------------------------------------------------------------- |
+| Administrator          | Overview, Resident summary, Appointment reports, Appointment workload |
+| Barangay Health Worker | Overview, Resident summary, Appointment reports                       |
+| Nurse                  | None in the approved final presentation                               |
+| Midwife                | None in the approved final presentation                               |
+| Resident               | None                                                                  |
 
-Administrator workload rows may cover all active staff. Nurse and midwife
-workload reports are self-only at the database boundary. Workload is an
-operational volume indicator, not a performance or quality score.
+Administrator workload rows visibly show appointment assignments and completed
+appointments only. Workload is an operational volume indicator, not a
+performance or quality score.
+
+Health-record analytics, maternal care, child care, pregnancy, prenatal,
+delivery, postnatal, growth, and immunization categories are not present in the
+final UI or ALAGA AI registry. Their RPCs and historical database controls are
+preserved as inactive future extensions and excluded from the approved final
+thesis scope.
 
 ## Time, filtering, and performance
 

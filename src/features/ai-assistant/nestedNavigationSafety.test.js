@@ -7,6 +7,10 @@ const reportsPage = fs.readFileSync(
   "src/features/reports/ReportsPage.jsx",
   "utf8",
 );
+const frontendRegistry = fs.readFileSync(
+  "src/features/ai-assistant/navigation.js",
+  "utf8",
+);
 
 describe("ALAGA AI nested destination safety", () => {
   it("registers only fixed child destinations", () => {
@@ -15,18 +19,17 @@ describe("ALAGA AI nested destination safety", () => {
       "/appointments/queue",
       "/health-records?section=encounters",
       "/health-records?section=vital-signs",
-      "/maternal-child-care?section=pregnancies",
-      "/maternal-child-care?section=prenatal",
-      "/maternal-child-care?section=deliveries",
-      "/maternal-child-care?section=postnatal",
-      "/maternal-child-care?section=children",
-      "/maternal-child-care?section=growth",
-      "/maternal-child-care?section=immunizations",
       "/reports?category=appointments",
       "/reports?category=overview&period=month",
     ]) {
       expect(routes).toContain(route);
     }
+  });
+
+  it("does not register inactive extension destinations", () => {
+    expect(frontendRegistry).not.toMatch(
+      /open_(?:maternal|pregnanc|prenatal|deliver|postnatal|child|growth|immunization|household|audit)/,
+    );
   });
 
   it("allowlists report categories and preset periods at the page boundary", () => {

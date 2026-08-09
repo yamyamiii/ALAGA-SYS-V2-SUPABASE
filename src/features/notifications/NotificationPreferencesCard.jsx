@@ -27,13 +27,17 @@ const TOPICS = [
   ["appointment_reminders_enabled", "Appointment reminders"],
   ["announcement_enabled", "Important announcements"],
   ["inquiry_updates_enabled", "Inquiry updates"],
-  ["maternal_child_reminders_enabled", "Maternal and child reminders"],
   ["document_updates_enabled", "Signed document availability"],
 ];
+const PRESERVED_INACTIVE_TOPIC_KEYS = ["maternal_child_reminders_enabled"];
 
 function preferenceValues(preference) {
   return Object.fromEntries(
-    [...CHANNELS, ...TOPICS].map(([key]) => [key, preference[key]]),
+    [
+      ...CHANNELS.map(([key]) => key),
+      ...TOPICS.map(([key]) => key),
+      ...PRESERVED_INACTIVE_TOPIC_KEYS,
+    ].map((key) => [key, preference[key]]),
   );
 }
 

@@ -26,11 +26,10 @@ const aiButton = fs.readFileSync(
 );
 
 describe("release-candidate role-aware UI", () => {
-  it("hides Settings from navigation while retaining its guarded legacy route", () => {
+  it("hides Settings and sends its legacy route through the scope guard", () => {
     expect(navigation).not.toMatch(/label:\s*"Settings"/i);
-    expect(router).toMatch(
-      /ROUTES\.settings[\s\S]*PERMISSIONS\.MANAGE_SETTINGS/i,
-    );
+    expect(router).toMatch(/HIDDEN_FINAL_SCOPE_ROUTES\.map/);
+    expect(router).not.toMatch(/ComingSoonPage/);
   });
 
   it("keeps broad clinical search staff-only and resident headings centered", () => {

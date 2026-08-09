@@ -10,6 +10,7 @@ import {
   createWelcomeMessage,
 } from "@/features/ai-assistant/constants";
 import { useAiAssistantMutation } from "@/features/ai-assistant/hooks";
+import { OPEN_AI_ASSISTANT_EVENT } from "@/features/ai-assistant/launcher";
 import { resolveAiAction } from "@/features/ai-assistant/navigation";
 import {
   clearPendingAiUiActions,
@@ -36,6 +37,13 @@ export function FloatingAiAssistant({ profile }) {
   const turnLimitReached = userTurns >= AI_MAX_CONVERSATION_TURNS;
 
   useEffect(() => () => clearPendingAiUiActions(), []);
+
+  useEffect(() => {
+    const openAssistant = () => setOpen(true);
+    globalThis.addEventListener?.(OPEN_AI_ASSISTANT_EVENT, openAssistant);
+    return () =>
+      globalThis.removeEventListener?.(OPEN_AI_ASSISTANT_EVENT, openAssistant);
+  }, []);
 
   const completeRequest = (requestMessages) => {
     if (requestInFlightRef.current) return;

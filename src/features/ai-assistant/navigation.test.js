@@ -133,13 +133,6 @@ describe("ALAGA AI frontend navigation boundary", () => {
     ["open_appointment_queue", ROUTES.appointmentQueue],
     ["open_health_record_encounters", ROUTES.healthRecordEncounters],
     ["open_health_record_vital_signs", ROUTES.healthRecordVitalSigns],
-    ["open_pregnancies", ROUTES.maternalPregnancies],
-    ["open_prenatal_visits", ROUTES.maternalPrenatalVisits],
-    ["open_deliveries", ROUTES.maternalDeliveries],
-    ["open_postnatal_care", ROUTES.maternalPostnatalCare],
-    ["open_child_records", ROUTES.maternalChildRecords],
-    ["open_growth_monitoring", ROUTES.maternalGrowthMonitoring],
-    ["open_immunizations", ROUTES.maternalImmunizations],
     ["open_appointment_reports", ROUTES.appointmentReports],
     ["open_monthly_reports", ROUTES.monthlyReports],
   ])("maps nested action %s to its fixed route", (actionId, route) => {
@@ -149,8 +142,9 @@ describe("ALAGA AI frontend navigation boundary", () => {
     ).toBe(route);
   });
 
-  it("allows every existing maternal/child tab for every viewing role", () => {
+  it("rejects every inactive maternal/child, household, and audit action", () => {
     const actionIds = [
+      "open_maternal_child_care",
       "open_pregnancies",
       "open_prenatal_visits",
       "open_deliveries",
@@ -158,6 +152,8 @@ describe("ALAGA AI frontend navigation boundary", () => {
       "open_child_records",
       "open_growth_monitoring",
       "open_immunizations",
+      "open_households",
+      "open_audit_logs",
     ];
     const roles = [
       USER_ROLES.ADMINISTRATOR,
@@ -169,9 +165,7 @@ describe("ALAGA AI frontend navigation boundary", () => {
 
     for (const role of roles) {
       for (const actionId of actionIds) {
-        expect(
-          resolveAiNavigationAction(navigate(actionId), role),
-        ).not.toBeNull();
+        expect(resolveAiNavigationAction(navigate(actionId), role)).toBeNull();
       }
     }
   });

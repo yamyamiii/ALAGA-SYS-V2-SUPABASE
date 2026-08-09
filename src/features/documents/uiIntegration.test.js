@@ -22,9 +22,10 @@ describe("printable document UI integration", () => {
     expect(appointment).toMatch(/canPrintAppointmentSlip/);
     expect(encounter).toContain("Print Consultation Summary");
     expect(encounter).toMatch(/canPrintConsultationSummary/);
-    expect(encounter).toContain("Create Referral Form");
-    expect(maternal).toContain("Print Prenatal Summary");
-    expect(maternal).toContain("Print Child Health Summary");
+    expect(encounter).not.toMatch(/ReferralDialog|Referral Form/);
+    expect(maternal).not.toMatch(
+      /Print Prenatal Summary|Print Child Health Summary|DocumentPreviewDialog/,
+    );
   });
 
   it("uses centralized RPC services instead of broad page queries", () => {

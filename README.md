@@ -1,19 +1,23 @@
 # ALAGA-SYS
 
-**Automated Local Appointment and General Assistance System** is a planned
-barangay healthcare management system. This repository currently contains the
+**Automated Local Appointment and General Assistance System (ALAGA-SYS)** is a
+web-based automated appointment and general assistance system for a barangay
+health center. It supports resident management, role-based appointment
+processing, staff assignment, appointment calendar and daily queue, basic
+appointment-linked consultation records, announcements, notifications,
+operational reports, printable appointment and consultation documents, and
+AI-assisted guidance. This repository contains the
 Phase 0 application foundation, Phase 1 normalized PostgreSQL schema and
 deny-by-default Row Level Security, Phase 2 authentication and trusted user
 management, and the Phase 3 household/resident registry and production
 hardening. Phase 4 adds operational appointment scheduling, a daily queue, a
 calendar, resident appointment history, and appointment dashboard summaries.
-Phase 5 adds the secure Electronic Health Records foundation: clinical
-encounters, vital signs, allergies, medical history, signatures, amendments,
-and resident clinical timelines.
+Phase 5 adds secure appointment-linked consultation records, vital signs,
+signatures, amendments, and resident-authorized summaries.
 Phase 5.5 allows a linked active resident to submit an own pending appointment
 request for staff review and cancel it only while still pending.
-Phase 6 adds secure pregnancy, prenatal, delivery, postnatal, child profile,
-growth, immunization, and developmental-visit foundations.
+Phase 6's maternal and child architecture is preserved as an inactive future
+extension and excluded from the approved final thesis scope.
 Phase 7 adds privacy-safe aggregate reports, bounded exports, and printing.
 Phase 8 adds announcements, in-app notifications, resident/admin activity,
 health-center information, FAQs, and resident inquiry tickets.
@@ -24,9 +28,10 @@ and deterministic, role-checked, read-only navigation using symbolic actions.
 Phase 9C adds deterministic trusted answers for hours, services, and current
 announcements plus multilingual matching, role-aware starters, compact source
 cards, copy/retry/confirmed-reset controls, and stricter client safety handling.
-Phase 10 adds authorized A4 previews, browser printing, and local selectable-text
-PDF downloads for appointment slips, consultation summaries, clinician-authored
-referrals, prenatal summaries, and child health summaries.
+Phase 10 visibly provides authorized A4 previews, browser printing, and local
+selectable-text PDF downloads for Appointment Slips and Consultation Summaries.
+Referral, prenatal, and child print architecture is preserved as an inactive
+future extension and excluded from the approved final thesis scope.
 The release-candidate foundation adds role-aware UAT corrections and optional,
 provider-neutral email/SMS delivery. External channels are opt-in, use only
 minimized templates, and never make core workflows depend on provider success.
@@ -135,14 +140,15 @@ npm run dev
 ```
 
 Vite prints the local URL. Guests enter at `/login`; authenticated users enter
-the dashboard at `/`. Households are available at `/households`, residents at
-`/residents`, and appointments at `/appointments`, `/appointments/calendar`,
-and `/appointments/queue`. Unfinished healthcare module routes remain shared
-placeholders. Authorized accounts access clinical encounters at
+the dashboard at `/`. Authorized Administrator/BHW accounts access residents
+at `/residents`; appointments remain at `/appointments`,
+`/appointments/calendar`, and `/appointments/queue`. Authorized accounts access
+basic consultation records at
 `/health-records` and `/health-records/:encounterId`. Authorized staff access
-aggregate reports and exports at `/reports`.
-General assistance is available at `/announcements`, `/notifications`,
-`/activity`, `/health-center`, `/faq`, and `/contact`, subject to role access.
+approved operational reports and exports at `/reports`. Announcements and
+resident notifications remain visible. FAQ, health-center information, and
+inquiries remain available through ALAGA AI or secondary assistance routes.
+Out-of-scope top-level routes fail closed to Access Denied.
 
 ## Quality commands
 
@@ -156,20 +162,19 @@ npm run format:check
 npm run preview
 ```
 
-## Current phase
+## Approved final thesis scope
 
-The release candidate hides the unfinished Settings navigation, removes broad
-resident-search affordances from resident clinical views, and adds own-profile
-notification preferences plus a privacy-minimized administrator delivery
-summary. In-app notifications remain authoritative. Email works only after a
-reviewed generic HTTP gateway is configured; SMS and scheduling remain
-manually disabled until separately activated.
+The primary application now focuses on Dashboard, Appointments, Residents for
+Administrator/BHW, basic Health Records for staff, Announcements, ALAGA AI,
+basic Reports for Administrator/BHW, Administrator-only User Management, and
+Resident Notifications. Calendar and Daily Queue remain nested appointment
+destinations. In-app notifications remain authoritative; email and SMS remain
+optional provider foundations and never control core workflow success.
 
-Phase 10 provides a reusable printable-document boundary backed by narrow,
+The printable-document boundary remains backed by narrow,
 server-authorized RPCs. Protected data is revalidated for every preview and is
 never stored in browser storage, uploaded, or sent to AI or an external PDF
-service. The new referral workflow is clinician-authored, encounter-derived,
-idempotent, versioned, and immutable after finalization.
+service. Only Appointment Slip and Consultation Summary actions are visible.
 
 Phase 9C completes the floating authenticated assistant experience with live, read-only
 grounding from active FAQs, health-center name/address/hours/services, and
@@ -179,6 +184,12 @@ maps it to a fixed local route. Conversation drafts stay in React memory. No
 resident, appointment, clinical, maternal/child, report, contact, inquiry,
 notification, or audit data is supplied to Gemini, and no AI action mutates
 application data.
+
+Maternal and Child Care, Referral Management, advanced clinical reports,
+prenatal and child printouts, Medicine Inventory, backup/audit delivery pages,
+and advanced administrator settings are preserved as inactive future
+extensions and excluded from the approved final thesis scope. Their database
+objects are not deleted or weakened by this presentation release.
 
 Phase 8 provides role-aware announcements, own/relevant in-app notifications,
 privacy-minimized activity timelines, public health-center information,
@@ -193,11 +204,11 @@ preferences until staff assignment and confirmation.
 
 ## Deployment note
 
-Migrations 1-31 are the existing baseline. The release candidate adds pending
-forward-only migration `20260720003200_outbound_notification_foundation.sql`;
-review and apply it manually before deploying the notification processor and
-frontend. Application startup does not push migrations, functions, schedules,
-or provider configuration automatically.
+Migrations 1-34 are the preserved database baseline. This scope-alignment
+release adds no migration and does not alter any historical migration.
+Application startup does not push migrations, functions, schedules, or provider
+configuration automatically. If the ALAGA AI parser changes are deployed, only
+the `alaga-ai` Edge Function requires redeployment.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),
@@ -221,9 +232,6 @@ See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Print design system](docs/ui/PRINT_DESIGN_SYSTEM.md),
 [Appointment Slip](docs/workflows/APPOINTMENT_SLIP.md),
 [Consultation Summary](docs/workflows/CONSULTATION_SUMMARY.md),
-[Referral Form](docs/workflows/REFERRAL_FORM.md),
-[Prenatal Summary](docs/workflows/PRENATAL_SUMMARY.md),
-[Child Health Summary](docs/workflows/CHILD_HEALTH_SUMMARY.md),
 [Gemini AI deployment](docs/deployment/GEMINI_AI.md),
 [Announcements and notifications](docs/workflows/ANNOUNCEMENTS_NOTIFICATIONS.md),
 [Resident inquiries](docs/workflows/RESIDENT_INQUIRIES.md),
@@ -238,3 +246,5 @@ See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [RLS matrix](docs/database/RLS_MATRIX.md), and
 [Roadmap](docs/requirements/ROADMAP.md). Phase 3C findings and regression scope
 are recorded in [Production QA](docs/quality/PHASE_3C_QA.md).
+The final role, route, and viewport checks are recorded in
+[Final scope UAT](docs/quality/FINAL_SCOPE_UAT.md).

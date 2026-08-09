@@ -75,6 +75,14 @@ rechecks the action against its own role allowlist, and maps it to a fixed local
 route. Gemini cannot create a new route, URL, action ID, or permission. See
 [AI navigation](../workflows/AI_NAVIGATION.md).
 
+The final-scope registry includes appointment requests, Appointments,
+Appointment Calendar, Daily Queue, Residents for Administrator/BHW, basic
+Health Records, Announcements, basic Reports for Administrator/BHW, and
+Administrator-only User Management. FAQ, health-center information, and
+inquiries remain safe secondary assistance destinations. Maternal/child,
+household, referral, audit, backup, settings, and advanced-report actions are
+not registered on either side of the boundary.
+
 ## Stateless conversation
 
 Messages remain only in React memory. Role-aware starters submit ordinary
@@ -119,3 +127,7 @@ There is no resident/clinical/report grounding, semantic search over protected
 data, SQL execution, report generation, appointment mutation, record mutation,
 external knowledge retrieval, clinical decision support, diagnosis,
 prescription/dosage guidance, or autonomous action.
+
+Maternal and Child Care navigation, Referral Management, advanced reports, and
+hidden administrator infrastructure are preserved as inactive future
+extensions and excluded from the approved final thesis scope.

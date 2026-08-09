@@ -31,11 +31,10 @@ describe("general assistance UI boundaries", () => {
     expect(combined).toMatch(/query\.refetch\(\)/);
   });
 
-  it("guards all six routes with centralized permissions", () => {
+  it("guards approved assistance routes and hides the activity route", () => {
     for (const [route, permission] of [
       ["announcements", "VIEW_ANNOUNCEMENTS"],
       ["notifications", "VIEW_NOTIFICATIONS"],
-      ["activity", "VIEW_ACTIVITY"],
       ["healthCenter", "VIEW_HEALTH_CENTER"],
       ["faq", "VIEW_FAQ"],
       ["contact", "VIEW_INQUIRIES"],
@@ -47,6 +46,8 @@ describe("general assistance UI boundaries", () => {
         ),
       );
     }
+    expect(router).toMatch(/HIDDEN_FINAL_SCOPE_ROUTES\.map/);
+    expect(router).not.toMatch(/ActivityPage/);
   });
 
   it("uses associated labels for search, filters, and form fields", () => {

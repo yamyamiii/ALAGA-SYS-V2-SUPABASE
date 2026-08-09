@@ -57,10 +57,9 @@ describe("registry UI boundaries", () => {
     expect(residentPage).toMatch(/useResidents/);
   });
 
-  it("protects both registry routes with centralized read permissions", () => {
-    expect(router).toMatch(
-      /ROUTES\.households[\s\S]*PERMISSIONS\.VIEW_HOUSEHOLDS/,
-    );
+  it("guards Residents and disables the standalone Households route", () => {
+    expect(router).not.toMatch(/HouseholdRegistryPage/);
+    expect(router).toMatch(/HIDDEN_FINAL_SCOPE_ROUTES\.map/);
     expect(router).toMatch(
       /ROUTES\.residents[\s\S]*PERMISSIONS\.VIEW_RESIDENTS/,
     );

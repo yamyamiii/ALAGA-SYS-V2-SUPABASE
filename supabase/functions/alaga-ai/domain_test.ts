@@ -321,9 +321,7 @@ Deno.test("resolves role-authorized nested destinations", () => {
     ["Open Encounters", "resident", "open_health_record_encounters"],
     ["Open Vital Signs", "nurse", "open_health_record_vital_signs"],
     ["Open Appointment Reports", "admin", "open_appointment_reports"],
-    ["Open Monthly Reports", "midwife", "open_monthly_reports"],
-    ["Open Pregnancies", "midwife", "open_pregnancies"],
-    ["Open Child Records", "resident", "open_child_records"],
+    ["Open Monthly Reports", "admin", "open_monthly_reports"],
   ];
   for (const [phrase, role, actionId] of examples) {
     assertEquals(
@@ -333,52 +331,50 @@ Deno.test("resolves role-authorized nested destinations", () => {
   }
 });
 
-Deno.test(
-  "offers every maternal and child care section to every viewing role",
-  () => {
-    const destinations: Array<[string, string]> = [
-      ["Pregnancies", "open_pregnancies"],
-      ["Prenatal Visits", "open_prenatal_visits"],
-      ["Deliveries", "open_deliveries"],
-      ["Postnatal Care", "open_postnatal_care"],
-      ["Child Profiles", "open_child_records"],
-      ["Growth Monitoring", "open_growth_monitoring"],
-      ["Immunizations", "open_immunizations"],
-    ];
-    const roles: CanonicalRole[] = [
-      "admin",
-      "barangay_health_worker",
-      "nurse",
-      "midwife",
-      "resident",
-    ];
-
-    for (const role of roles) {
-      for (const [phrase, actionId] of destinations) {
-        assertEquals(
-          navigationResponseFor(phrase, role)?.actions[0]?.actionId,
-          actionId,
-        );
-      }
-    }
-  },
-);
-
-Deno.test("matches Filipino maternal and child destinations", () => {
-  const examples: Array<[string, string]> = [
-    ["Buksan ang mga pagbubuntis", "open_pregnancies"],
-    ["Buksan ang prenatal checkups", "open_prenatal_visits"],
-    ["Punta sa panganganak", "open_deliveries"],
-    ["Tingnan ang postnatal visits", "open_postnatal_care"],
-    ["Buksan ang mga rekord ng bata", "open_child_records"],
-    ["Tingnan ang paglaki ng bata", "open_growth_monitoring"],
-    ["Punta sa mga bakuna", "open_immunizations"],
+Deno.test("never offers inactive extension actions to any role", () => {
+  const actionIds = [
+    "open_maternal_child_care",
+    "open_pregnancies",
+    "open_prenatal_visits",
+    "open_deliveries",
+    "open_postnatal_care",
+    "open_child_records",
+    "open_growth_monitoring",
+    "open_immunizations",
+    "open_households",
+    "open_audit_logs",
   ];
-  for (const [phrase, actionId] of examples) {
-    assertEquals(
-      navigationResponseFor(phrase, "resident")?.actions[0]?.actionId,
-      actionId,
-    );
+  const roles: CanonicalRole[] = [
+    "admin",
+    "barangay_health_worker",
+    "nurse",
+    "midwife",
+    "resident",
+  ];
+
+  for (const role of roles) {
+    for (const actionId of actionIds) {
+      assert(!navigationActionIdsForRole(role).includes(actionId));
+      assertEquals(
+        sanitizeNavigationActions([{ type: "navigate", actionId }], role),
+        [],
+      );
+    }
+  }
+});
+
+Deno.test("does not match inactive maternal and child destinations", () => {
+  const phrases = [
+    "Buksan ang mga pagbubuntis",
+    "Buksan ang prenatal checkups",
+    "Punta sa panganganak",
+    "Tingnan ang postnatal visits",
+    "Buksan ang mga rekord ng bata",
+    "Tingnan ang paglaki ng bata",
+    "Punta sa mga bakuna",
+  ];
+  for (const phrase of phrases) {
+    assertEquals(navigationResponseFor(phrase, "resident")?.actions ?? [], []);
   }
 });
 

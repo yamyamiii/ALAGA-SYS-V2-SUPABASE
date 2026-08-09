@@ -1,5 +1,12 @@
 # Health Records architecture
 
+The approved visible scope presents this as a basic appointment-linked
+consultation record system: Health Records, Consultation Record, Vital Signs,
+and Consultation Summary. It is not presented as a comprehensive hospital EHR.
+All existing assignment, signing, amendment, masking, resident ownership, RLS,
+and trusted-RPC controls remain authoritative. Broad allergy/history management
+is hidden from the main record presentation without deleting backend support.
+
 ## Scope and clinical boundary
 
 Phase 5 provides a clinical-documentation foundation for Brgy. Bagongpook

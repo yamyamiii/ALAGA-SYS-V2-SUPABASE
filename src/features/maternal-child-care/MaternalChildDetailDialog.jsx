@@ -1,6 +1,5 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,8 +11,6 @@ import { ErrorState, LoadingState } from "@/components/common/StateDisplay";
 import { useMaternalChildDetail } from "@/features/maternal-child-care/hooks";
 import { MaternalChildEventDialog } from "@/features/maternal-child-care/MaternalChildEventDialog";
 import { useAuth } from "@/features/auth/authContext";
-import { DocumentPreviewDialog } from "@/features/documents/DocumentPreviewDialog";
-import { DOCUMENT_TYPES } from "@/features/documents/constants";
 import {
   canArchiveMaternalChildCare,
   canCreateMaternalChildProfile,
@@ -65,7 +62,6 @@ export function MaternalChildDetailDialog({
 }) {
   const { profile } = useAuth();
   const [eventType, setEventType] = useState(null);
-  const [printOpen, setPrintOpen] = useState(false);
   const query = useMaternalChildDetail(kind, recordId, open);
   const transition = useMaternalChildMutation(({ current, target }) =>
     maternalChildService.transitionPregnancy(current, target),
@@ -101,11 +97,6 @@ export function MaternalChildDetailDialog({
     }
   }
 
-  const documentType =
-    kind === "pregnancy"
-      ? DOCUMENT_TYPES.PRENATAL_SUMMARY
-      : DOCUMENT_TYPES.CHILD_HEALTH_SUMMARY;
-
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -119,12 +110,6 @@ export function MaternalChildDetailDialog({
           </DialogHeader>
           {record ? (
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => setPrintOpen(true)}>
-                <FileText />
-                {kind === "pregnancy"
-                  ? "Print Prenatal Summary"
-                  : "Print Child Health Summary"}
-              </Button>
               {canAddEvent ? (
                 <Button onClick={() => setEventType(sectionEvent)}>
                   Add {sectionEvent === "visit" ? "child visit" : sectionEvent}
@@ -257,14 +242,6 @@ export function MaternalChildDetailDialog({
           />
         </DialogContent>
       </Dialog>
-      {printOpen ? (
-        <DocumentPreviewDialog
-          documentType={documentType}
-          recordId={recordId}
-          open
-          onOpenChange={setPrintOpen}
-        />
-      ) : null}
     </>
   );
 }

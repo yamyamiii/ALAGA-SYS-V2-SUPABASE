@@ -50,7 +50,7 @@ export const AI_NAVIGATION_TARGETS = Object.freeze({
   open_notifications: {
     label: "Open Notifications",
     route: ROUTES.notifications,
-    roles: ALL_ROLES,
+    roles: [USER_ROLES.RESIDENT],
   },
   open_announcements: {
     label: "Open Announcements",
@@ -81,11 +81,6 @@ export const AI_NAVIGATION_TARGETS = Object.freeze({
     route: ROUTES.residents,
     roles: [USER_ROLES.ADMINISTRATOR, USER_ROLES.BARANGAY_HEALTH_WORKER],
   },
-  open_households: {
-    label: "Open Households",
-    route: ROUTES.households,
-    roles: [USER_ROLES.ADMINISTRATOR, USER_ROLES.BARANGAY_HEALTH_WORKER],
-  },
   open_health_records: {
     label: "Open Health Records",
     route: ROUTES.healthRecords,
@@ -101,84 +96,24 @@ export const AI_NAVIGATION_TARGETS = Object.freeze({
     route: ROUTES.healthRecordVitalSigns,
     roles: ALL_ROLES,
   },
-  open_maternal_child_care: {
-    label: "Open Maternal and Child Care",
-    route: ROUTES.maternalChildCare,
-    roles: ALL_ROLES,
-  },
-  open_pregnancies: {
-    label: "Open Pregnancies",
-    route: ROUTES.maternalPregnancies,
-    roles: ALL_ROLES,
-  },
-  open_prenatal_visits: {
-    label: "Open Prenatal Visits",
-    route: ROUTES.maternalPrenatalVisits,
-    roles: ALL_ROLES,
-  },
-  open_deliveries: {
-    label: "Open Deliveries",
-    route: ROUTES.maternalDeliveries,
-    roles: ALL_ROLES,
-  },
-  open_postnatal_care: {
-    label: "Open Postnatal Care",
-    route: ROUTES.maternalPostnatalCare,
-    roles: ALL_ROLES,
-  },
-  open_immunizations: {
-    label: "Open Immunizations",
-    route: ROUTES.maternalImmunizations,
-    roles: ALL_ROLES,
-  },
-  open_child_records: {
-    label: "Open Child Records",
-    route: ROUTES.maternalChildRecords,
-    roles: ALL_ROLES,
-  },
-  open_growth_monitoring: {
-    label: "Open Growth Monitoring",
-    route: ROUTES.maternalGrowthMonitoring,
-    roles: ALL_ROLES,
-  },
   open_reports: {
     label: "Open Reports",
     route: ROUTES.reports,
-    roles: [
-      USER_ROLES.ADMINISTRATOR,
-      USER_ROLES.BARANGAY_HEALTH_WORKER,
-      USER_ROLES.NURSE,
-      USER_ROLES.MIDWIFE,
-    ],
+    roles: [USER_ROLES.ADMINISTRATOR, USER_ROLES.BARANGAY_HEALTH_WORKER],
   },
   open_appointment_reports: {
     label: "Open Appointment Reports",
     route: ROUTES.appointmentReports,
-    roles: [
-      USER_ROLES.ADMINISTRATOR,
-      USER_ROLES.BARANGAY_HEALTH_WORKER,
-      USER_ROLES.NURSE,
-      USER_ROLES.MIDWIFE,
-    ],
+    roles: [USER_ROLES.ADMINISTRATOR, USER_ROLES.BARANGAY_HEALTH_WORKER],
   },
   open_monthly_reports: {
     label: "Open Monthly Reports",
     route: ROUTES.monthlyReports,
-    roles: [
-      USER_ROLES.ADMINISTRATOR,
-      USER_ROLES.BARANGAY_HEALTH_WORKER,
-      USER_ROLES.NURSE,
-      USER_ROLES.MIDWIFE,
-    ],
+    roles: [USER_ROLES.ADMINISTRATOR, USER_ROLES.BARANGAY_HEALTH_WORKER],
   },
   open_user_management: {
     label: "Open User Management",
     route: ROUTES.userManagement,
-    roles: [USER_ROLES.ADMINISTRATOR],
-  },
-  open_audit_logs: {
-    label: "Open Audit Logs",
-    route: ROUTES.auditLogs,
     roles: [USER_ROLES.ADMINISTRATOR],
   },
 });

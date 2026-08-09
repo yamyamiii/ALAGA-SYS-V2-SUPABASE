@@ -79,7 +79,10 @@ describe("ALAGA AI conversation schemas", () => {
     expect(getAiWelcomeMessage(USER_ROLES.NURSE)).toMatch(
       /assigned appointment/i,
     );
-    expect(getAiWelcomeMessage(USER_ROLES.MIDWIFE)).toMatch(/maternal/i);
+    expect(getAiWelcomeMessage(USER_ROLES.MIDWIFE)).toMatch(
+      /consultation-record/i,
+    );
+    expect(getAiWelcomeMessage(USER_ROLES.MIDWIFE)).not.toMatch(/maternal/i);
     expect(getAiWelcomeMessage(USER_ROLES.ADMINISTRATOR)).not.toMatch(
       /diagnos/i,
     );

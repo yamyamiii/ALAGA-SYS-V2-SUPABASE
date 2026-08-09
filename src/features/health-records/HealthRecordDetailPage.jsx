@@ -1,7 +1,6 @@
 import {
   Archive,
   ArrowLeft,
-  ClipboardPlus,
   FileText,
   FilePenLine,
   FileSignature,
@@ -26,31 +25,19 @@ import {
 import { useAuth } from "@/features/auth/authContext";
 import { DocumentPreviewDialog } from "@/features/documents/DocumentPreviewDialog";
 import { DOCUMENT_TYPES } from "@/features/documents/constants";
-import { useReferralForEncounter } from "@/features/documents/hooks";
-import {
-  canCreateReferral,
-  canPrintConsultationSummary,
-  canQueryReferral,
-} from "@/features/documents/permissions";
-import { ReferralDialog } from "@/features/documents/ReferralDialog";
-import { ClinicalHistoryManager } from "@/features/health-records/ClinicalHistoryManager";
+import { canPrintConsultationSummary } from "@/features/documents/permissions";
 import { EncounterActionDialog } from "@/features/health-records/EncounterActionDialog";
 import { EncounterClinicalFormDialog } from "@/features/health-records/EncounterClinicalFormDialog";
 import {
   ENCOUNTER_STATUS_LABELS,
   ENCOUNTER_TYPE_LABELS,
 } from "@/features/health-records/constants";
-import {
-  useHealthRecord,
-  useResidentAllergies,
-  useResidentMedicalHistory,
-} from "@/features/health-records/hooks";
+import { useHealthRecord } from "@/features/health-records/hooks";
 import { missingEncounterSignFields } from "@/features/health-records/schemas";
 import {
   canAmendEncounter,
   canArchiveEncounter,
   canEditEncounter,
-  canManageClinicalHistory,
   canRecordVitals,
   canSignEncounter,
 } from "@/features/health-records/permissions";
@@ -97,19 +84,8 @@ export default function HealthRecordDetailPage() {
   const [vitalsOpen, setVitalsOpen] = useState(false);
   const [action, setAction] = useState(null);
   const [consultationPrintOpen, setConsultationPrintOpen] = useState(false);
-  const [referralOpen, setReferralOpen] = useState(false);
   const encounter = query.data;
   const clinicalVisible = Boolean(encounter?.clinical);
-  const allergies = useResidentAllergies(
-    encounter?.resident_id,
-    clinicalVisible,
-  );
-  const history = useResidentMedicalHistory(
-    encounter?.resident_id,
-    clinicalVisible,
-  );
-  const referralEligible = canQueryReferral(profile.role, encounter);
-  const referral = useReferralForEncounter(encounter?.id, referralEligible);
 
   if (query.isLoading) {
     return (
@@ -145,18 +121,10 @@ export default function HealthRecordDetailPage() {
   const canAmend = canAmendEncounter(profile.role, encounter);
   const canArchive = canArchiveEncounter(profile.role, encounter);
   const canVitals = canRecordVitals(profile.role, encounter, profile.id);
-  const canManageHistory = canManageClinicalHistory(profile.role);
   const canPrintConsultation = canPrintConsultationSummary(
     profile.role,
     encounter,
   );
-  const canCreateEncounterReferral = canCreateReferral(
-    profile.role,
-    encounter,
-    profile.id,
-  );
-  const showReferralAction =
-    canCreateEncounterReferral || Boolean(referral.data);
   const vitals = encounter.vital_signs;
   const missingSignFields = missingEncounterSignFields(encounter);
   const signReady = missingSignFields.length === 0;
@@ -169,7 +137,7 @@ export default function HealthRecordDetailPage() {
         </Link>
       </Button>
       <PageHeading
-        eyebrow="Clinical encounter"
+        eyebrow="Consultation record"
         title={encounter.encounter_number}
         description={`${ENCOUNTER_TYPE_LABELS[encounter.encounter_type]} · ${formatManilaDate(encounter.encounter_date)}`}
         actions={
@@ -180,12 +148,6 @@ export default function HealthRecordDetailPage() {
                 onClick={() => setConsultationPrintOpen(true)}
               >
                 <FileText /> Print Consultation Summary
-              </Button>
-            ) : null}
-            {showReferralAction ? (
-              <Button variant="outline" onClick={() => setReferralOpen(true)}>
-                <ClipboardPlus />
-                {referral.data ? "View Referral Form" : "Create Referral Form"}
               </Button>
             ) : null}
             {canEdit ? (
@@ -370,42 +332,8 @@ export default function HealthRecordDetailPage() {
               {formatManilaDate(encounter.clinical.follow_up_date)}
             </Value>
           </Section>
-          <Section title="12. Allergies" plain>
-            <ClinicalHistoryManager
-              type="allergy"
-              residentId={encounter.resident_id}
-              items={allergies.data ?? []}
-              canManage={canManageHistory}
-              isLoading={allergies.isLoading}
-              error={allergies.error}
-              onRetry={() => allergies.refetch()}
-              onChanged={() => allergies.refetch()}
-            />
-          </Section>
-          <Section title="13. Medical History" plain>
-            <ClinicalHistoryManager
-              type="history"
-              residentId={encounter.resident_id}
-              items={history.data ?? []}
-              canManage={canManageHistory}
-              isLoading={history.isLoading}
-              error={history.error}
-              onRetry={() => history.refetch()}
-              onChanged={() => history.refetch()}
-            />
-          </Section>
         </>
       ) : null}
-
-      <Section title="14. Administrative Metadata">
-        <Value label="Created">
-          {formatManilaTimestamp(encounter.created_at)}
-        </Value>
-        <Value label="Last updated">
-          {formatManilaTimestamp(encounter.updated_at)}
-        </Value>
-        <Value label="Amends encounter">{encounter.amends_encounter_id}</Value>
-      </Section>
 
       <EncounterClinicalFormDialog
         encounter={encounter}
@@ -434,13 +362,6 @@ export default function HealthRecordDetailPage() {
           }
         }}
       />
-      {referralOpen ? (
-        <ReferralDialog
-          encounter={encounter}
-          open
-          onOpenChange={setReferralOpen}
-        />
-      ) : null}
       {consultationPrintOpen ? (
         <DocumentPreviewDialog
           documentType={DOCUMENT_TYPES.CONSULTATION_SUMMARY}

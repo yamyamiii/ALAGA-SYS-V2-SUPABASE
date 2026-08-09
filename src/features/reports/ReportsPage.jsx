@@ -1,9 +1,7 @@
 import {
   Activity,
-  Baby,
   CalendarCheck,
   Download,
-  HeartPulse,
   Printer,
   UsersRound,
 } from "lucide-react";
@@ -42,9 +40,6 @@ const iconByCategory = {
   overview: Activity,
   residents: UsersRound,
   appointments: CalendarCheck,
-  health_records: HeartPulse,
-  maternal_care: HeartPulse,
-  child_care: Baby,
   staff_workload: UsersRound,
 };
 
@@ -81,17 +76,14 @@ function Summary({ category, data, loading }) {
           </p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[560px] text-left text-sm">
             <thead>
               <tr className="border-b">
                 {[
                   "Staff",
                   "Role",
-                  "Assigned",
-                  "Completed",
-                  "Encounters",
-                  "Maternal/child",
-                  "Total",
+                  "Assigned appointments",
+                  "Completed appointments",
                 ].map((heading) => (
                   <th key={heading} scope="col" className="px-3 py-2">
                     {heading}
@@ -106,11 +98,6 @@ function Summary({ category, data, loading }) {
                   <td className="px-3 py-3">{labelFor(row.role)}</td>
                   <td className="px-3 py-3">{row.assigned_appointments}</td>
                   <td className="px-3 py-3">{row.completed_appointments}</td>
-                  <td className="px-3 py-3">{row.clinical_encounters}</td>
-                  <td className="px-3 py-3">{row.maternal_child_events}</td>
-                  <td className="px-3 py-3 font-semibold">
-                    {row.total_volume}
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -132,13 +119,7 @@ function Summary({ category, data, loading }) {
       })),
     ]);
   }
-  for (const key of [
-    "status_counts",
-    "priority_counts",
-    "type_counts",
-    "outcome_counts",
-    "immunization_status_counts",
-  ]) {
+  for (const key of ["status_counts", "priority_counts", "type_counts"]) {
     const chart = objectChart(data?.summary, key);
     if (chart.length) charts.push([labelFor(key), chart]);
   }
@@ -206,11 +187,7 @@ export default function ReportsPage() {
   const showAppointmentFilters = ["appointments", "staff_workload"].includes(
     category,
   );
-  const showStaff = [
-    "appointments",
-    "health_records",
-    "staff_workload",
-  ].includes(category);
+  const showStaff = ["appointments", "staff_workload"].includes(category);
 
   const applyFilters = () => {
     const result = validateReportFilters(activeDraft);

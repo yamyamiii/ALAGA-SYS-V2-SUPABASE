@@ -264,24 +264,25 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     ["Open Encounters", "resident", "open_health_record_encounters"],
     ["Open Vital Signs", "nurse", "open_health_record_vital_signs"],
     ["Open Appointment Reports", "admin", "open_appointment_reports"],
-    ["Open Monthly Reports", "midwife", "open_monthly_reports"],
-    ["Open Pregnancies", "midwife", "open_pregnancies"],
-    ["Open Child Records", "resident", "open_child_records"],
+    ["Open Monthly Reports", "admin", "open_monthly_reports"],
   ])("resolves nested destination: %s", (phrase, role, actionId) => {
     expect(navigationResponseFor(phrase, role)?.actions).toEqual([
       expect.objectContaining({ actionId }),
     ]);
   });
 
-  it("offers every maternal and child care section to every viewing role", () => {
-    const destinations = [
-      ["Pregnancies", "open_pregnancies"],
-      ["Prenatal Visits", "open_prenatal_visits"],
-      ["Deliveries", "open_deliveries"],
-      ["Postnatal Care", "open_postnatal_care"],
-      ["Child Profiles", "open_child_records"],
-      ["Growth Monitoring", "open_growth_monitoring"],
-      ["Immunizations", "open_immunizations"],
+  it("never offers inactive extension actions to any role", () => {
+    const actionIds = [
+      "open_maternal_child_care",
+      "open_pregnancies",
+      "open_prenatal_visits",
+      "open_deliveries",
+      "open_postnatal_care",
+      "open_child_records",
+      "open_growth_monitoring",
+      "open_immunizations",
+      "open_households",
+      "open_audit_logs",
     ];
     const roles = [
       "admin",
@@ -292,26 +293,27 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     ];
 
     for (const role of roles) {
-      for (const [phrase, actionId] of destinations) {
-        expect(navigationResponseFor(phrase, role)?.actions).toEqual([
-          expect.objectContaining({ actionId }),
-        ]);
+      for (const actionId of actionIds) {
+        expect(navigationActionIdsForRole(role)).not.toContain(actionId);
+        expect(
+          sanitizeNavigationActions([{ type: "navigate", actionId }], role),
+        ).toEqual([]);
       }
     }
   });
 
   it.each([
-    ["Buksan ang mga pagbubuntis", "open_pregnancies"],
-    ["Buksan ang prenatal checkups", "open_prenatal_visits"],
-    ["Punta sa panganganak", "open_deliveries"],
-    ["Tingnan ang postnatal visits", "open_postnatal_care"],
-    ["Buksan ang mga rekord ng bata", "open_child_records"],
-    ["Tingnan ang paglaki ng bata", "open_growth_monitoring"],
-    ["Punta sa mga bakuna", "open_immunizations"],
-  ])("resolves maternal/child Filipino phrase: %s", (phrase, actionId) => {
-    expect(
-      navigationResponseFor(phrase, "resident")?.actions[0]?.actionId,
-    ).toBe(actionId);
+    "Buksan ang mga pagbubuntis",
+    "Buksan ang prenatal checkups",
+    "Punta sa panganganak",
+    "Tingnan ang postnatal visits",
+    "Buksan ang mga rekord ng bata",
+    "Tingnan ang paglaki ng bata",
+    "Punta sa mga bakuna",
+  ])("does not return an inactive maternal/child action: %s", (phrase) => {
+    expect(navigationResponseFor(phrase, "resident")?.actions ?? []).toEqual(
+      [],
+    );
   });
 
   it("does not broaden nested appointment or report permissions", () => {

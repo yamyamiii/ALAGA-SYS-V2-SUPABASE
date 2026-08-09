@@ -1,7 +1,8 @@
 # Printable documents architecture
 
-Phase 10 adds a reusable A4 document framework for five approved healthcare
-documents. Pages open `DocumentPreviewDialog` with only a symbolic document
+Phase 10 adds a reusable A4 document framework. The approved visible thesis
+scope exposes only Appointment Slip and Consultation Summary. Pages open
+`DocumentPreviewDialog` with only a symbolic document
 type and an existing record UUID. `documentService` validates the UUID and
 calls one narrow RPC. The browser never supplies a role or resident ID.
 
@@ -13,13 +14,15 @@ the database boundary. Its security-definer RPCs use an empty `search_path` and
 return only document fields. They do not grant table access, weaken RLS, or use
 a service-role key in the browser.
 
-| Document             | Trusted RPC                     | Database authorization                                       |
-| -------------------- | ------------------------------- | ------------------------------------------------------------ |
-| Appointment Slip     | `document_appointment_slip`     | Valid appointment state plus existing role/ownership scope   |
-| Consultation Summary | `document_consultation_summary` | Signed/amended and narrative-authorized role/owner           |
-| Referral Form        | `document_referral_form`        | Finalized referral plus encounter narrative authorization    |
-| Prenatal Summary     | `document_prenatal_summary`     | Existing maternal record scope; clinical facts remain masked |
-| Child Health Summary | `document_child_health_summary` | Existing child record scope; clinical facts remain masked    |
+| Visible document     | Trusted RPC                     | Database authorization                                     |
+| -------------------- | ------------------------------- | ---------------------------------------------------------- |
+| Appointment Slip     | `document_appointment_slip`     | Valid appointment state plus existing role/ownership scope |
+| Consultation Summary | `document_consultation_summary` | Signed/amended and narrative-authorized role/owner         |
+
+Referral Form, Prenatal Summary, and Child Health Summary actions are removed
+from pages and dialogs. Their database functions, tables, policies, and model
+code are preserved as inactive future extensions and excluded from the
+approved final thesis scope.
 
 The shared React Query keys use zero cache time for protected document payloads
 and revalidate on every preview opening. Window focus does not refetch or reset
@@ -39,7 +42,7 @@ external PDF service, or sends document content off-device. The library lives
 in a separate lazy bundle so normal application routes do not pay its bundle
 cost.
 
-## Referral model
+## Preserved referral model
 
 `clinical_referrals` links one active referral to a signed or amended encounter.
 The encounter derives the resident; no resident ID is accepted by referral
@@ -52,6 +55,10 @@ referral can be archived only by the referring clinician.
 Direct browser table access is revoked. Semantic audits contain only the
 referral identifier, status, and version—never the receiving facility, reason,
 or clinical summary.
+
+The referral model has no final-scope navigation, page action, print action, or
+AI action. It remains documented here only to make the non-destructive boundary
+explicit.
 
 ## Known limitations
 

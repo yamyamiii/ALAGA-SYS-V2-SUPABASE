@@ -1,5 +1,8 @@
 # Referral Form
 
+> Preserved as an inactive future extension and excluded from the approved
+> final thesis scope. No Referral Form action is visible in the application.
+
 Referral creation is a controlled clinical workflow linked to one signed or
 amended encounter. Only that encounter's attending nurse or an attending
 midwife on a maternal/child encounter may author it.

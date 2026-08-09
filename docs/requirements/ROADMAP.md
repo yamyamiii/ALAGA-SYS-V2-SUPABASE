@@ -1,5 +1,14 @@
 # ALAGA-SYS roadmap
 
+## Approved final thesis release
+
+The approved title is **Automated Local Appointment and General Assistance
+System (ALAGA-SYS)**. The visible release focuses on appointments, resident
+management, appointment-linked consultation records, announcements,
+notifications, basic operational reports, trusted user management, and ALAGA
+AI guidance. Historical backend capabilities remain protected for data and
+dependency safety; visibility flags are not authorization controls.
+
 ## Phase 0 — Foundation
 
 Vite/React project, responsive application shell, design system, route and
@@ -34,6 +43,8 @@ auditing and privacy protections.
 ## Phase 6 — Maternal and child healthcare
 
 Program-specific relational records, schedules, and monitoring workflows.
+Preserved as an inactive future extension and excluded from the approved final
+thesis scope.
 
 ## Phase 7 — Reports, analytics, exports, and printing
 
@@ -71,11 +82,11 @@ capability is introduced.
 ## Phase 10 — Printable forms and document exports
 
 Reusable authorized A4 previews, browser printing, and local selectable-text
-PDF downloads for Appointment Slips, signed/amended Consultation Summaries,
-controlled clinician-authored Referral Forms, Prenatal Summaries, and Child
-Health Summaries. Narrow RPCs preserve ownership, assignment, clinical masking,
-and record-state rules. Generated content remains in memory and is never sent
-to AI or an external PDF service.
+PDF downloads. Appointment Slips and signed/amended Consultation Summaries are
+the approved visible documents. Referral, Prenatal, and Child Health document
+support is preserved as an inactive future extension and excluded from the
+approved final thesis scope. Narrow RPCs preserve ownership, assignment,
+clinical masking, and record-state rules.
 
 Medical certificates, prescriptions, laboratory results, health certificates,
 barangay clearances, automated clinical conclusions, and AI-generated document
@@ -90,7 +101,7 @@ events without making workflows depend on delivery. Email operates only when a
 reviewed HTTP gateway is configured; SMS remains disabled by default. External
 templates contain only minimized operational fields and no clinical detail.
 
-Administrator Settings, Backup/Restore, mandatory-delivery policies, provider
+Administrator Settings, the visible Backup/Restore console, mandatory-delivery policies, provider
 webhooks, contact-verification workflows beyond Supabase Auth, and paid SMS
 activation remain future enhancements.
 
@@ -102,6 +113,7 @@ threat model, narrow authorization design, audit model, and privacy review.
 
 ## Future phases
 
-Medicine inventory, dispensing, laboratory integrations, backup/restore
-operations, advanced AI capabilities, provider-specific delivery webhooks, and
-final deployment hardening remain out of scope until separately approved.
+Maternal and Child Care, Referral Management, Medicine Inventory, advanced
+clinical reports, advanced administrator settings, provider-specific delivery
+webhooks, and destructive schema cleanup remain future work. Backup, audit,
+notification delivery, and security infrastructure stay operational internally.
