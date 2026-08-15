@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppointmentDetailDialog } from "@/features/appointments/AppointmentDetailDialog";
@@ -15,10 +15,6 @@ vi.mock("@/features/auth/authContext", () => ({
 
 vi.mock("@/features/appointments/AppointmentActionDialog", () => ({
   AppointmentActionDialog: () => null,
-}));
-
-vi.mock("@/features/health-records/AppointmentEncounterAction", () => ({
-  AppointmentEncounterAction: () => null,
 }));
 
 const appointmentId = "11111111-1111-4111-8111-111111111111";
@@ -95,6 +91,87 @@ describe("AppointmentDetailDialog rescheduling lineage", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("APT-2026-000001")).toBeInTheDocument();
     expect(screen.queryByText("Rescheduled from")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /clinical encounter/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("separates the current confirmed schedule from the original Resident request", () => {
+    useAppointment.mockReturnValue({
+      data: appointment({
+        service_type: "Blood Pressure Monitoring",
+        scheduled_date: "2026-08-15",
+        start_time: "15:00:00",
+        end_time: "15:30:00",
+        request_source: "resident",
+        requested_date: "2026-08-16",
+        requested_start_time: "08:00:00",
+        requested_end_time: "08:30:00",
+        resident_requested_at: "2026-08-10T01:00:00Z",
+        staff: {
+          first_name: "Nora",
+          last_name: "Nurse",
+          role: "nurse",
+        },
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderDialog();
+
+    const current = screen
+      .getByRole("heading", { name: "Current appointment" })
+      .closest("section");
+    expect(within(current).getByText("Confirmed")).toBeInTheDocument();
+    expect(within(current).getByText("Aug 15, 2026")).toBeInTheDocument();
+    expect(within(current).getByText("3:00 PM–3:30 PM")).toBeInTheDocument();
+    expect(
+      within(current).getByText("Blood Pressure Monitoring"),
+    ).toBeInTheDocument();
+    expect(within(current).getByText("Nora Nurse")).toBeInTheDocument();
+
+    const original = screen
+      .getByRole("heading", { name: "Original appointment request" })
+      .closest("section");
+    expect(within(original).getByText("Aug 16, 2026")).toBeInTheDocument();
+    expect(within(original).getByText("8:00 AM")).toBeInTheDocument();
+    expect(within(original).getByText("8:30 AM")).toBeInTheDocument();
+    expect(
+      within(original).getByText(
+        "The health center adjusted your preferred schedule. Your current appointment schedule is shown above.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps an unchanged preferred schedule as historical request metadata", () => {
+    useAppointment.mockReturnValue({
+      data: appointment({
+        request_source: "resident",
+        requested_date: "2026-08-01",
+        requested_start_time: "08:00:00",
+        requested_end_time: "08:30:00",
+        resident_requested_at: "2026-07-26T00:00:00Z",
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderDialog();
+
+    expect(
+      screen.getByRole("heading", { name: "Original appointment request" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This is the schedule you originally requested. The health center may adjust the final appointment schedule.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/adjusted your preferred schedule/i),
+    ).not.toBeInTheDocument();
   });
 
   it("opens a replacement appointment and shows its original appointment", () => {
@@ -118,5 +195,47 @@ describe("AppointmentDetailDialog rescheduling lineage", () => {
     expect(screen.getByText("APT-2026-000002")).toBeInTheDocument();
     expect(screen.getByText("Rescheduled from")).toBeInTheDocument();
     expect(screen.getByText("APT-2026-000001")).toBeInTheDocument();
+  });
+
+  it("renders a missing reason cleanly for staff-facing details", () => {
+    useAuth.mockReturnValue({
+      profile: { id: "55555555-5555-4555-8555-555555555555", role: "admin" },
+    });
+    useAppointment.mockReturnValue({
+      data: appointment({
+        reason: null,
+        operational_notes: "Legacy scheduling note",
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderDialog();
+
+    const reasonLabel = screen.getByText("Reason");
+    expect(reasonLabel.nextElementSibling).toHaveTextContent("Not provided");
+    expect(screen.queryByText("Operational notes")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Legacy scheduling note"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/^undefined|null$/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps a missing Resident cancellation reason out of the detail layout", () => {
+    useAuth.mockReturnValue({
+      profile: { id: "55555555-5555-4555-8555-555555555555", role: "resident" },
+    });
+    useAppointment.mockReturnValue({
+      data: appointment({ status: "cancelled", cancellation_reason: null }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderDialog();
+
+    expect(screen.queryByText("Cancellation reason")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^undefined|null$/i)).not.toBeInTheDocument();
   });
 });

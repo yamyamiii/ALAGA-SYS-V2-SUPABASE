@@ -308,6 +308,77 @@ Deno.test(
   },
 );
 
+Deno.test("answers assigned appointment workflow questions for Nurses", () => {
+  for (const phrase of [
+    "How do I check my assigned appointments?",
+    "Where can I see my assigned appointments?",
+    "How do I view my schedule?",
+    "Where is my appointment calendar?",
+    "How do I use the Daily Queue?",
+    "Paano ko makikita ang assigned appointments ko?",
+  ]) {
+    const response = workflowResponseFor(phrase, "nurse");
+    assertEquals(response?.category, "workflow_assigned_appointments");
+    assert(response?.message.match(/logged-in Nurse|naka-login na Nurse/));
+    assert(!response?.message.match(/other staff|all staff/i));
+    assertEquals(response?.actions[0]?.actionId, "open_appointments");
+  }
+});
+
+Deno.test(
+  "answers Resident-request confirmation questions for Admin and BHW",
+  () => {
+    for (const phrase of [
+      "How do I confirm a resident appointment request?",
+      "How do I approve an appointment request?",
+      "How do I process a pending resident request?",
+      "Paano ko i-confirm ang resident appointment request?",
+    ]) {
+      for (const role of ["admin", "barangay_health_worker"] as const) {
+        const response = workflowResponseFor(phrase, role);
+        assertEquals(response?.category, "workflow_appointment_confirmation");
+        assert(
+          response?.message.match(
+            /Assign an eligible staff member when required|Mag-assign ng eligible staff member kapag kinakailangan/,
+          ),
+        );
+        assert(response?.message.includes("required rejection justification"));
+        assert(
+          response?.message.match(
+            /same appointment and APT number|parehong appointment at APT number/,
+          ),
+        );
+        assert(
+          !response?.message.match(
+            /manual start|mark in progress|clinical encounter|operational notes|replacement row/i,
+          ),
+        );
+        assertEquals(response?.actions[0]?.actionId, "open_appointments");
+      }
+    }
+  },
+);
+
+Deno.test("keeps static appointment workflows role-bound and read-only", () => {
+  assertEquals(
+    workflowResponseFor(
+      "How do I confirm a resident appointment request?",
+      "resident",
+    )?.actions,
+    [],
+  );
+  assert(
+    workflowResponseFor(
+      "How do I check my assigned appointments?",
+      "midwife",
+    )?.message.includes("logged-in Midwife"),
+  );
+  assertEquals(
+    workflowResponseFor("How do I calibrate the clinic printer?", "nurse"),
+    null,
+  );
+});
+
 Deno.test("resolves role-authorized nested destinations", () => {
   const examples: Array<[string, CanonicalRole, string]> = [
     ["Open Calendar", "admin", "open_appointment_calendar"],

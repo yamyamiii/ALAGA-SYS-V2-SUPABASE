@@ -16,8 +16,20 @@ const preferences = fs.readFileSync(
   "src/features/notifications/NotificationPreferencesCard.jsx",
   "utf8",
 );
-const dashboard = fs.readFileSync(
-  "src/features/notifications/NotificationDeliveryDashboard.jsx",
+const notificationsPage = fs.readFileSync(
+  "src/features/assistance/NotificationsPage.jsx",
+  "utf8",
+);
+const notificationNavigation = fs.readFileSync(
+  "src/features/notifications/navigation.js",
+  "utf8",
+);
+const notificationHooks = fs.readFileSync(
+  "src/features/notifications/hooks.js",
+  "utf8",
+);
+const notificationService = fs.readFileSync(
+  "src/services/notificationService.js",
   "utf8",
 );
 const aiButton = fs.readFileSync(
@@ -53,13 +65,28 @@ describe("release-candidate role-aware UI", () => {
     expect(preferences).toMatch(/sm:flex-row/i);
   });
 
-  it("shows only minimized administrator delivery metadata", () => {
-    expect(dashboard).toMatch(/Pending/i);
-    expect(dashboard).toMatch(/Unconfigured/i);
-    expect(dashboard).toMatch(/destination_hint/i);
-    expect(dashboard).not.toMatch(
-      /message body|free-form|recipient_email|recipient_phone/i,
+  it("keeps the Notifications page focused on in-app updates and preferences", () => {
+    expect(notificationsPage).toMatch(/NotificationPreferencesCard/);
+    expect(notificationsPage).toMatch(/Unread only/);
+    expect(notificationsPage).toMatch(/Mark all as read/);
+    expect(notificationsPage).toMatch(/query\.data\.items\.map/);
+    expect(notificationsPage).not.toMatch(/NotificationDeliveryDashboard/);
+    expect(notificationsPage).not.toMatch(
+      /External delivery status|Recent delivery jobs|destination_hint/i,
     );
+    expect(notificationsPage).not.toMatch(/>Open<|>Mark as read</i);
+    expect(notificationsPage).toMatch(
+      /<button[\s\S]*onClick=\{\(\) => activate\(item\)\}/i,
+    );
+    expect(notificationNavigation).toMatch(
+      /notification\.action_path !== target\.path/i,
+    );
+  });
+
+  it("retains hidden external-delivery service and hook infrastructure", () => {
+    expect(notificationHooks).toMatch(/useNotificationDeliverySummary/);
+    expect(notificationService).toMatch(/notification_delivery_summary/);
+    expect(notificationService).toMatch(/notification_retry_failed_job/);
   });
 
   it("keeps the AI launcher below dialogs and above mobile navigation", () => {

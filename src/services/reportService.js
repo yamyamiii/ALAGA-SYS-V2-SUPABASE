@@ -101,13 +101,115 @@ function appointment(filters) {
   };
 }
 
+function normalizedOverviewSummary(overview = {}, appointments = {}) {
+  const statusCounts = appointments.status_counts ?? {};
+  return {
+    active_residents: overview.active_residents ?? 0,
+    total_appointments: appointments.total ?? 0,
+    pending_requests: overview.pending_requests ?? 0,
+    confirmed_appointments: statusCounts.confirmed ?? 0,
+    completed_appointments: appointments.completed ?? 0,
+    cancelled_appointments: appointments.cancelled ?? 0,
+    appointments_today: overview.appointments_today ?? 0,
+    checked_in_queue: overview.checked_in_queue ?? 0,
+  };
+}
+
+function overviewExportRows(summary) {
+  const labels = {
+    active_residents: "Active residents",
+    total_appointments: "Total appointments",
+    pending_requests: "Pending requests",
+    confirmed_appointments: "Confirmed appointments",
+    completed_appointments: "Completed appointments",
+    cancelled_appointments: "Cancelled appointments",
+    appointments_today: "Appointments today",
+    checked_in_queue: "Checked-in queue",
+  };
+  return Object.entries(labels).map(([key, metric]) => ({
+    metric,
+    value: summary[key],
+  }));
+}
+
+function sanitizeExportRows(category, rows) {
+  if (category !== "staff_workload") return rows;
+  return rows.map(
+    ({ staff, role, assigned_appointments, completed_appointments }) => ({
+      staff,
+      role,
+      assigned_appointments,
+      completed_appointments,
+    }),
+  );
+}
+
+function requiredDashboardCount(source, key) {
+  const value = Number(source?.[key]);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new ReportServiceError(
+      "invalid_response",
+      "The dashboard aggregate response was invalid.",
+    );
+  }
+  return value;
+}
+
+const DASHBOARD_APPOINTMENT_TOTAL_PARAMETERS = Object.freeze({
+  p_search: null,
+  p_date_from: null,
+  p_date_to: null,
+  p_status: null,
+  p_appointment_type: null,
+  p_service_type: null,
+  p_priority: null,
+  p_assigned_staff_id: null,
+  p_include_archived: false,
+  p_sort: "scheduled_at",
+  p_direction: "asc",
+  p_limit: 1,
+  p_offset: 0,
+});
+
 export function createReportService(clientProvider = getSupabaseClient) {
   return {
+    async loadDashboard(today, signal) {
+      const client = clientProvider();
+      const [overview, visibleAppointments] = await Promise.all([
+        rpc(
+          client,
+          "report_overview_summary",
+          { p_start_date: today, p_end_date: today },
+          "Dashboard totals could not be loaded.",
+          signal,
+        ),
+        rpc(
+          client,
+          "appointment_list",
+          DASHBOARD_APPOINTMENT_TOTAL_PARAMETERS,
+          "The authorized appointment total could not be loaded.",
+          signal,
+        ),
+      ]);
+
+      return {
+        active_residents: requiredDashboardCount(overview, "active_residents"),
+        total_appointments: visibleAppointments?.length
+          ? requiredDashboardCount(visibleAppointments[0], "total_count")
+          : 0,
+        pending_requests: requiredDashboardCount(overview, "pending_requests"),
+        appointments_today: requiredDashboardCount(
+          overview,
+          "appointments_today",
+        ),
+      };
+    },
+
     async load(category, filters, signal) {
       const client = clientProvider();
       if (category === "overview") {
-        return {
-          summary: await rpc(
+        const [overview, appointments] = await Promise.all([
+          rpc(
             client,
             "report_overview_summary",
             {
@@ -117,6 +219,16 @@ export function createReportService(clientProvider = getSupabaseClient) {
             "The overview could not be loaded.",
             signal,
           ),
+          rpc(
+            client,
+            "report_appointment_summary",
+            appointment(filters),
+            "Appointment totals could not be loaded.",
+            signal,
+          ),
+        ]);
+        return {
+          summary: normalizedOverviewSummary(overview, appointments),
         };
       }
       if (category === "residents") {
@@ -221,8 +333,9 @@ export function createReportService(clientProvider = getSupabaseClient) {
     },
 
     async exportRows(category, filters, format) {
+      const client = clientProvider();
       const data = await rpc(
-        clientProvider(),
+        client,
         "report_export_rows",
         {
           p_report_type: category,
@@ -233,8 +346,32 @@ export function createReportService(clientProvider = getSupabaseClient) {
         },
         "The report export could not be prepared.",
       );
+      const rawRows = (data ?? []).map(({ row_data: row }) => row);
+      if (category === "overview") {
+        const [overview, appointments] = await Promise.all([
+          rpc(
+            client,
+            "report_overview_summary",
+            {
+              p_start_date: filters.start_date,
+              p_end_date: filters.end_date,
+            },
+            "The overview export could not be prepared.",
+          ),
+          rpc(
+            client,
+            "report_appointment_summary",
+            appointment(filters),
+            "Appointment totals could not be loaded.",
+          ),
+        ]);
+        const rows = overviewExportRows(
+          normalizedOverviewSummary(overview, appointments),
+        );
+        return { rows, total: rows.length };
+      }
       return {
-        rows: (data ?? []).map(({ row_data: row }) => row),
+        rows: sanitizeExportRows(category, rawRows),
         total: Number(data?.[0]?.total_count ?? 0),
       };
     },

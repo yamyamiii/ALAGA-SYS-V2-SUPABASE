@@ -6,6 +6,14 @@ const migration = fs.readFileSync(
   "supabase/migrations/20260720003200_outbound_notification_foundation.sql",
   "utf8",
 );
+const assistanceMigration = fs.readFileSync(
+  "supabase/migrations/20260720002700_general_assistance.sql",
+  "utf8",
+);
+const announcementNotificationCleanup = fs.readFileSync(
+  "supabase/migrations/20260720004300_cleanup_archived_announcement_notifications.sql",
+  "utf8",
+);
 
 describe("outbound notification database boundary", () => {
   it("keeps operational tables RLS-protected and inaccessible to browsers", () => {
@@ -78,6 +86,27 @@ describe("outbound notification database boundary", () => {
     );
     expect(migration).toMatch(
       /auth\.role\(\) is distinct from 'service_role'/i,
+    );
+  });
+
+  it("uses trusted announcement source metadata for creation and stale cleanup", () => {
+    expect(assistanceMigration).toMatch(
+      /select profile\.id,'new_announcement','New announcement',[\s\S]*'announcements',saved_record\.id,'\/announcements'/i,
+    );
+    expect(announcementNotificationCleanup).toMatch(
+      /delete from public\.assistance_notifications as notification\s+using public\.announcements as announcement[\s\S]*notification\.source_type = 'announcements'[\s\S]*notification\.source_id = announcement\.id[\s\S]*announcement\.archived_at is not null/i,
+    );
+    expect(announcementNotificationCleanup).not.toMatch(
+      /(?:title|summary|dedup_key)\s*(?:=|like|ilike)/i,
+    );
+  });
+
+  it("does not grant browsers direct notification-row deletion", () => {
+    expect(announcementNotificationCleanup).toMatch(
+      /revoke all on function public\.announcement_archive\(uuid, bigint\)[\s\S]*from public, anon, authenticated/i,
+    );
+    expect(announcementNotificationCleanup).not.toMatch(
+      /grant\s+delete\s+on\s+(?:table\s+)?public\.assistance_notifications/i,
     );
   });
 });

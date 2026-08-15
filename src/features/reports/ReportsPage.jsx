@@ -24,6 +24,7 @@ import { AccessibleBarChart } from "@/features/reports/AccessibleBarChart";
 import {
   categoriesForRole,
   REPORT_FORMATS,
+  reportSummaryEntries,
 } from "@/features/reports/constants";
 import { ReportFilters } from "@/features/reports/ReportFilters";
 import {
@@ -49,12 +50,6 @@ function labelFor(key) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function scalarEntries(summary = {}) {
-  return Object.entries(summary)
-    .filter(([, value]) => typeof value !== "object")
-    .map(([key, value]) => ({ key, label: labelFor(key), value }));
-}
-
 function objectChart(summary, key) {
   return Object.entries(summary?.[key] ?? {}).map(([label, value]) => ({
     label: labelFor(label),
@@ -64,7 +59,12 @@ function objectChart(summary, key) {
 
 function Summary({ category, data, loading }) {
   const Icon = iconByCategory[category] ?? Activity;
-  const entries = scalarEntries(data?.summary);
+  const entries = reportSummaryEntries(category, data?.summary).map(
+    (entry) => ({
+      ...entry,
+      label: entry.label ?? labelFor(entry.key),
+    }),
+  );
   if (category === "staff_workload") {
     const rows = data?.workload ?? [];
     return rows.length ? (
@@ -250,7 +250,9 @@ export default function ReportsPage() {
     }
   };
   const hasData =
-    scalarEntries(query.data?.summary).some(({ value }) => Number(value) > 0) ||
+    reportSummaryEntries(category, query.data?.summary).some(
+      ({ value }) => Number(value) > 0,
+    ) ||
     (query.data?.workload?.length ?? 0) > 0 ||
     (query.data?.byAge?.some(({ value }) => Number(value) > 0) ?? false) ||
     (query.data?.services?.some(({ value }) => Number(value) > 0) ?? false);

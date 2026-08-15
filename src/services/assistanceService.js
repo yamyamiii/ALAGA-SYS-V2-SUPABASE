@@ -125,6 +125,23 @@ function page(data, pageNumber, pageSize) {
   };
 }
 
+function requiredNotificationCount(row, key) {
+  const raw = row?.[key];
+  const value = Number(raw);
+  if (
+    raw === null ||
+    raw === undefined ||
+    !Number.isSafeInteger(value) ||
+    value < 0
+  ) {
+    throw new AssistanceServiceError(
+      "invalid_response",
+      "The notification count response was invalid.",
+    );
+  }
+  return value;
+}
+
 export function createAssistanceService(clientProvider = getSupabaseClient) {
   const client = () => clientProvider();
   return {
@@ -184,9 +201,27 @@ export function createAssistanceService(clientProvider = getSupabaseClient) {
         "Notifications could not be loaded.",
         signal,
       );
+      if (!Array.isArray(data)) {
+        throw new AssistanceServiceError(
+          "invalid_response",
+          "The notification response was invalid.",
+        );
+      }
+      if (data.length === 0) {
+        return {
+          items: [],
+          total: 0,
+          unread: 0,
+          page: pageNumber,
+          page_size: pageSize,
+        };
+      }
       return {
-        ...page(data, pageNumber, pageSize),
-        unread: Number(data?.[0]?.unread_count ?? 0),
+        items: data,
+        total: requiredNotificationCount(data[0], "total_count"),
+        unread: requiredNotificationCount(data[0], "unread_count"),
+        page: pageNumber,
+        page_size: pageSize,
       };
     },
     markNotificationRead(id) {

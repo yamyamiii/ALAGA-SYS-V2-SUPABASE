@@ -1,14 +1,14 @@
-import { Bell, CheckCheck } from "lucide-react";
-import { Link } from "react-router-dom";
-import { toast } from "sonner";
 import { useState } from "react";
+import { Bell, CheckCheck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
+import { PageHeading } from "@/components/common/PageHeading";
 import {
   EmptyState,
   ErrorState,
   LoadingState,
 } from "@/components/common/StateDisplay";
-import { PageHeading } from "@/components/common/PageHeading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,16 +17,16 @@ import {
   useAssistanceMutation,
   useNotifications,
 } from "@/features/assistance/hooks";
-import { RegistryPagination } from "@/features/registry/RegistryPagination";
-import { assistanceService } from "@/services/assistanceService";
-import { NotificationPreferencesCard } from "@/features/notifications/NotificationPreferencesCard";
-import { NotificationDeliveryDashboard } from "@/features/notifications/NotificationDeliveryDashboard";
 import { useAuth } from "@/features/auth/authContext";
-import { USER_ROLES } from "@/features/auth/permissions";
+import { NotificationPreferencesCard } from "@/features/notifications/NotificationPreferencesCard";
+import { resolveNotificationDestination } from "@/features/notifications/navigation";
+import { RegistryPagination } from "@/features/registry/RegistryPagination";
 import { formatManilaDateTime } from "@/lib/dateTime";
+import { assistanceService } from "@/services/assistanceService";
 
 export default function NotificationsPage() {
-  const { profile } = useAuth();
+  const navigate = useNavigate();
+  const { can } = useAuth();
   const [filters, setFilters] = useState({
     unread_only: false,
     page: 1,
@@ -37,15 +37,29 @@ export default function NotificationsPage() {
   const readAll = useAssistanceMutation(
     assistanceService.markAllNotificationsRead,
   );
-  const mark = async (id) => {
-    try {
-      await read.mutateAsync(id);
-    } catch (error) {
-      toast.error("Notification could not be updated", {
-        description: error.message,
+
+  const activate = (item) => {
+    if (!item.read_at) {
+      read.mutate(item.id, {
+        onError: (error) => {
+          toast.error("Notification could not be updated", {
+            description: error.message,
+          });
+        },
       });
     }
+    const destination = resolveNotificationDestination(item, can);
+    if (destination) navigate(destination);
   };
+
+  const activationLabel = (item) => {
+    const hasDestination = Boolean(resolveNotificationDestination(item, can));
+    if (!hasDestination) {
+      return `${item.read_at ? "View" : "Mark as read"} notification: ${item.title}`;
+    }
+    return `${item.read_at ? "Open" : "Read and open"} notification: ${item.title}`;
+  };
+
   const markAll = async () => {
     try {
       await readAll.mutateAsync();
@@ -56,6 +70,7 @@ export default function NotificationsPage() {
       });
     }
   };
+
   return (
     <div className="space-y-6">
       <PageHeading
@@ -78,10 +93,10 @@ export default function NotificationsPage() {
           <input
             type="checkbox"
             checked={filters.unread_only}
-            onChange={(e) =>
-              setFilters((v) => ({
-                ...v,
-                unread_only: e.target.checked,
+            onChange={(event) =>
+              setFilters((value) => ({
+                ...value,
+                unread_only: event.target.checked,
                 page: 1,
               }))
             }
@@ -91,9 +106,6 @@ export default function NotificationsPage() {
         <Badge variant="secondary">{query.data?.unread ?? 0} unread</Badge>
       </div>
       <NotificationPreferencesCard />
-      <NotificationDeliveryDashboard
-        enabled={profile.role === USER_ROLES.ADMINISTRATOR}
-      />
       <Card>
         {query.isLoading ? (
           <LoadingState title="Loading notifications" />
@@ -112,42 +124,36 @@ export default function NotificationsPage() {
         ) : (
           <div className="divide-y">
             {query.data.items.map((item) => (
-              <article
-                key={item.id}
-                className={`flex gap-3 p-4 sm:p-5 ${item.read_at ? "" : "bg-primary/5"}`}
-              >
-                <Bell className="mt-1 h-5 w-5 shrink-0 text-primary" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-semibold">{item.title}</h2>
-                    {!item.read_at ? <Badge>New</Badge> : null}
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {item.summary}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {NOTIFICATION_LABELS[item.notification_type] ??
-                      item.notification_type}{" "}
-                    · {formatManilaDateTime(item.available_at)}
-                  </p>
-                  <div className="mt-3 flex gap-2">
-                    {item.action_path ? (
-                      <Button asChild size="sm" variant="outline">
-                        <Link to={item.action_path}>Open</Link>
-                      </Button>
-                    ) : null}
-                    {!item.read_at ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => mark(item.id)}
-                        disabled={read.isPending}
-                      >
-                        Mark as read
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
+              <article key={item.id}>
+                <button
+                  type="button"
+                  className={`group flex min-h-11 w-full gap-3 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:p-5 ${item.read_at ? "" : "bg-primary/5"}`}
+                  onClick={() => activate(item)}
+                  aria-label={activationLabel(item)}
+                >
+                  <Bell
+                    aria-hidden="true"
+                    className="mt-1 h-5 w-5 shrink-0 text-primary"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold">{item.title}</span>
+                      {!item.read_at ? (
+                        <span className="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
+                          New
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      {item.summary}
+                    </span>
+                    <span className="mt-2 block text-xs text-muted-foreground">
+                      {NOTIFICATION_LABELS[item.notification_type] ??
+                        item.notification_type}{" "}
+                      · {formatManilaDateTime(item.available_at)}
+                    </span>
+                  </span>
+                </button>
               </article>
             ))}
           </div>

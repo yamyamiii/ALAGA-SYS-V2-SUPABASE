@@ -9,7 +9,11 @@ import { buildAppointmentListParameters } from "@/services/appointmentService";
 import { getAppointmentActions } from "@/features/appointments/permissions";
 import {
   appointmentSchema,
+  cancellationSchema,
+  rejectionSchema,
   residentAppointmentRequestSchema,
+  residentRequestStaffEditSchema,
+  rescheduleSchema,
 } from "@/features/appointments/schemas";
 import {
   addDaysToDateKey,
@@ -82,6 +86,18 @@ describe("appointment foundations", () => {
         ...request,
         reason: "",
       }).success,
+    ).toBe(true);
+    expect(
+      residentAppointmentRequestSchema.safeParse({
+        ...request,
+        reason: " ".repeat(1001),
+      }).success,
+    ).toBe(true);
+    expect(
+      residentAppointmentRequestSchema.safeParse({
+        ...request,
+        reason: "x".repeat(1001),
+      }).success,
     ).toBe(false);
     const attemptedOverride = residentAppointmentRequestSchema.safeParse({
       ...request,
@@ -89,6 +105,77 @@ describe("appointment foundations", () => {
     });
     expect(attemptedOverride.success).toBe(true);
     expect(attemptedOverride.data).not.toHaveProperty("end_time");
+  });
+
+  it("allows only Resident-origin staff edits to retain an empty reason", () => {
+    const edit = {
+      resident_id: "22222222-2222-4222-8222-222222222222",
+      appointment_type: "scheduled",
+      service_type: "General Consultation",
+      scheduled_date: "2026-08-15",
+      start_time: "09:00",
+      end_time: "09:30",
+      priority: "normal",
+      assigned_staff_id: "33333333-3333-4333-8333-333333333333",
+      reason: "",
+      operational_notes: "",
+    };
+
+    expect(residentRequestStaffEditSchema.safeParse(edit).success).toBe(true);
+    expect(appointmentSchema.safeParse(edit).success).toBe(false);
+    expect(
+      residentRequestStaffEditSchema.safeParse({
+        ...edit,
+        reason: " Existing reason ",
+      }).data.reason,
+    ).toBe("Existing reason");
+    expect(
+      residentRequestStaffEditSchema.safeParse({
+        ...edit,
+        reason: "x".repeat(1001),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("separates optional cancellation from required request rejection", () => {
+    expect(
+      cancellationSchema.safeParse({ cancellation_reason: "" }).success,
+    ).toBe(true);
+    expect(
+      cancellationSchema.safeParse({ cancellation_reason: "   " }).success,
+    ).toBe(true);
+    expect(
+      cancellationSchema.safeParse({
+        cancellation_reason: " Change of plans ",
+      }).data.cancellation_reason,
+    ).toBe("Change of plans");
+    expect(
+      cancellationSchema.safeParse({
+        cancellation_reason: "x".repeat(1001),
+      }).success,
+    ).toBe(false);
+    expect(rejectionSchema.safeParse({ rejection_reason: "" }).success).toBe(
+      false,
+    );
+    expect(
+      rejectionSchema.safeParse({ rejection_reason: " Reviewed and denied " })
+        .data.rejection_reason,
+    ).toBe("Reviewed and denied");
+  });
+
+  it("accepts only operational date and time fields for rescheduling", () => {
+    const parsed = rescheduleSchema.parse({
+      scheduled_date: "2026-08-20",
+      start_time: "09:00",
+      end_time: "09:30",
+      assigned_staff_id: "33333333-3333-4333-8333-333333333333",
+    });
+
+    expect(parsed).toEqual({
+      scheduled_date: "2026-08-20",
+      start_time: "09:00",
+      end_time: "09:30",
+    });
   });
 
   it("calculates date-only values without browser timezone drift", () => {
@@ -124,6 +211,9 @@ describe("appointment foundations", () => {
       getAppointmentActions(USER_ROLES.NURSE, confirmed, profileId),
     ).toEqual(expect.arrayContaining(["check_in", "no_show"]));
     expect(
+      getAppointmentActions(USER_ROLES.NURSE, confirmed, profileId),
+    ).not.toContain("cancel");
+    expect(
       getAppointmentActions(USER_ROLES.NURSE, confirmed, "other-user"),
     ).toEqual([]);
     expect(
@@ -149,6 +239,75 @@ describe("appointment foundations", () => {
         profileId,
       ),
     ).toContain("check_in");
+    expect(
+      getAppointmentActions(
+        USER_ROLES.MIDWIFE,
+        { ...confirmed, service_type: "Maternal Care" },
+        profileId,
+      ),
+    ).not.toContain("cancel");
+
+    const checkedIn = { ...confirmed, status: "checked_in" };
+    expect(
+      getAppointmentActions(USER_ROLES.ADMINISTRATOR, checkedIn, profileId),
+    ).not.toContain("start");
+    expect(
+      getAppointmentActions(USER_ROLES.ADMINISTRATOR, checkedIn, profileId),
+    ).toContain("complete");
+    expect(
+      getAppointmentActions(USER_ROLES.NURSE, checkedIn, profileId),
+    ).not.toContain("start");
+    expect(
+      getAppointmentActions(USER_ROLES.NURSE, checkedIn, profileId),
+    ).toContain("complete");
+    expect(
+      getAppointmentActions(
+        USER_ROLES.MIDWIFE,
+        { ...checkedIn, service_type: "Maternal Care" },
+        profileId,
+      ),
+    ).not.toContain("start");
+    expect(
+      getAppointmentActions(
+        USER_ROLES.MIDWIFE,
+        { ...checkedIn, service_type: "Maternal Care" },
+        profileId,
+      ),
+    ).toContain("complete");
+    expect(
+      getAppointmentActions(
+        USER_ROLES.BARANGAY_HEALTH_WORKER,
+        checkedIn,
+        profileId,
+      ),
+    ).not.toContain("complete");
+    expect(
+      getAppointmentActions(
+        USER_ROLES.NURSE,
+        { ...checkedIn, status: "in_progress" },
+        profileId,
+      ),
+    ).toContain("complete");
+
+    for (const [role, roleAppointment, actorId] of [
+      [USER_ROLES.ADMINISTRATOR, confirmed, profileId],
+      [USER_ROLES.BARANGAY_HEALTH_WORKER, confirmed, profileId],
+      [USER_ROLES.NURSE, confirmed, profileId],
+      [
+        USER_ROLES.MIDWIFE,
+        { ...confirmed, service_type: "Maternal Care" },
+        profileId,
+      ],
+      [
+        USER_ROLES.RESIDENT,
+        { ...pending, request_source: "resident" },
+        profileId,
+      ],
+    ]) {
+      expect(
+        getAppointmentActions(role, roleAppointment, actorId),
+      ).not.toContain("notes");
+    }
   });
 
   it("does not hide nurse assignments with default frontend filters", () => {

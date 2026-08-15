@@ -47,7 +47,7 @@ import {
   USER_ROLES,
 } from "@/features/auth/permissions";
 import { openAiAssistant } from "@/features/ai-assistant/launcher";
-import { useReport } from "@/features/reports/hooks";
+import { useDashboardSummary } from "@/features/reports/hooks";
 
 const STAFF_ROLES = [
   USER_ROLES.ADMINISTRATOR,
@@ -62,27 +62,17 @@ export default function DashboardPage() {
   const reportRole = isFinalScopeReportRole(profile.role);
   const residentView = profile.role === USER_ROLES.RESIDENT;
   const staffView = STAFF_ROLES.includes(profile.role);
+  const clinicalStaffView = [USER_ROLES.NURSE, USER_ROLES.MIDWIFE].includes(
+    profile.role,
+  );
   const registryRole = [
     USER_ROLES.ADMINISTRATOR,
     USER_ROLES.BARANGAY_HEALTH_WORKER,
   ].includes(profile.role);
   const appointmentSummary = useAppointmentDashboard(!reportRole);
-  const reportSummary = useReport(
-    "overview",
-    {
-      start_date: today,
-      end_date: today,
-      purok_id: "",
-      service_type: "",
-      status: "",
-      staff_id: "",
-    },
-    reportRole,
-  );
+  const reportSummary = useDashboardSummary(today, reportRole);
   const summary = reportRole ? reportSummary : appointmentSummary;
-  const summaryData = reportRole
-    ? reportSummary.data?.summary
-    : appointmentSummary.data;
+  const summaryData = reportRole ? reportSummary.data : appointmentSummary.data;
   const queue = useAppointmentQueue(
     { date: today, page: 1, pageSize: 5 },
     { poll: false, enabled: staffView },
@@ -133,22 +123,22 @@ export default function DashboardPage() {
           label: "Upcoming appointments",
           icon: UsersRound,
           value: summaryData?.upcoming_appointments,
-          helper: "Confirmed future schedule",
+          helper: "Pending or confirmed future schedule",
         },
         {
-          label: "Completed visits",
+          label: "Completed visits today",
           icon: CircleCheckBig,
           value: summaryData?.completed_today,
-          helper: "Visible to your account",
+          helper: "Completed on the Asia/Manila business date",
         },
       ]
     : [
         ...(registryRole
           ? [
               {
-                label: "Total residents",
+                label: "Active residents",
                 icon: UsersRound,
-                value: summaryData?.total_residents,
+                value: summaryData?.active_residents,
                 helper: "Active resident registry",
               },
             ]
@@ -160,14 +150,20 @@ export default function DashboardPage() {
             summaryData?.total_appointments ??
             summaryData?.assigned_appointments ??
             summaryData?.appointments_today,
-          helper: "Authorized appointment workload",
+          helper: reportRole
+            ? "All authorized non-archived appointments"
+            : "Authorized appointment workload",
         },
         {
-          label: "Pending requests",
+          label: clinicalStaffView ? "Upcoming assigned" : "Pending requests",
           icon: CalendarClock,
-          value:
-            summaryData?.pending_requests ?? summaryData?.pending_appointments,
-          helper: "Awaiting action",
+          value: clinicalStaffView
+            ? summaryData?.upcoming_appointments
+            : (summaryData?.pending_requests ??
+              summaryData?.pending_appointments),
+          helper: clinicalStaffView
+            ? "Future pending or confirmed assignments"
+            : "Awaiting action",
         },
         {
           label: "Today's schedule",
@@ -225,7 +221,7 @@ export default function DashboardPage() {
                         {stat.label}
                       </p>
                       <p className="mt-2 text-2xl font-semibold">
-                        {summary.isLoading ? "…" : (stat.value ?? 0)}
+                        {summary.isLoading ? "…" : (stat.value ?? "—")}
                       </p>
                     </div>
                   ))}

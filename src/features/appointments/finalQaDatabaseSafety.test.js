@@ -13,6 +13,12 @@ const healthRecords = read("20260720002000_health_records_foundation.sql");
 const residentRequests = read(
   "20260720002200_resident_appointment_requests.sql",
 );
+const residentCancellation = read(
+  "20260720003800_optional_resident_cancellation_reason.sql",
+);
+const authorizedCancellation = read(
+  "20260720004100_optional_authorized_cancellation_reason.sql",
+);
 const assistance = read("20260720002700_general_assistance.sql");
 const reports = read("20260720002600_reports_analytics.sql");
 const rls = read("20260720001000_rls_policies.sql");
@@ -41,16 +47,16 @@ describe("final appointment and clinical QA database fixes", () => {
     expect(correctedConstraint).not.toMatch(/\{1,300\}/);
   });
 
-  it("keeps staff and resident cancellation narrow and reason-bounded", () => {
+  it("keeps staff and Resident cancellation narrow and reason-bounded", () => {
     const staffCancel = functionBlock(
-      appointmentWorkflow,
+      authorizedCancellation,
       "appointment_transition",
-      "create or replace function public.appointment_update_operational_notes",
+      "revoke all on function",
     );
     const residentCancel = functionBlock(
-      residentRequests,
+      residentCancellation,
       "resident_appointment_cancel",
-      "create or replace function public.resident_appointment_detail",
+      "revoke all on function",
     );
 
     expect(staffCancel).toMatch(
@@ -60,7 +66,10 @@ describe("final appointment and clinical QA database fixes", () => {
       /actor_role = 'barangay_health_worker'[\s\S]*'cancelled'/i,
     );
     expect(staffCancel).toMatch(
-      /nullif\(btrim\(p_cancellation_reason\), ''\) is null/i,
+      /normalized_cancellation_reason text :=[\s\S]*nullif\(btrim\(p_cancellation_reason\), ''\)/i,
+    );
+    expect(staffCancel).toMatch(
+      /request_source =[\s\S]*resident[\s\S]*rejection reason is required/i,
     );
     expect(staffCancel).toMatch(/char_length[\s\S]*> 1000/i);
     expect(residentCancel).toMatch(/linked_profile_id = actor_id/i);
@@ -69,7 +78,7 @@ describe("final appointment and clinical QA database fixes", () => {
     );
     expect(residentCancel).toMatch(/status is distinct from[\s\S]*pending/i);
     expect(residentCancel).toMatch(
-      /char_length\(btrim\(p_cancellation_reason\)\) > 1000/i,
+      /char_length\(normalized_cancellation_reason\) > 1000/i,
     );
   });
 

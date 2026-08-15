@@ -193,7 +193,21 @@ describe("ALAGA AI Edge Function security boundary", () => {
       index.indexOf("const sourceTypes"),
     );
     expect(index.indexOf("const workflowResponse")).toBeLessThan(
+      index.indexOf("const navigationResponse"),
+    );
+    expect(index.indexOf("const workflowResponse")).toBeLessThan(
       index.indexOf("const ai = new GoogleGenAI"),
+    );
+  });
+
+  it("keeps appointment workflow guidance static, read-only, and PHI-free", () => {
+    expect(domain).toMatch(/ASSIGNED_APPOINTMENTS_WORKFLOW_QUESTION/);
+    expect(domain).toMatch(/APPOINTMENT_CONFIRMATION_WORKFLOW_QUESTION/);
+    expect(domain).toMatch(/actionId: "open_appointments"/);
+    expect(domain).not.toMatch(/type: "(?:mutate|confirm_appointment)"/);
+    expect(index).not.toMatch(/\.from\("appointments"\)/);
+    expect(index).not.toMatch(
+      /resident_name|appointment_number|diagnosis_text|clinical_notes/i,
     );
   });
 

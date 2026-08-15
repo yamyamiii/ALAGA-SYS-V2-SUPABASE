@@ -904,6 +904,49 @@ export function groundedResponseFor(
 const APPOINTMENT_REQUEST_WORKFLOW_QUESTION =
   /\b(?:how (?:do|can|to) (?:i |a resident )?(?:request|book|schedule) (?:an )?appointment|appointment request (?:process|steps|workflow)|(?:book|request|schedule) (?:an )?appointment|paano (?:ako )?(?:(?:mag-?)?(?:request|book|schedule) (?:ng |ang )?appointment|magpapa-?appointment)|gusto kong magpa-?appointment|mag-?request ako (?:ng |ang )?appointment)\b/i;
 
+const ASSIGNED_APPOINTMENTS_WORKFLOW_QUESTION =
+  /\b(?:how (?:do|can) i (?:check|find|see|view) my assigned appointments?|where (?:can|do) i (?:find|see|view) my assigned appointments?|how (?:do|can) i (?:check|see|view) my schedule|where is my appointment calendar|how (?:do|can) i use (?:the )?daily queue|paano ko makikita (?:ang )?(?:mga )?(?:assigned appointments?|schedule) ko|saan ko makikita (?:ang )?(?:mga )?(?:assigned appointments?|schedule) ko|paano (?:ko )?gamitin (?:ang )?daily queue)\b/i;
+
+const APPOINTMENT_CONFIRMATION_WORKFLOW_QUESTION =
+  /\b(?:how (?:do|can) i (?:confirm|approve|process|review) (?:a |an )?(?:pending )?(?:resident )?appointment request|how (?:do|can) i process (?:a )?pending resident request|paano (?:ko )?(?:i-?)?(?:confirm|approve|process|review) (?:ang )?(?:pending )?(?:resident )?appointment request)\b/i;
+
+const ASSIGNED_APPOINTMENT_ROLES: readonly CanonicalRole[] = [
+  "nurse",
+  "midwife",
+];
+const APPOINTMENT_REVIEW_ROLES: readonly CanonicalRole[] = [
+  "admin",
+  "barangay_health_worker",
+];
+
+function openAppointmentsWorkflowAction(
+  role: CanonicalRole | undefined,
+): NavigationAction[] {
+  if (!role) return [];
+  const definition = NAVIGATION_DEFINITIONS.open_appointments;
+  if (!definition.roles.includes(role)) return [];
+  return [
+    {
+      type: "navigate",
+      actionId: "open_appointments",
+      label: navigationLabel(definition, role),
+      requiresConfirmation: false,
+    },
+  ];
+}
+
+function unavailableWorkflowResponse(message: string) {
+  return {
+    category: "workflow_role_unavailable",
+    message:
+      detectResponseLanguage(message) === "english"
+        ? "That appointment workflow is not available to your account role. I can only explain workflows authorized for your role."
+        : "Hindi available sa iyong account role ang appointment workflow na iyon. Ang mga workflow lang na awtorisado para sa iyong role ang maaari kong ipaliwanag.",
+    sources: [] as GroundingSource[],
+    actions: [] as AssistantAction[],
+  };
+}
+
 export function workflowResponseFor(
   message: string,
   role?: CanonicalRole,
@@ -914,6 +957,68 @@ export function workflowResponseFor(
   sources: GroundingSource[];
   actions: AssistantAction[];
 } | null {
+  const assignedAppointmentsQuestion =
+    ASSIGNED_APPOINTMENTS_WORKFLOW_QUESTION.test(message);
+  const confirmationQuestion =
+    APPOINTMENT_CONFIRMATION_WORKFLOW_QUESTION.test(message);
+
+  if (assignedAppointmentsQuestion) {
+    if (!role || !ASSIGNED_APPOINTMENT_ROLES.includes(role)) {
+      return unavailableWorkflowResponse(message);
+    }
+
+    const language = detectResponseLanguage(message);
+    const roleName = role === "nurse" ? "Nurse" : "Midwife";
+    const instructions =
+      language === "english"
+        ? `To check your assigned appointments:\n1. Open Appointments from the sidebar.\n2. The Appointments list shows appointments assigned to the logged-in ${roleName}.\n3. Use Calendar to view your assigned schedules by date.\n4. Use Daily Queue for appointments on the selected day and checked-in Residents.\n5. Open an appointment to view its current schedule and status.`
+        : `Para tingnan ang iyong assigned appointments:\n1. Buksan ang Appointments sa sidebar.\n2. Makikita sa Appointments list ang mga appointment na assigned sa naka-login na ${roleName}.\n3. Gamitin ang Calendar para makita ang iyong assigned schedules ayon sa petsa.\n4. Gamitin ang Daily Queue para sa mga appointment sa napiling araw at mga Resident na checked in.\n5. Buksan ang appointment para makita ang kasalukuyang schedule at status nito.`;
+
+    return {
+      category: "workflow_assigned_appointments",
+      message: instructions,
+      sources: [
+        {
+          type: "workflow",
+          label: "Workflow Guide",
+          title: `${roleName} assigned appointment workflow`,
+          content:
+            "Open Appointments to review only the logged-in clinical staff member's assigned list, calendar, selected-day queue, and current appointment schedule and status.",
+          updatedAt: null,
+        },
+      ],
+      actions: openAppointmentsWorkflowAction(role),
+    };
+  }
+
+  if (confirmationQuestion) {
+    if (!role || !APPOINTMENT_REVIEW_ROLES.includes(role)) {
+      return unavailableWorkflowResponse(message);
+    }
+
+    const language = detectResponseLanguage(message);
+    const instructions =
+      language === "english"
+        ? "To confirm a Resident appointment request:\n1. Open Appointments.\n2. Review Incoming resident requests or the pending request.\n3. Open the request details.\n4. Finalize the operational date and time if needed.\n5. Assign an eligible staff member when required.\n6. Confirm the appointment.\n\nIf the request cannot be accepted, use Reject and provide the required rejection justification. After confirmation, the operational flow is Check in, then Complete. Rescheduling keeps the same appointment and APT number. Health Records remain separate and are used only when the service needs clinical documentation."
+        : "Para i-confirm ang Resident appointment request:\n1. Buksan ang Appointments.\n2. I-review ang Incoming resident requests o ang pending request.\n3. Buksan ang request details.\n4. I-finalize ang operational date at time kung kailangan.\n5. Mag-assign ng eligible staff member kapag kinakailangan.\n6. I-confirm ang appointment.\n\nKung hindi maaaring tanggapin ang request, gamitin ang Reject at ilagay ang required rejection justification. Pagkatapos ma-confirm, Check in at Complete ang operational flow. Kapag ni-reschedule, mananatili ang parehong appointment at APT number. Hiwalay ang Health Records at ginagamit lamang kapag kailangan ng clinical documentation para sa serbisyo.";
+
+    return {
+      category: "workflow_appointment_confirmation",
+      message: instructions,
+      sources: [
+        {
+          type: "workflow",
+          label: "Workflow Guide",
+          title: "Resident appointment request review workflow",
+          content:
+            "Admin and Barangay Health Worker review a pending Resident request, finalize its schedule, assign eligible staff when required, and confirm it. Rejection keeps its required justification. Confirmed appointments proceed through check-in and completion, while rescheduling preserves the appointment and APT number.",
+          updatedAt: null,
+        },
+      ],
+      actions: openAppointmentsWorkflowAction(role),
+    };
+  }
+
   if (!APPOINTMENT_REQUEST_WORKFLOW_QUESTION.test(message)) return null;
 
   const language = detectResponseLanguage(message);

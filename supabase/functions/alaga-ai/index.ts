@@ -449,6 +449,27 @@ Deno.serve(async (request) => {
       );
     }
 
+    const workflowResponse = workflowResponseFor(
+      finalUserMessage,
+      profile.role,
+      profile.hasActiveResidentLink,
+    );
+    if (workflowResponse) {
+      logRequest(requestId, profile.role, workflowResponse.category, startedAt);
+      return jsonResponse(
+        {
+          data: assistantData(
+            workflowResponse.message,
+            workflowResponse.sources,
+            workflowResponse.actions,
+          ),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+
     const navigationResponse = navigationResponseFor(
       finalUserMessage,
       profile.role,
@@ -466,27 +487,6 @@ Deno.serve(async (request) => {
             navigationResponse.message,
             [],
             navigationResponse.actions,
-          ),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-
-    const workflowResponse = workflowResponseFor(
-      finalUserMessage,
-      profile.role,
-      profile.hasActiveResidentLink,
-    );
-    if (workflowResponse) {
-      logRequest(requestId, profile.role, workflowResponse.category, startedAt);
-      return jsonResponse(
-        {
-          data: assistantData(
-            workflowResponse.message,
-            workflowResponse.sources,
-            workflowResponse.actions,
           ),
           request_id: requestId,
         },

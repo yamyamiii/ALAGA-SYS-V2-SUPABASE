@@ -6,6 +6,10 @@ const migration = fs.readFileSync(
   "supabase/migrations/20260720002700_general_assistance.sql",
   "utf8",
 );
+const announcementNotificationCleanup = fs.readFileSync(
+  "supabase/migrations/20260720004300_cleanup_archived_announcement_notifications.sql",
+  "utf8",
+);
 
 describe("general assistance database boundary", () => {
   it("uses RPC-only tables with RLS and no authenticated table writes", () => {
@@ -44,9 +48,37 @@ describe("general assistance database boundary", () => {
     );
   });
 
+  it("authorizes only Admin/BHW soft deletion with locking, versioning, and audit", () => {
+    expect(migration).toMatch(
+      /function public\.announcement_archive[\s\S]*assistance_require_role\(\s*array\['admin','barangay_health_worker'\][\s\S]*where id=p_id for update[\s\S]*current_record\.version<>p_expected_version[\s\S]*archived_at=statement_timestamp\(\)[\s\S]*updated_by=auth\.uid\(\)[\s\S]*'announcement\.archived'/i,
+    );
+    expect(migration).toMatch(
+      /a\.archived_at is null and a\.publish_at <= now\(\)/i,
+    );
+    expect(migration).not.toMatch(/delete\s+from\s+public\.announcements/i);
+  });
+
+  it("removes only source-linked notification rows while retaining announcement history", () => {
+    expect(announcementNotificationCleanup).toMatch(
+      /delete from public\.assistance_notifications as notification[\s\S]*notification\.source_type = 'announcements'[\s\S]*notification\.source_id = p_id/i,
+    );
+    expect(announcementNotificationCleanup).toMatch(
+      /assistance_require_role\([\s\S]*array\['admin','barangay_health_worker'\]/i,
+    );
+    expect(announcementNotificationCleanup).toMatch(
+      /'announcement\.archived'[\s\S]*'announcements'[\s\S]*p_id/i,
+    );
+    expect(announcementNotificationCleanup).not.toMatch(
+      /delete from public\.(?:announcements|audit_logs)/i,
+    );
+  });
+
   it("limits notifications and resident activity to the authenticated owner", () => {
     expect(migration).toMatch(
       /recipient_profile_id=auth\.uid\(\)[\s\S]*available_at<=now\(\)/i,
+    );
+    expect(migration).toMatch(
+      /function public\.assistance_notification_read\(\s*p_id uuid\s*\)[\s\S]*where id=p_id and recipient_profile_id=auth\.uid\(\)/i,
     );
     expect(migration).toMatch(
       /r\.linked_profile_id=auth\.uid\(\)[\s\S]*a\.entity_type='appointments'/i,

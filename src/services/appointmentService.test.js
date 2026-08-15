@@ -16,7 +16,113 @@ function rpcClient(result) {
   return { rpc: vi.fn().mockResolvedValue(result) };
 }
 
+function sequentialRpcClient(results) {
+  let call = 0;
+  return {
+    rpc: vi.fn(() => Promise.resolve(results[call++])),
+  };
+}
+
 describe("appointment service", () => {
+  it("combines Manila-day aggregates with the caller-RLS assigned total", async () => {
+    const client = sequentialRpcClient([
+      {
+        data: [
+          {
+            appointments_today: 0,
+            pending_appointments: 0,
+            checked_in_today: 0,
+            completed_today: 0,
+            upcoming_appointments: 1,
+          },
+        ],
+        error: null,
+      },
+      {
+        data: [
+          {
+            id: appointmentId,
+            appointment_number: "APT-2026-000003",
+            scheduled_date: "2026-08-12",
+            total_count: 1,
+          },
+        ],
+        error: null,
+      },
+    ]);
+    const service = createAppointmentService(() => client);
+
+    await expect(service.getDashboardSummary()).resolves.toMatchObject({
+      assigned_appointments: 1,
+      appointments_today: 0,
+      upcoming_appointments: 1,
+    });
+    expect(client.rpc).toHaveBeenNthCalledWith(
+      1,
+      "appointment_dashboard_summary",
+      {},
+    );
+    expect(client.rpc).toHaveBeenNthCalledWith(
+      2,
+      "appointment_list",
+      expect.objectContaining({
+        p_date_from: null,
+        p_date_to: null,
+        p_assigned_staff_id: null,
+        p_include_archived: false,
+        p_limit: 1,
+        p_offset: 0,
+      }),
+    );
+  });
+
+  it("counts historical and future assignments without inflating today's schedule", async () => {
+    const client = sequentialRpcClient([
+      {
+        data: [
+          {
+            appointments_today: 0,
+            pending_appointments: 0,
+            checked_in_today: 0,
+            completed_today: 0,
+            upcoming_appointments: 1,
+          },
+        ],
+        error: null,
+      },
+      { data: [{ total_count: 2 }], error: null },
+    ]);
+    const service = createAppointmentService(() => client);
+
+    await expect(service.getDashboardSummary()).resolves.toMatchObject({
+      assigned_appointments: 2,
+      appointments_today: 0,
+    });
+  });
+
+  it("rejects malformed assigned totals instead of showing a false zero", async () => {
+    const client = sequentialRpcClient([
+      {
+        data: [
+          {
+            appointments_today: 0,
+            pending_appointments: 0,
+            checked_in_today: 0,
+            completed_today: 0,
+            upcoming_appointments: 1,
+          },
+        ],
+        error: null,
+      },
+      { data: [{}], error: null },
+    ]);
+    const service = createAppointmentService(() => client);
+
+    await expect(service.getDashboardSummary()).rejects.toMatchObject({
+      code: "invalid_response",
+    });
+  });
+
   it("uses the deployed defaults for staff search", () => {
     expect(buildAppointmentStaffSearchRequest()).toEqual({
       page: 1,
@@ -180,7 +286,6 @@ describe("appointment service", () => {
       priority: "normal",
       assigned_staff_id: "",
       reason: "Routine visit",
-      operational_notes: "",
     };
 
     await expect(
@@ -191,6 +296,7 @@ describe("appointment service", () => {
       expect.objectContaining({
         p_resident_id: residentId,
         p_assigned_staff_id: null,
+        p_operational_notes: null,
         p_request_key: requestKey,
       }),
     );
@@ -269,6 +375,122 @@ describe("appointment service", () => {
     );
   });
 
+  it("normalizes an omitted Resident reason to null without a placeholder", async () => {
+    const client = rpcClient({
+      data: [
+        {
+          id: appointmentId,
+          appointment_number: "APT-2026-000004",
+          status: "pending",
+          version: 1,
+        },
+      ],
+      error: null,
+    });
+    const service = createAppointmentService(() => client);
+
+    await service.requestResidentAppointment(
+      {
+        service_type: "General Consultation",
+        scheduled_date: "2026-08-15",
+        start_time: "08:00",
+        reason: "   ",
+      },
+      requestKey,
+    );
+
+    expect(client.rpc).toHaveBeenCalledWith("resident_appointment_request", {
+      p_service_type: "General Consultation",
+      p_scheduled_date: "2026-08-15",
+      p_start_time: "08:00",
+      p_reason: null,
+      p_request_key: requestKey,
+    });
+    expect(JSON.stringify(client.rpc.mock.calls[0][1])).not.toMatch(
+      /N\/A|None|Not provided/i,
+    );
+  });
+
+  it("preserves a null reason and hidden legacy notes during a staff schedule edit", async () => {
+    const client = rpcClient({
+      data: [
+        {
+          id: appointmentId,
+          appointment_number: "APT-2026-000004",
+          version: 2,
+        },
+      ],
+      error: null,
+    });
+    const service = createAppointmentService(() => client);
+
+    await service.updateAppointment(
+      {
+        id: appointmentId,
+        version: 1,
+        request_source: "resident",
+        operational_notes: "Legacy scheduling note",
+      },
+      {
+        appointment_type: "scheduled",
+        service_type: "General Consultation",
+        scheduled_date: "2026-08-15",
+        start_time: "09:00",
+        end_time: "09:30",
+        priority: "normal",
+        assigned_staff_id: "33333333-3333-4333-8333-333333333333",
+        reason: "   ",
+      },
+    );
+
+    expect(client.rpc).toHaveBeenCalledWith("appointment_update_schedule", {
+      p_appointment_id: appointmentId,
+      p_expected_version: 1,
+      p_appointment_type: "scheduled",
+      p_service_type: "General Consultation",
+      p_scheduled_date: "2026-08-15",
+      p_start_time: "09:00",
+      p_end_time: "09:30",
+      p_priority: "normal",
+      p_assigned_staff_id: "33333333-3333-4333-8333-333333333333",
+      p_reason: null,
+      p_operational_notes: "Legacy scheduling note",
+    });
+  });
+
+  it("preserves and trims an existing reason during a staff schedule edit", async () => {
+    const client = rpcClient({
+      data: [
+        {
+          id: appointmentId,
+          appointment_number: "APT-2026-000004",
+          version: 2,
+        },
+      ],
+      error: null,
+    });
+    const service = createAppointmentService(() => client);
+
+    await service.updateAppointment(
+      { id: appointmentId, version: 1, request_source: "resident" },
+      {
+        appointment_type: "scheduled",
+        service_type: "General Consultation",
+        scheduled_date: "2026-08-15",
+        start_time: "09:00",
+        end_time: "09:30",
+        priority: "normal",
+        assigned_staff_id: "33333333-3333-4333-8333-333333333333",
+        reason: " Existing reason ",
+      },
+    );
+
+    expect(client.rpc).toHaveBeenCalledWith(
+      "appointment_update_schedule",
+      expect.objectContaining({ p_reason: "Existing reason" }),
+    );
+  });
+
   it("fails safely while offline without sending a resident request", async () => {
     const online = vi
       .spyOn(window.navigator, "onLine", "get")
@@ -314,6 +536,138 @@ describe("appointment service", () => {
       p_appointment_id: appointmentId,
       p_expected_version: 1,
       p_cancellation_reason: "CHANGE DATE",
+    });
+  });
+
+  it("normalizes a blank Resident cancellation reason to null", async () => {
+    const client = rpcClient({
+      data: [
+        {
+          id: appointmentId,
+          appointment_number: "APT-2026-000002",
+          status: "cancelled",
+          version: 2,
+        },
+      ],
+      error: null,
+    });
+    const service = createAppointmentService(() => client);
+
+    await service.cancelResidentAppointment(
+      { id: appointmentId, version: 1 },
+      "   ",
+    );
+
+    expect(client.rpc).toHaveBeenCalledWith("resident_appointment_cancel", {
+      p_appointment_id: appointmentId,
+      p_expected_version: 1,
+      p_cancellation_reason: null,
+    });
+    expect(JSON.stringify(client.rpc.mock.calls[0][1])).not.toMatch(
+      /N\/A|None|No reason|Not provided/i,
+    );
+  });
+
+  it("normalizes a blank authorized staff cancellation reason to null", async () => {
+    const client = rpcClient({
+      data: [
+        {
+          id: appointmentId,
+          appointment_number: "APT-2026-000002",
+          status: "cancelled",
+          version: 2,
+        },
+      ],
+      error: null,
+    });
+    const service = createAppointmentService(() => client);
+
+    await service.transition({ id: appointmentId, version: 1 }, "cancelled", {
+      cancellation_reason: "   ",
+    });
+
+    expect(client.rpc).toHaveBeenCalledWith("appointment_transition", {
+      p_appointment_id: appointmentId,
+      p_expected_version: 1,
+      p_target_status: "cancelled",
+      p_cancellation_reason: null,
+      p_operational_notes: null,
+    });
+    expect(JSON.stringify(client.rpc.mock.calls[0][1])).not.toMatch(
+      /N\/A|None|No reason|Not provided/i,
+    );
+  });
+
+  it("trims and preserves a supplied staff cancellation reason", async () => {
+    const client = rpcClient({
+      data: [
+        {
+          id: appointmentId,
+          appointment_number: "APT-2026-000002",
+          status: "cancelled",
+          version: 2,
+        },
+      ],
+      error: null,
+    });
+    const service = createAppointmentService(() => client);
+
+    await service.transition({ id: appointmentId, version: 1 }, "cancelled", {
+      cancellation_reason: " Clinic closing early ",
+    });
+
+    expect(client.rpc).toHaveBeenCalledWith(
+      "appointment_transition",
+      expect.objectContaining({
+        p_cancellation_reason: "Clinic closing early",
+      }),
+    );
+  });
+
+  it("reschedules the same authoritative appointment through the versioned RPC", async () => {
+    const client = rpcClient({
+      data: [
+        {
+          original_id: appointmentId,
+          original_version: 2,
+          replacement_id: appointmentId,
+          replacement_number: "APT-2026-000002",
+          replacement_version: 2,
+        },
+      ],
+      error: null,
+    });
+    const service = createAppointmentService(() => client);
+    const assignedStaffId = "33333333-3333-4333-8333-333333333333";
+
+    await expect(
+      service.reschedule(
+        {
+          id: appointmentId,
+          version: 1,
+          assigned_staff_id: assignedStaffId,
+        },
+        {
+          scheduled_date: "2026-08-20",
+          start_time: "10:00",
+          end_time: "10:30",
+        },
+        requestKey,
+      ),
+    ).resolves.toMatchObject({
+      original_id: appointmentId,
+      replacement_id: appointmentId,
+      replacement_number: "APT-2026-000002",
+    });
+
+    expect(client.rpc).toHaveBeenCalledWith("appointment_reschedule", {
+      p_appointment_id: appointmentId,
+      p_expected_version: 1,
+      p_scheduled_date: "2026-08-20",
+      p_start_time: "10:00",
+      p_end_time: "10:30",
+      p_assigned_staff_id: assignedStaffId,
+      p_request_key: requestKey,
     });
   });
 

@@ -27,7 +27,7 @@ export function getAppointmentActions(role, appointment, profileId) {
 
   if (role === USER_ROLES.ADMINISTRATOR) {
     if (archived) return [APPOINTMENT_ACTIONS.RESTORE];
-    const actions = [APPOINTMENT_ACTIONS.NOTES];
+    const actions = [];
     if (["pending", "confirmed"].includes(status)) {
       actions.push(
         APPOINTMENT_ACTIONS.EDIT,
@@ -40,7 +40,7 @@ export function getAppointmentActions(role, appointment, profileId) {
       actions.push(APPOINTMENT_ACTIONS.CHECK_IN, APPOINTMENT_ACTIONS.NO_SHOW);
     }
     if (status === "checked_in") {
-      actions.push(APPOINTMENT_ACTIONS.START, APPOINTMENT_ACTIONS.CANCEL);
+      actions.push(APPOINTMENT_ACTIONS.COMPLETE, APPOINTMENT_ACTIONS.CANCEL);
     }
     if (status === "in_progress") {
       actions.push(APPOINTMENT_ACTIONS.COMPLETE, APPOINTMENT_ACTIONS.CANCEL);
@@ -59,7 +59,6 @@ export function getAppointmentActions(role, appointment, profileId) {
         APPOINTMENT_ACTIONS.EDIT,
         APPOINTMENT_ACTIONS.RESCHEDULE,
         APPOINTMENT_ACTIONS.CANCEL,
-        APPOINTMENT_ACTIONS.NOTES,
       );
     }
     if (status === "pending") actions.push(APPOINTMENT_ACTIONS.CONFIRM);
@@ -73,12 +72,13 @@ export function getAppointmentActions(role, appointment, profileId) {
     assigned &&
     maternalRelevant
   ) {
-    const actions = [APPOINTMENT_ACTIONS.NOTES];
+    const actions = [];
     if (status === "confirmed") {
       actions.push(APPOINTMENT_ACTIONS.CHECK_IN, APPOINTMENT_ACTIONS.NO_SHOW);
     }
-    if (status === "checked_in") actions.push(APPOINTMENT_ACTIONS.START);
-    if (status === "in_progress") actions.push(APPOINTMENT_ACTIONS.COMPLETE);
+    if (["checked_in", "in_progress"].includes(status)) {
+      actions.push(APPOINTMENT_ACTIONS.COMPLETE);
+    }
     return actions;
   }
 
@@ -89,7 +89,6 @@ export function transitionDescription(action, appointment) {
   const next = {
     confirm: "Confirmed",
     check_in: "Checked in",
-    start: "In progress",
     complete: "Completed",
     no_show: "No show",
   }[action];

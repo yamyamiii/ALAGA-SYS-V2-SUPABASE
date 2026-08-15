@@ -12,6 +12,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { AnnouncementDialog } from "@/features/assistance/AssistanceDialogs";
 import {
   ANNOUNCEMENT_CATEGORIES,
@@ -45,13 +53,19 @@ export default function AnnouncementsPage() {
   );
   const [editing, setEditing] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [archiving, setArchiving] = useState(null);
   const open = (record = null) => {
     setEditing(record);
     setDialogOpen(true);
   };
-  const archiveRecord = async (record) => {
+  const archiveAnnouncement = async () => {
+    if (!archiving) return;
     try {
-      await archive.mutateAsync({ id: record.id, version: record.version });
+      await archive.mutateAsync({
+        id: archiving.id,
+        version: archiving.version,
+      });
+      setArchiving(null);
       toast.success("Announcement archived");
     } catch (error) {
       toast.error("Announcement could not be archived", {
@@ -121,7 +135,7 @@ export default function AnnouncementsPage() {
                     }))
                   }
                 />
-                Include archived
+                Show archived
               </label>
             ) : null}
           </div>
@@ -181,8 +195,8 @@ export default function AnnouncementsPage() {
                     </Button>
                     <Button
                       size="sm"
-                      variant="outline"
-                      onClick={() => archiveRecord(item)}
+                      variant="destructive"
+                      onClick={() => setArchiving(item)}
                       disabled={archive.isPending}
                     >
                       <Archive />
@@ -209,6 +223,41 @@ export default function AnnouncementsPage() {
         record={editing}
         mutation={save}
       />
+      <Dialog
+        open={Boolean(archiving)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !archive.isPending) setArchiving(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive announcement?</DialogTitle>
+            <DialogDescription>
+              This announcement will no longer be visible to users, but it will
+              remain available in archived records.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={archive.isPending}
+              onClick={() => setArchiving(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={archive.isPending}
+              onClick={archiveAnnouncement}
+            >
+              <Archive />
+              {archive.isPending ? "Archiving…" : "Archive announcement"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Megaphone className="h-4 w-4" />
         Announcements must never contain private health information.

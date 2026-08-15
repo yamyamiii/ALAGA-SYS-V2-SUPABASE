@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -47,6 +47,7 @@ export function EncounterCreateDialog({
   onCreated,
 }) {
   const { profile } = useAuth();
+  const requestKey = useRef(crypto.randomUUID());
   const [selectedResident, setSelectedResident] = useState(
     appointment?.resident ?? null,
   );
@@ -57,7 +58,7 @@ export function EncounterCreateDialog({
         )
       : ENCOUNTER_TYPES;
   const mutation = useHealthRecordMutation((values) =>
-    healthRecordService.create(values),
+    healthRecordService.create(values, requestKey.current),
   );
   const {
     control,
@@ -81,6 +82,7 @@ export function EncounterCreateDialog({
     draftKey: `${appointment?.id ?? "new"}:${profile.role}`,
     resetDraft: () => {
       const resident = appointment?.resident ?? null;
+      requestKey.current = crypto.randomUUID();
       setSelectedResident(resident);
       mutation.reset();
       reset({

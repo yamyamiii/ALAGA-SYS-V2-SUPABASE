@@ -7,6 +7,7 @@ import {
   canCreateEncounter,
   canEditEncounter,
   canRecordVitals,
+  canViewClinicalNarrative,
 } from "@/features/health-records/permissions";
 import { missingEncounterSignFields } from "@/features/health-records/schemas";
 
@@ -60,6 +61,24 @@ describe("clinical UI permissions", () => {
         profileId,
       ),
     ).toBe(false);
+  });
+
+  it("keeps narrative visibility clinical while preserving nurse and midwife workflows", () => {
+    expect(
+      canViewClinicalNarrative(USER_ROLES.BARANGAY_HEALTH_WORKER, draft),
+    ).toBe(false);
+    expect(canViewClinicalNarrative(USER_ROLES.ADMINISTRATOR, draft)).toBe(
+      false,
+    );
+    expect(canViewClinicalNarrative(USER_ROLES.NURSE, draft)).toBe(true);
+    expect(canViewClinicalNarrative(USER_ROLES.RESIDENT, draft)).toBe(false);
+    expect(
+      canViewClinicalNarrative(USER_ROLES.MIDWIFE, {
+        ...draft,
+        encounter_type: "maternal_care",
+      }),
+    ).toBe(true);
+    expect(canViewClinicalNarrative(USER_ROLES.MIDWIFE, draft)).toBe(false);
   });
 
   it("uses amendment and controlled admin archival for signed records", () => {

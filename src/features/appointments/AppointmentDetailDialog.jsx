@@ -33,7 +33,6 @@ import { USER_ROLES } from "@/features/auth/permissions";
 import { DocumentPreviewDialog } from "@/features/documents/DocumentPreviewDialog";
 import { DOCUMENT_TYPES } from "@/features/documents/constants";
 import { canPrintAppointmentSlip } from "@/features/documents/permissions";
-import { AppointmentEncounterAction } from "@/features/health-records/AppointmentEncounterAction";
 import { formatPersonName } from "@/features/registry/formatters";
 
 function Value({ label, children, wide = false }) {
@@ -46,6 +45,17 @@ function Value({ label, children, wide = false }) {
         {children || "Not provided"}
       </dd>
     </div>
+  );
+}
+
+function preferredScheduleWasAdjusted(appointment) {
+  if (appointment?.request_source !== "resident") return false;
+  return (
+    appointment.scheduled_date !== appointment.requested_date ||
+    appointment.start_time?.slice(0, 5) !==
+      appointment.requested_start_time?.slice(0, 5) ||
+    appointment.end_time?.slice(0, 5) !==
+      appointment.requested_end_time?.slice(0, 5)
   );
 }
 
@@ -65,6 +75,7 @@ export function AppointmentDetailDialog({
   const appointment = query.data;
   const actions = getAppointmentActions(profile.role, appointment, profile.id);
   const printable = canPrintAppointmentSlip(appointment);
+  const preferredScheduleAdjusted = preferredScheduleWasAdjusted(appointment);
 
   return (
     <>
@@ -97,52 +108,60 @@ export function AppointmentDetailDialog({
             />
           ) : appointment ? (
             <div className="space-y-5">
-              <section className="rounded-xl border bg-primary/5 p-4">
+              <section
+                className="rounded-xl border border-primary/20 bg-primary/5 p-4"
+                aria-labelledby="current-appointment-heading"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
+                    <h3
+                      id="current-appointment-heading"
+                      className="font-heading font-semibold"
+                    >
+                      Current appointment
+                    </h3>
                     <p className="font-heading text-xl font-semibold">
                       {appointment.appointment_number}
                     </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {formatManilaDate(appointment.scheduled_date)} ·{" "}
-                      {formatManilaTime(appointment.start_time)}–
-                      {formatManilaTime(appointment.end_time)}
-                    </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {!residentView ? (
-                      <Badge
-                        variant={
-                          appointment.priority === "urgent"
-                            ? "destructive"
-                            : appointment.priority === "priority"
-                              ? "warning"
-                              : "secondary"
-                        }
-                      >
-                        {PRIORITY_LABELS[appointment.priority]}
-                      </Badge>
-                    ) : null}
+                  {!residentView ? (
+                    <Badge
+                      variant={
+                        appointment.priority === "urgent"
+                          ? "destructive"
+                          : appointment.priority === "priority"
+                            ? "warning"
+                            : "secondary"
+                      }
+                    >
+                      {PRIORITY_LABELS[appointment.priority]}
+                    </Badge>
+                  ) : null}
+                </div>
+                <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <Value label="Status">
                     <StatusBadge
                       status={APPOINTMENT_STATUS_LABELS[appointment.status]}
                     />
-                  </div>
-                </div>
+                  </Value>
+                  <Value label="Schedule">
+                    {formatManilaDate(appointment.scheduled_date)}
+                  </Value>
+                  <Value label="Time">
+                    {formatManilaTime(appointment.start_time)}–
+                    {formatManilaTime(appointment.end_time)}
+                  </Value>
+                  <Value label="Service">{appointment.service_type}</Value>
+                  <Value label="Assigned staff" wide>
+                    {formatPersonName(appointment.staff)}
+                  </Value>
+                </dl>
               </section>
 
               <section className="rounded-xl border p-4">
-                <h3 className="font-heading font-semibold">Health Record</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Clinical documentation remains separate from operational
-                  appointment notes.
-                </p>
-                <div className="mt-4">
-                  <AppointmentEncounterAction appointment={appointment} />
-                </div>
-              </section>
-
-              <section className="rounded-xl border p-4">
-                <h3 className="font-heading font-semibold">Schedule</h3>
+                <h3 className="font-heading font-semibold">
+                  Appointment information
+                </h3>
                 <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {!residentView ? (
                     <>
@@ -160,18 +179,9 @@ export function AppointmentDetailDialog({
                   <Value label="Type">
                     {APPOINTMENT_TYPE_LABELS[appointment.appointment_type]}
                   </Value>
-                  <Value label="Service">{appointment.service_type}</Value>
-                  <Value label="Assigned staff">
-                    {formatPersonName(appointment.staff)}
-                  </Value>
                   <Value label="Reason" wide>
                     {appointment.reason}
                   </Value>
-                  {!residentView ? (
-                    <Value label="Operational notes" wide>
-                      {appointment.operational_notes}
-                    </Value>
-                  ) : null}
                   {appointment.cancellation_reason ? (
                     <Value label="Cancellation reason" wide>
                       {appointment.cancellation_reason}
@@ -188,12 +198,20 @@ export function AppointmentDetailDialog({
               {appointment.request_source === "resident" ? (
                 <section className="rounded-xl border p-4">
                   <h3 className="font-heading font-semibold">
-                    Resident request
+                    Original appointment request
                   </h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    The original preferred schedule remains recorded even when
-                    staff adjust the operational schedule.
+                    {residentView
+                      ? "This is the schedule you originally requested. The health center may adjust the final appointment schedule."
+                      : "This is the schedule the Resident originally requested. The health center may adjust the final appointment schedule."}
                   </p>
+                  {preferredScheduleAdjusted ? (
+                    <p className="mt-2 text-sm font-medium text-primary">
+                      {residentView
+                        ? "The health center adjusted your preferred schedule. Your current appointment schedule is shown above."
+                        : "The current appointment schedule differs from the Resident's preferred schedule shown below."}
+                    </p>
+                  ) : null}
                   <dl className="mt-4 grid gap-4 sm:grid-cols-3">
                     <Value label="Preferred date">
                       {formatManilaDate(appointment.requested_date)}

@@ -77,6 +77,44 @@ describe("appointment database safety", () => {
     );
   });
 
+  it("keeps Nurse list, calendar, queue, and dashboard visibility assignment-scoped", () => {
+    const policy = migration.slice(
+      migration.indexOf("create policy appointments_select_assigned_clinician"),
+      migration.indexOf("create or replace function public.appointment_create"),
+    );
+    expect(policy).toMatch(/assigned_staff_id = auth\.uid\(\)/i);
+    expect(policy).toMatch(/archived_at is null/i);
+    expect(policy).toMatch(
+      /current_profile_role\(\) = 'nurse'::public\.app_role/i,
+    );
+
+    for (const name of [
+      "appointment_list",
+      "appointment_calendar",
+      "appointment_dashboard_summary",
+    ]) {
+      const start = migration.indexOf(
+        `create or replace function public.${name}`,
+      );
+      const body = migration.slice(start, migration.indexOf("$$;", start));
+      expect(body).toMatch(/security invoker/i);
+    }
+
+    const residentRequestMigration = fs.readFileSync(
+      "supabase/migrations/20260720002200_resident_appointment_requests.sql",
+      "utf8",
+    );
+    const queueStart = residentRequestMigration.indexOf(
+      "create or replace function public.appointment_daily_queue",
+    );
+    const queue = residentRequestMigration.slice(
+      queueStart,
+      residentRequestMigration.indexOf("$$;", queueStart),
+    );
+    expect(queue).toMatch(/security invoker/i);
+    expect(queue).toMatch(/from public\.appointments as a/i);
+  });
+
   it("protects midwife scope and resident ownership through RLS", () => {
     expect(migration).toMatch(
       /current_profile_role\(\) = 'midwife'[\s\S]*service_type in \('Maternal Care', 'Child Health'\)/i,

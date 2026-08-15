@@ -14,6 +14,7 @@ import {
   withWorkflowGrounding,
   workflowResponseFor,
   workflowGrounding,
+  uncertaintyMessageFor,
 } from "../../../supabase/functions/alaga-ai/domain.ts";
 
 const healthCenterSource = {
@@ -107,6 +108,106 @@ describe("ALAGA AI server grounding and navigation domain", () => {
         workflowResponseFor("Request an appointment", role, true)?.actions,
       ).toEqual([]);
     }
+  });
+
+  it.each([
+    "How do I check my assigned appointments?",
+    "Where can I see my assigned appointments?",
+    "How do I view my schedule?",
+    "Where is my appointment calendar?",
+    "How do I use the Daily Queue?",
+    "Paano ko makikita ang assigned appointments ko?",
+  ])(
+    "returns verified assigned-appointment guidance to a Nurse: %s",
+    (phrase) => {
+      const response = workflowResponseFor(phrase, "nurse");
+
+      expect(response).toMatchObject({
+        category: "workflow_assigned_appointments",
+        sources: [
+          {
+            type: "workflow",
+            title: "Nurse assigned appointment workflow",
+          },
+        ],
+        actions: [
+          {
+            type: "navigate",
+            actionId: "open_appointments",
+            label: "Open Appointments",
+            requiresConfirmation: false,
+          },
+        ],
+      });
+      expect(response?.message).toMatch(
+        /appointments assigned to the logged-in Nurse|appointment na assigned sa naka-login na Nurse/,
+      );
+      expect(response?.message).not.toMatch(/other staff|all staff/i);
+    },
+  );
+
+  it.each([
+    "How do I confirm a resident appointment request?",
+    "How do I approve an appointment request?",
+    "How do I process a pending resident request?",
+    "Paano ko i-confirm ang resident appointment request?",
+  ])(
+    "returns verified Resident-request review guidance to Admin/BHW: %s",
+    (phrase) => {
+      for (const role of ["admin", "barangay_health_worker"]) {
+        const response = workflowResponseFor(phrase, role);
+
+        expect(response).toMatchObject({
+          category: "workflow_appointment_confirmation",
+          actions: [
+            {
+              type: "navigate",
+              actionId: "open_appointments",
+              label: "Open Appointments",
+              requiresConfirmation: false,
+            },
+          ],
+        });
+        expect(response?.message).toMatch(
+          /Assign an eligible staff member when required|Mag-assign ng eligible staff member kapag kinakailangan/,
+        );
+        expect(response?.message).toContain("required rejection justification");
+        expect(response?.message).toMatch(
+          /same appointment and APT number|parehong appointment at APT number/,
+        );
+        expect(response?.message).not.toMatch(
+          /manual start|mark in progress|clinical encounter|operational notes|replacement row/i,
+        );
+      }
+    },
+  );
+
+  it("keeps appointment workflow guidance role-bound and read-only", () => {
+    expect(
+      workflowResponseFor(
+        "How do I confirm a resident appointment request?",
+        "resident",
+      ),
+    ).toMatchObject({ category: "workflow_role_unavailable", actions: [] });
+    expect(
+      workflowResponseFor("How do I check my assigned appointments?", "nurse")
+        ?.actions,
+    ).toEqual([
+      expect.objectContaining({
+        type: "navigate",
+        actionId: "open_appointments",
+      }),
+    ]);
+    expect(
+      workflowResponseFor("How do I check my assigned appointments?", "midwife")
+        ?.message,
+    ).toContain("logged-in Midwife");
+    expect(
+      workflowResponseFor("How do I calibrate the clinic printer?", "nurse"),
+    ).toBeNull();
+    expect(
+      uncertaintyMessageFor("How do I calibrate the clinic printer?"),
+    ).toBe("I could not find verified information about that in ALAGA-SYS.");
   });
 
   it("detects English, Filipino, and Taglish response language", () => {

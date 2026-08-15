@@ -39,6 +39,15 @@ const expectedMigrations = [
   "20260720003200_outbound_notification_foundation.sql",
   "20260720003300_backup_restore_foundation.sql",
   "20260720003400_production_security_hardening.sql",
+  "20260720003500_resident_clinical_document_safety.sql",
+  "20260720003600_optional_resident_appointment_reason.sql",
+  "20260720003700_preserve_optional_resident_appointment_reason.sql",
+  "20260720003800_optional_resident_cancellation_reason.sql",
+  "20260720003900_fix_reschedule_propagation_notifications.sql",
+  "20260720004000_enforce_single_row_appointment_lifecycle.sql",
+  "20260720004100_optional_authorized_cancellation_reason.sql",
+  "20260720004200_simplify_appointment_completion.sql",
+  "20260720004300_cleanup_archived_announcement_notifications.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -111,6 +120,20 @@ const reviewedPendingMigrationHashes = {
     "394793a2449680175e30134298bd35e8edbeeafd1fbef349b593853020ade519",
   "20260720003400_production_security_hardening.sql":
     "08643a1e9a2d2431de8ea2a88af85784f3f622572395ba28cda3ac17fb42e5de",
+  "20260720003500_resident_clinical_document_safety.sql":
+    "5016961c83cce82c199a410c258760d4a6a156c4a61f785c6920a18998fbbe05",
+  "20260720003600_optional_resident_appointment_reason.sql":
+    "e793f0d1836c6db97e685afa4b5bb965c0683a745e8851041775576c7380d21d",
+  "20260720003700_preserve_optional_resident_appointment_reason.sql":
+    "40b5cd2d5015185f66fe0e6aa447ed9ab5f99d2660ec5eb38d670e1fc5c1ae12",
+  "20260720003800_optional_resident_cancellation_reason.sql":
+    "855d42d047d885ff8280418974e7c6a10ded9bdfc6314eff3c38f34bbc2624ee",
+  "20260720003900_fix_reschedule_propagation_notifications.sql":
+    "602ad1cf8a8195e7ceb3c30550ef115628f2b0d59908f24f88ca38a5802647a3",
+  "20260720004000_enforce_single_row_appointment_lifecycle.sql":
+    "041dd1fd15ae302e5f899dd94bb6ddb6329f991d67551917486483ba79b3e8bd",
+  "20260720004100_optional_authorized_cancellation_reason.sql":
+    "15ad5784562fc387cfe1c60f00c616e9ad2b8585e5a2fca3597365130cde39e0",
 };
 const expectedTables = [
   "admin_action_rate_limits",
@@ -206,7 +229,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly thirty-four expected migrations exist in lexical order",
+  "Exactly forty-three expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -602,6 +625,105 @@ check(
       residentAppointmentRequestsMigration,
     ),
   "Resident cancellation is own-pending-only and version protected",
+);
+const authorizedCancellationMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("optional_authorized_cancellation_reason"),
+  )?.sql ?? "";
+const authorizedCancellationDeclarationAudit = auditPlpgsqlIntoTargets(
+  authorizedCancellationMigration,
+);
+check(
+  authorizedCancellationDeclarationAudit.functionCount === 1 &&
+    authorizedCancellationDeclarationAudit.undeclared.length === 0,
+  "The authorized-cancellation transition has declared PL/pgSQL targets",
+);
+check(
+  /appointments_cancelled_fields_consistent[\s\S]*status = 'cancelled' and cancelled_at is not null[\s\S]*status <> 'cancelled' and cancelled_at is null/i.test(
+    authorizedCancellationMigration,
+  ) &&
+    !/appointments_cancelled_fields_consistent[\s\S]*cancellation_reason is not null/i.test(
+      authorizedCancellationMigration,
+    ),
+  "Authorized cancellations may persist a SQL-null narrative",
+);
+check(
+  /normalized_cancellation_reason text :=[\s\S]*nullif\(btrim\(p_cancellation_reason\), ''\)/i.test(
+    authorizedCancellationMigration,
+  ) &&
+    /p_target_status = 'cancelled'[\s\S]*current_record\.status = 'pending'[\s\S]*current_record\.request_source =[\s\S]*'resident'[\s\S]*normalized_cancellation_reason is null[\s\S]*rejection reason is required/i.test(
+      authorizedCancellationMigration,
+    ),
+  "Resident-request rejection remains distinct and justification-required",
+);
+check(
+  /current_record\.version <> p_expected_version[\s\S]*errcode = '40001'/i.test(
+    authorizedCancellationMigration,
+  ) &&
+    /select \* into current_record[\s\S]*for update/i.test(
+      authorizedCancellationMigration,
+    ) &&
+    /actor_role = 'barangay_health_worker'[\s\S]*'cancelled'[\s\S]*current_record\.status <> 'in_progress'/i.test(
+      authorizedCancellationMigration,
+    ) &&
+    /actor_role in \([\s\S]*'nurse'[\s\S]*'midwife'[\s\S]*'no_show'/i.test(
+      authorizedCancellationMigration,
+    ),
+  "Cancellation authorization, row locking, and concurrency remain unchanged",
+);
+check(
+  !/grant\s+(?:insert|update|delete)[^;]*public\.appointments/i.test(
+    authorizedCancellationMigration,
+  ) &&
+    /grant execute on function public\.appointment_transition\([\s\S]*to authenticated, service_role/i.test(
+      authorizedCancellationMigration,
+    ),
+  "The cancellation correction restores only the existing trusted RPC grant",
+);
+const simplifiedAppointmentCompletionMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("simplify_appointment_completion"),
+  )?.sql ?? "";
+const simplifiedCompletionDeclarationAudit = auditPlpgsqlIntoTargets(
+  simplifiedAppointmentCompletionMigration,
+);
+check(
+  simplifiedCompletionDeclarationAudit.functionCount === 1 &&
+    simplifiedCompletionDeclarationAudit.undeclared.length === 0,
+  "The simplified appointment transition has declared PL/pgSQL targets",
+);
+check(
+  /\('checked_in'::public\.appointment_status, 'completed'::public\.appointment_status\)/i.test(
+    simplifiedAppointmentCompletionMigration,
+  ) &&
+    /started_at = case[\s\S]*'in_progress'[\s\S]*'completed'[\s\S]*transitioned_at/i.test(
+      simplifiedAppointmentCompletionMigration,
+    ) &&
+    /completed_at = case[\s\S]*'completed'[\s\S]*transitioned_at/i.test(
+      simplifiedAppointmentCompletionMigration,
+    ),
+  "Checked-in appointments can complete with trusted server timestamps",
+);
+check(
+  /current_record\.version <> p_expected_version[\s\S]*errcode = '40001'/i.test(
+    simplifiedAppointmentCompletionMigration,
+  ) &&
+    /current_record\.assigned_staff_id = actor_id/i.test(
+      simplifiedAppointmentCompletionMigration,
+    ) &&
+    !/health_encounters|health_record/i.test(
+      simplifiedAppointmentCompletionMigration,
+    ),
+  "Simplified completion keeps concurrency and assignment checks without requiring a Health Record",
+);
+check(
+  !/grant\s+(?:insert|update|delete)[^;]*public\.appointments/i.test(
+    simplifiedAppointmentCompletionMigration,
+  ) &&
+    /grant execute on function public\.appointment_transition\([\s\S]*to authenticated, service_role/i.test(
+      simplifiedAppointmentCompletionMigration,
+    ),
+  "Simplified completion restores only the existing trusted RPC grant",
 );
 check(
   /appointment_daily_queue[\s\S]*current_profile_role\(\) = 'resident'[\s\S]*residents cannot access the daily appointment queue/i.test(
@@ -1135,6 +1257,60 @@ check(
     /notification\.read_all/i.test(assistanceMigration) &&
     /inquiry\.status_changed/i.test(assistanceMigration),
   "Required assistance actions produce minimized semantic audits",
+);
+
+const archivedAnnouncementNotificationMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("cleanup_archived_announcement_notifications"),
+  )?.sql ?? "";
+const archivedAnnouncementNotificationDeclarationAudit =
+  auditPlpgsqlIntoTargets(archivedAnnouncementNotificationMigration);
+check(
+  archivedAnnouncementNotificationDeclarationAudit.functionCount === 1 &&
+    archivedAnnouncementNotificationDeclarationAudit.undeclared.length === 0,
+  "Archived-announcement notification cleanup has declared PL/pgSQL targets",
+);
+check(
+  /delete from public\.assistance_notifications as notification\s+using public\.announcements as announcement[\s\S]*notification\.source_type = 'announcements'[\s\S]*notification\.source_id = announcement\.id[\s\S]*announcement\.archived_at is not null/i.test(
+    archivedAnnouncementNotificationMigration,
+  ) &&
+    /delete from public\.assistance_notifications as notification[\s\S]*notification\.source_type = 'announcements'[\s\S]*notification\.source_id = p_id/i.test(
+      archivedAnnouncementNotificationMigration,
+    ) &&
+    !/(?:title|summary|dedup_key)\s*(?:=|like|ilike)/i.test(
+      archivedAnnouncementNotificationMigration,
+    ),
+  "Archived announcements remove only source-linked in-app notifications",
+);
+check(
+  /assistance_require_role\([\s\S]*array\['admin','barangay_health_worker'\]/i.test(
+    archivedAnnouncementNotificationMigration,
+  ) &&
+    /where id = p_id\s+for update/i.test(
+      archivedAnnouncementNotificationMigration,
+    ) &&
+    /current_record\.version <> p_expected_version/i.test(
+      archivedAnnouncementNotificationMigration,
+    ) &&
+    /'announcement\.archived'[\s\S]*'announcements'[\s\S]*p_id/i.test(
+      archivedAnnouncementNotificationMigration,
+    ) &&
+    !/delete from public\.(?:announcements|audit_logs)/i.test(
+      archivedAnnouncementNotificationMigration,
+    ),
+  "Announcement cleanup preserves soft deletion, authorization, concurrency, and audit history",
+);
+check(
+  /revoke all on function public\.announcement_archive\(uuid, bigint\)[\s\S]*from public, anon, authenticated/i.test(
+    archivedAnnouncementNotificationMigration,
+  ) &&
+    /grant execute on function public\.announcement_archive\(uuid, bigint\)[\s\S]*to authenticated, service_role/i.test(
+      archivedAnnouncementNotificationMigration,
+    ) &&
+    !/grant\s+delete\s+on\s+(?:table\s+)?public\.assistance_notifications/i.test(
+      archivedAnnouncementNotificationMigration,
+    ),
+  "Announcement cleanup restores only the existing trusted RPC grant",
 );
 
 const finalQaMigration =

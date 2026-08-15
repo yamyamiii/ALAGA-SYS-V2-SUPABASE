@@ -38,8 +38,8 @@ import {
   useRegistryMutation,
 } from "@/features/registry/hooks";
 import { DeploymentBarangayContext } from "@/features/registry/DeploymentBarangayContext";
-import { HouseholdSearchField } from "@/features/registry/HouseholdSearchField";
 import { ResidentPhoto } from "@/features/registry/ResidentPhoto";
+import { residentValuesForWrite } from "@/features/registry/residentFormValues";
 import {
   residentSchema,
   validateLocalityConsistency,
@@ -106,7 +106,6 @@ function Select({ id, register, children, disabled = false, onChange }) {
 export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
   const editing = Boolean(resident?.id);
   const [localityError, setLocalityError] = useState("");
-  const [selectedHousehold, setSelectedHousehold] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [removePhoto, setRemovePhoto] = useState(false);
@@ -125,7 +124,6 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
     resolver: zodResolver(residentSchema),
     defaultValues: defaults,
   });
-  const purokId = watch("purok_id");
   const sex = watch("sex");
   const puroks = usePuroks();
   const mutation = useRegistryMutation(async ({ values, duplicateMatches }) => {
@@ -186,16 +184,6 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
         ),
       );
       setLocalityError("");
-      setSelectedHousehold(
-        source.household_id && source.household
-          ? {
-              ...source.household,
-              id: source.household_id,
-              barangay_id: source.barangay_id,
-              purok_id: source.purok_id,
-            }
-          : null,
-      );
       setPhotoFile(null);
       setPhotoPreview(null);
       setRemovePhoto(false);
@@ -232,16 +220,20 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
   }
 
   async function save(values, duplicateMatches = []) {
-    const mismatch = validateLocalityConsistency(values, {
+    const writeValues = residentValuesForWrite(values, resident);
+    const mismatch = validateLocalityConsistency(writeValues, {
       puroks: puroks.data,
-      households: selectedHousehold ? [selectedHousehold] : [],
+      households: [],
     });
     if (mismatch) {
       setLocalityError(mismatch);
       return;
     }
     setLocalityError("");
-    const result = await mutation.mutateAsync({ values, duplicateMatches });
+    const result = await mutation.mutateAsync({
+      values: writeValues,
+      duplicateMatches,
+    });
     if (result.savedWithAuditWarning) {
       toast.error(result.warning);
     } else if (result.photoWarning) {
@@ -558,10 +550,7 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
           </section>
 
           <section className="space-y-4 border-t pt-6">
-            <SectionHeading
-              title="Locality and household"
-              description="Brgy. Bagongpook purok and optional household relationships"
-            />
+            <SectionHeading title="Locality" />
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Field
                 label="Purok"
@@ -576,8 +565,6 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
                     setValue("purok_id", event.target.value, {
                       shouldValidate: true,
                     });
-                    setValue("household_id", "", { shouldValidate: true });
-                    setSelectedHousehold(null);
                   }}
                 >
                   <option value="">Select purok</option>
@@ -587,24 +574,6 @@ export function ResidentFormDialog({ open, onOpenChange, resident, onSaved }) {
                     </option>
                   ))}
                 </Select>
-              </Field>
-              <Field
-                label="Household"
-                htmlFor="resident-household"
-                error={errors.household_id}
-              >
-                <HouseholdSearchField
-                  purokId={purokId}
-                  value={watch("household_id")}
-                  selectedHousehold={selectedHousehold}
-                  onChange={(household) => {
-                    setSelectedHousehold(household);
-                    setValue("household_id", household?.id ?? "", {
-                      shouldValidate: true,
-                    });
-                  }}
-                  disabled={mutation.isPending}
-                />
               </Field>
               <Field
                 label="Address (optional)"

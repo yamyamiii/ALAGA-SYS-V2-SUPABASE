@@ -5,7 +5,17 @@ import { reportService } from "@/services/reportService";
 export const reportKeys = Object.freeze({
   all: ["reports"],
   category: (category, filters) => ["reports", category, filters],
+  dashboard: (today) => ["reports", "dashboard", today],
 });
+
+export function useDashboardSummary(today, enabled = true) {
+  return useQuery({
+    queryKey: reportKeys.dashboard(today),
+    queryFn: ({ signal }) => reportService.loadDashboard(today, signal),
+    enabled: enabled && Boolean(today),
+    staleTime: 60_000,
+  });
+}
 
 export function useReport(category, filters, enabled = true) {
   return useQuery({

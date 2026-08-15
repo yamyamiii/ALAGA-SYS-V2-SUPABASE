@@ -171,6 +171,12 @@ describe("role permissions", () => {
       hasPermission(USER_ROLES.NURSE, PERMISSIONS.MANAGE_ANNOUNCEMENTS),
     ).toBe(false);
     expect(
+      hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.MANAGE_ANNOUNCEMENTS),
+    ).toBe(false);
+    expect(
+      hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.MANAGE_ANNOUNCEMENTS),
+    ).toBe(false);
+    expect(
       hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.VIEW_NOTIFICATIONS),
     ).toBe(true);
     expect(hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.SUBMIT_INQUIRY)).toBe(

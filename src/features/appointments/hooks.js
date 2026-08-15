@@ -15,6 +15,14 @@ export const appointmentKeys = Object.freeze({
   residentRequests: ["appointments", "resident-requests"],
 });
 
+export function invalidateAppointmentQueries(queryClient) {
+  return queryClient.invalidateQueries({
+    queryKey: appointmentKeys.all,
+    exact: false,
+    refetchType: "active",
+  });
+}
+
 export function useAppointments(filters) {
   return useQuery({
     queryKey: appointmentKeys.list(filters),
@@ -87,6 +95,8 @@ export function useAppointmentDashboard(enabled = true) {
     queryKey: appointmentKeys.dashboard,
     queryFn: () => appointmentService.getDashboardSummary(),
     staleTime: 60_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
     enabled,
   });
 }
@@ -104,7 +114,6 @@ export function useAppointmentMutation(mutationFn) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: appointmentKeys.all }),
+    onSuccess: () => invalidateAppointmentQueries(queryClient),
   });
 }

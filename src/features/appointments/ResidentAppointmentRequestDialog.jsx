@@ -151,7 +151,9 @@ export function ResidentAppointmentRequestDialog({
           </p>
 
           <div className="space-y-2">
-            <Label htmlFor="resident-request-reason">Reason for visit</Label>
+            <Label htmlFor="resident-request-reason">
+              Reason for visit (optional)
+            </Label>
             <textarea
               id="resident-request-reason"
               rows={4}

@@ -7,8 +7,8 @@ const pages = ["HealthRecordsPage.jsx", "HealthRecordDetailPage.jsx"].map(
   (name) => fs.readFileSync(`src/features/health-records/${name}`, "utf8"),
 );
 const service = fs.readFileSync("src/services/healthRecordService.js", "utf8");
-const appointmentIntegration = fs.readFileSync(
-  "src/features/health-records/AppointmentEncounterAction.jsx",
+const appointmentDetail = fs.readFileSync(
+  "src/features/appointments/AppointmentDetailDialog.jsx",
   "utf8",
 );
 const residentIntegration = fs.readFileSync(
@@ -66,12 +66,15 @@ describe("health-record UI boundaries", () => {
     expect(service).toMatch(/providerCode/);
   });
 
-  it("integrates appointments and residents without exposing appointment notes", () => {
-    expect(appointmentIntegration).toMatch(/Start Clinical Encounter/);
-    expect(appointmentIntegration).toMatch(/Open Health Record/);
-    expect(appointmentIntegration).toMatch(/Maternal Care/);
+  it("keeps clinical creation in Health Records and out of Appointment Details", () => {
+    expect(pages[0]).toMatch(/Create encounter/);
+    expect(pages[0]).toMatch(/canCreateEncounter\(profile\.role\)/);
+    expect(pages[0]).toMatch(/EncounterCreateDialog/);
     expect(encounterCreate).toMatch(/profile\.role === "midwife"/);
-    expect(appointmentIntegration).not.toMatch(/operational_notes|reason/);
+    expect(service).toMatch(/health_encounter_create/);
+    expect(appointmentDetail).not.toMatch(
+      /AppointmentEncounterAction|Create Clinical Encounter|Add Clinical Encounter/i,
+    );
     expect(residentIntegration).toMatch(/Clinical Timeline/);
     expect(residentIntegration).toMatch(/Allergies/);
     expect(residentIntegration).toMatch(/Medical History/);
@@ -89,6 +92,22 @@ describe("health-record UI boundaries", () => {
     expect(pages[0]).toContain('showVitalSignsContext ? "#vital-signs" : ""');
     expect(detailPage).toContain('id="vital-signs"');
     expect(pages[0]).not.toMatch(/searchParams\.get\(["'](?:id|encounterId)/);
+  });
+
+  it("describes health records as appointment-linked consultations", () => {
+    expect(pages[0]).toMatch(
+      /Consultation records linked to resident appointments and authorized health-center services/i,
+    );
+    expect(pages[0]).not.toMatch(
+      /Secure clinical encounters, vital signs, allergies/i,
+    );
+  });
+
+  it("requires both backend data and the current role before rendering narratives", () => {
+    expect(detailPage).toMatch(
+      /canViewClinicalNarrative\(profile\.role, encounter\)/,
+    );
+    expect(detailPage).toMatch(/clinicalVisible\s*\?/);
   });
 
   it("explains and enforces the required signing fields in the UI", () => {

@@ -40,6 +40,7 @@ import {
   canEditEncounter,
   canRecordVitals,
   canSignEncounter,
+  canViewClinicalNarrative,
 } from "@/features/health-records/permissions";
 import { VitalSignsDialog } from "@/features/health-records/VitalSignsDialog";
 import { formatPersonName } from "@/features/registry/formatters";
@@ -85,7 +86,9 @@ export default function HealthRecordDetailPage() {
   const [action, setAction] = useState(null);
   const [consultationPrintOpen, setConsultationPrintOpen] = useState(false);
   const encounter = query.data;
-  const clinicalVisible = Boolean(encounter?.clinical);
+  const clinicalVisible =
+    canViewClinicalNarrative(profile.role, encounter) &&
+    Boolean(encounter?.clinical);
 
   if (query.isLoading) {
     return (

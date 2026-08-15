@@ -104,8 +104,8 @@ export default function HealthRecordsPage() {
             : showVitalSignsContext
               ? "Select an authorized encounter to view its vital signs or, when permitted, document them. Record access remains protected by role permissions and row-level security."
               : showEncounterContext
-                ? "Review the clinical encounters authorized for your role. Operational appointment notes remain separate."
-                : "Secure clinical encounters, vital signs, allergies, and relevant history. Operational appointment notes remain separate."
+                ? "Consultation records linked to resident appointments and authorized health-center services."
+                : "Consultation records and vital signs linked to resident appointments and authorized health-center services."
         }
         actions={
           canCreateEncounter(profile.role) ? (

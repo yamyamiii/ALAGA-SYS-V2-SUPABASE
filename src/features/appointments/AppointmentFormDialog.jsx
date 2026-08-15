@@ -26,7 +26,10 @@ import {
 import { AppointmentResidentField } from "@/features/appointments/AppointmentResidentField";
 import { AppointmentStaffField } from "@/features/appointments/AppointmentStaffField";
 import { useAppointmentMutation } from "@/features/appointments/hooks";
-import { appointmentSchema } from "@/features/appointments/schemas";
+import {
+  appointmentSchema,
+  residentRequestStaffEditSchema,
+} from "@/features/appointments/schemas";
 import {
   addDaysToDateKey,
   addMinutesToTime,
@@ -57,7 +60,6 @@ function defaults(walkIn = false) {
     priority: "normal",
     assigned_staff_id: "",
     reason: "",
-    operational_notes: "",
   };
 }
 
@@ -69,6 +71,7 @@ export function AppointmentFormDialog({
   onSaved,
 }) {
   const editing = Boolean(appointment);
+  const residentOrigin = appointment?.request_source === "resident";
   const [selectedResident, setSelectedResident] = useState(null);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const requestKey = useRef(crypto.randomUUID());
@@ -85,7 +88,9 @@ export function AppointmentFormDialog({
     watch,
     formState: { errors },
   } = useForm({
-    resolver: zodResolver(appointmentSchema),
+    resolver: zodResolver(
+      residentOrigin ? residentRequestStaffEditSchema : appointmentSchema,
+    ),
     defaultValues: defaults(walkIn),
   });
   const serviceType = watch("service_type");
@@ -107,7 +112,6 @@ export function AppointmentFormDialog({
           priority: appointment.priority,
           assigned_staff_id: appointment.assigned_staff_id ?? "",
           reason: appointment.reason ?? "",
-          operational_notes: appointment.operational_notes ?? "",
         });
         setSelectedResident(appointment.resident);
         setSelectedStaff(appointment.staff);
@@ -271,7 +275,9 @@ export function AppointmentFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="appointment-reason">Reason</Label>
+            <Label htmlFor="appointment-reason">
+              Reason{residentOrigin ? " (optional)" : ""}
+            </Label>
             <textarea
               id="appointment-reason"
               rows={3}
@@ -280,23 +286,6 @@ export function AppointmentFormDialog({
             />
             <FieldError error={errors.reason} />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="appointment-notes">
-              Operational notes (optional)
-            </Label>
-            <textarea
-              id="appointment-notes"
-              rows={3}
-              {...register("operational_notes")}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            />
-            <p className="text-xs text-muted-foreground">
-              Do not enter diagnoses, prescriptions, or clinical encounter
-              notes.
-            </p>
-            <FieldError error={errors.operational_notes} />
-          </div>
-
           <DialogFooter>
             <Button
               type="button"

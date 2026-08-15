@@ -19,6 +19,18 @@ const residentDialog = fs.readFileSync(
   "src/features/appointments/ResidentAppointmentRequestDialog.jsx",
   "utf8",
 );
+const detailDialog = fs.readFileSync(
+  "src/features/appointments/AppointmentDetailDialog.jsx",
+  "utf8",
+);
+const permissions = fs.readFileSync(
+  "src/features/appointments/permissions.js",
+  "utf8",
+);
+const constants = fs.readFileSync(
+  "src/features/appointments/constants.js",
+  "utf8",
+);
 const tabs = fs.readFileSync(
   "src/features/appointments/AppointmentTabs.jsx",
   "utf8",
@@ -80,6 +92,33 @@ describe("appointment UI boundaries", () => {
     expect(calendar).not.toMatch(/item\.reason|item\.operational_notes/i);
     expect(queue).not.toMatch(/item\.reason|item\.operational_notes/i);
     expect(queue).toMatch(/not a clinical triage assessment/i);
+  });
+
+  it("keeps check-in and completion while removing the manual start action", () => {
+    expect(permissions).toMatch(/APPOINTMENT_ACTIONS\.CHECK_IN/);
+    expect(permissions).toMatch(/APPOINTMENT_ACTIONS\.COMPLETE/);
+    expect(permissions).not.toMatch(/APPOINTMENT_ACTIONS\.START/);
+    expect(queue).not.toMatch(/APPOINTMENT_ACTIONS\.START/);
+    expect(constants).not.toMatch(/START:\s*["']start["']/);
+    expect(constants).toMatch(/in_progress:\s*["']In consultation["']/);
+    expect(detailDialog).not.toMatch(
+      /AppointmentEncounterAction|Create Clinical Encounter|Add Clinical Encounter/i,
+    );
+  });
+
+  it("uses the current schedule on Resident cards and details while preserving request metadata", () => {
+    for (const source of [residentPage, detailDialog]) {
+      expect(source).toMatch(/formatManilaDate\(appointment\.scheduled_date\)/);
+      expect(source).toMatch(/formatManilaTime\(appointment\.start_time\)/);
+      expect(source).toMatch(/formatManilaTime\(appointment\.end_time\)/);
+    }
+    expect(residentPage).not.toMatch(
+      /appointment\.requested_(?:date|start_time|end_time)/,
+    );
+    expect(detailDialog).toMatch(/Original appointment request/);
+    expect(detailDialog).toMatch(/appointment\.requested_date/);
+    expect(detailDialog).toMatch(/appointment\.requested_start_time/);
+    expect(detailDialog).toMatch(/appointment\.requested_end_time/);
   });
 
   it("provides responsive cards, desktop tables/calendar, and retry states", () => {

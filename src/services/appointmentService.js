@@ -168,6 +168,29 @@ function pageResult(data, page, pageSize) {
   };
 }
 
+function requiredNonnegativeCount(source, key, fallback) {
+  const value = Number(source?.[key]);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new AppointmentServiceError("invalid_response", fallback);
+  }
+  return value;
+}
+
+function appointmentTotal(data) {
+  if (!Array.isArray(data)) {
+    throw new AppointmentServiceError(
+      "invalid_response",
+      "The assigned appointment total response was invalid.",
+    );
+  }
+  if (data.length === 0) return 0;
+  return requiredNonnegativeCount(
+    data[0],
+    "total_count",
+    "The assigned appointment total response was invalid.",
+  );
+}
+
 function normalizePositiveInteger(value, fallback, maximum) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
@@ -383,13 +406,42 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
     },
 
     async getDashboardSummary() {
-      const data = await rpc(
-        client(),
-        "appointment_dashboard_summary",
-        {},
-        "Appointment totals could not be loaded.",
+      const currentClient = client();
+      const [data, visibleAppointments] = await Promise.all([
+        rpc(
+          currentClient,
+          "appointment_dashboard_summary",
+          {},
+          "Appointment totals could not be loaded.",
+        ),
+        rpc(
+          currentClient,
+          "appointment_list",
+          buildAppointmentListParameters({ page: 1, page_size: 1 }),
+          "The assigned appointment total could not be loaded.",
+        ),
+      ]);
+      const summary = firstRow(
+        data,
+        "The appointment totals response was invalid.",
       );
-      return firstRow(data, "The appointment totals response was invalid.");
+      for (const key of [
+        "appointments_today",
+        "pending_appointments",
+        "checked_in_today",
+        "completed_today",
+        "upcoming_appointments",
+      ]) {
+        requiredNonnegativeCount(
+          summary,
+          key,
+          "The appointment totals response was invalid.",
+        );
+      }
+      return {
+        ...summary,
+        assigned_appointments: appointmentTotal(visibleAppointments),
+      };
     },
 
     async listResidentAppointmentRequests(page = 1, pageSize = 5) {
@@ -419,7 +471,7 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
           p_priority: values.priority,
           p_assigned_staff_id: nullable(values.assigned_staff_id),
           p_reason: nullable(values.reason),
-          p_operational_notes: nullable(values.operational_notes),
+          p_operational_notes: null,
           p_request_key: requestKey,
         },
         "The appointment could not be created.",
@@ -435,7 +487,7 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
           p_service_type: values.service_type,
           p_scheduled_date: values.scheduled_date,
           p_start_time: values.start_time,
-          p_reason: values.reason.trim(),
+          p_reason: nullable(values.reason?.trim()),
           p_request_key: requestKey,
         },
         "Your appointment request could not be submitted.",
@@ -450,7 +502,7 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
         {
           p_appointment_id: appointment.id,
           p_expected_version: appointment.version,
-          p_cancellation_reason: cancellationReason.trim(),
+          p_cancellation_reason: nullable(cancellationReason?.trim()),
         },
         "Your appointment request could not be cancelled.",
       );
@@ -471,8 +523,8 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
           p_end_time: values.end_time,
           p_priority: values.priority,
           p_assigned_staff_id: nullable(values.assigned_staff_id),
-          p_reason: nullable(values.reason),
-          p_operational_notes: nullable(values.operational_notes),
+          p_reason: nullable(values.reason?.trim()),
+          p_operational_notes: nullable(appointment.operational_notes),
         },
         "The appointment changes could not be saved.",
       );
@@ -487,7 +539,7 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
           p_appointment_id: appointment.id,
           p_expected_version: appointment.version,
           p_target_status: targetStatus,
-          p_cancellation_reason: nullable(options.cancellation_reason),
+          p_cancellation_reason: nullable(options.cancellation_reason?.trim()),
           p_operational_notes: nullable(options.operational_notes),
         },
         "The appointment status could not be changed.",
@@ -519,7 +571,7 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
           p_scheduled_date: values.scheduled_date,
           p_start_time: values.start_time,
           p_end_time: values.end_time,
-          p_assigned_staff_id: nullable(values.assigned_staff_id),
+          p_assigned_staff_id: nullable(appointment.assigned_staff_id),
           p_request_key: requestKey,
         },
         "The appointment could not be rescheduled.",

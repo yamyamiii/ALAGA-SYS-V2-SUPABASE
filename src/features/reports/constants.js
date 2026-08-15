@@ -55,3 +55,43 @@ export const REPORT_FORMATS = Object.freeze([
   ["pdf", "PDF"],
   ["print", "Print"],
 ]);
+
+export const REPORT_SUMMARY_METRICS = Object.freeze({
+  overview: Object.freeze([
+    ["active_residents", "Active residents"],
+    ["total_appointments", "Total appointments"],
+    ["pending_requests", "Pending requests"],
+    ["confirmed_appointments", "Confirmed appointments"],
+    ["completed_appointments", "Completed appointments"],
+    ["cancelled_appointments", "Cancelled appointments"],
+    ["appointments_today", "Appointments today"],
+    ["checked_in_queue", "Checked-in queue"],
+  ]),
+  residents: Object.freeze([
+    ["active_residents", "Active residents"],
+    ["male", "Male residents"],
+    ["female", "Female residents"],
+    ["senior_citizens", "Senior citizens"],
+    ["pwd_residents", "PWD residents"],
+    ["without_household", "Residents without household assignment"],
+    ["inactive", "Inactive residents"],
+    ["moved_out", "Moved-out residents"],
+    ["deceased", "Deceased residents"],
+    ["archived", "Archived residents"],
+  ]),
+});
+
+export function reportSummaryEntries(category, summary = {}) {
+  const metrics = REPORT_SUMMARY_METRICS[category];
+  if (!metrics) {
+    return Object.entries(summary)
+      .filter(([, value]) => typeof value !== "object")
+      .map(([key, value]) => ({ key, value }));
+  }
+
+  return metrics.map(([key, label]) => ({
+    key,
+    label,
+    value: summary[key] ?? 0,
+  }));
+}

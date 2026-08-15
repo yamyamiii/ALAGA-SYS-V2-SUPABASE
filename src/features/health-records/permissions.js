@@ -8,7 +8,7 @@ export function canCreateEncounter(role) {
 }
 
 export function canViewClinicalNarrative(role, encounter) {
-  if (role === USER_ROLES.NURSE || role === USER_ROLES.RESIDENT) return true;
+  if (role === USER_ROLES.NURSE) return true;
   return (
     role === USER_ROLES.MIDWIFE &&
     MIDWIFE_TYPES.includes(encounter?.encounter_type)

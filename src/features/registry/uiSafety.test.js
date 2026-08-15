@@ -96,8 +96,14 @@ describe("registry UI boundaries", () => {
     expect(residentPage).not.toMatch(/setDetailId\(item\.resident_number\)/);
   });
 
-  it("replaces the first-100 household dropdown with debounced server search", () => {
-    expect(residentForm).toMatch(/HouseholdSearchField/);
+  it("hides household controls from the Resident form while retaining shared search support", () => {
+    expect(residentForm).not.toMatch(/HouseholdSearchField/);
+    expect(residentForm).not.toMatch(
+      /Locality and household|label="Household"|No household|optional household relationships/i,
+    );
+    expect(residentForm).toMatch(/SectionHeading title="Locality"/);
+    expect(residentForm).toMatch(/label="Purok"/);
+    expect(residentForm).toMatch(/label="Address \(optional\)"/);
     expect(householdSearch).toMatch(/useHouseholdSearch/);
     expect(householdSearch).toMatch(/useDebouncedValue/);
     expect(residentForm).not.toMatch(/listHouseholdOptions/);
