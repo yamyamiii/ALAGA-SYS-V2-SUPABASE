@@ -14,6 +14,23 @@ describe("reports database boundary", () => {
     ).toBeGreaterThanOrEqual(7);
     expect(migration).toMatch(/actor_role is null or actor_role = 'resident'/i);
     expect(migration).toMatch(/from public, anon, authenticated/i);
+    expect(migration).toMatch(
+      /p_group = 'registry'[\s\S]*actor_role not in \('admin', 'barangay_health_worker'\)/i,
+    );
+    expect(migration).not.toMatch(
+      /p_group = 'appointments'[\s\S]{0,180}actor_role not in/i,
+    );
+    for (const name of [
+      "report_appointment_summary",
+      "report_appointments_over_time",
+      "report_services_distribution",
+      "report_export_rows",
+    ]) {
+      const start = migration.indexOf(`function public.${name}`);
+      const end = migration.indexOf("$$;", start);
+      expect(migration.slice(start, end)).toMatch(/security invoker/i);
+      expect(migration.slice(start, end)).toMatch(/report_validate_scope/i);
+    }
   });
 
   it("does not expose clinical narrative fields", () => {

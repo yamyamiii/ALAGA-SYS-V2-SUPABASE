@@ -74,7 +74,11 @@ export function AppointmentDetailDialog({
   const [printOpen, setPrintOpen] = useState(false);
   const appointment = query.data;
   const actions = getAppointmentActions(profile.role, appointment, profile.id);
-  const printable = canPrintAppointmentSlip(appointment);
+  const printable = canPrintAppointmentSlip(
+    profile.role,
+    appointment,
+    profile.id,
+  );
   const preferredScheduleAdjusted = preferredScheduleWasAdjusted(appointment);
 
   return (

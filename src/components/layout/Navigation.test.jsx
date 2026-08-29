@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { Navigation } from "@/components/layout/Navigation";
 import { AuthContext } from "@/features/auth/authContext";
@@ -13,7 +13,6 @@ const expectedByRole = {
     "Residents",
     "Health Records",
     "Announcements",
-    "ALAGA AI",
     "Reports",
     "User Management",
   ],
@@ -23,7 +22,6 @@ const expectedByRole = {
     "Residents",
     "Health Records",
     "Announcements",
-    "ALAGA AI",
     "Reports",
   ],
   [USER_ROLES.NURSE]: [
@@ -31,26 +29,25 @@ const expectedByRole = {
     "Appointments",
     "Health Records",
     "Announcements",
-    "ALAGA AI",
+    "Reports",
   ],
   [USER_ROLES.MIDWIFE]: [
     "Dashboard",
     "Appointments",
     "Health Records",
     "Announcements",
-    "ALAGA AI",
+    "Reports",
   ],
   [USER_ROLES.RESIDENT]: [
     "Dashboard",
     "My Appointments",
     "Announcements",
     "Notifications",
-    "ALAGA AI",
   ],
 };
 
 function renderNavigation(role, props = {}) {
-  render(
+  return render(
     <AuthContext.Provider
       value={{
         can: (permission) => hasPermission(role, permission),
@@ -74,10 +71,8 @@ describe("final-scope primary navigation", () => {
       ).toHaveTextContent(labels.join(""));
       expect(
         screen.getAllByRole("link").map((link) => link.textContent),
-      ).toEqual(labels.filter((label) => label !== "ALAGA AI"));
-      expect(
-        screen.getByRole("button", { name: "ALAGA AI" }),
-      ).toBeInTheDocument();
+      ).toEqual(labels);
+      expect(screen.queryByText("ALAGA AI")).not.toBeInTheDocument();
     },
   );
 
@@ -100,15 +95,11 @@ describe("final-scope primary navigation", () => {
     }
   });
 
-  it("closes the mobile drawer before opening the in-memory AI assistant", () => {
-    const onNavigate = vi.fn();
-    const dispatch = vi.spyOn(globalThis, "dispatchEvent");
-    renderNavigation(USER_ROLES.RESIDENT, { onNavigate });
-    screen.getByRole("button", { name: "ALAGA AI" }).click();
-    expect(onNavigate).toHaveBeenCalledOnce();
-    expect(dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "alaga:open-ai-assistant" }),
-    );
-    dispatch.mockRestore();
+  it("keeps ALAGA AI out of every role's primary navigation", () => {
+    for (const role of Object.values(USER_ROLES)) {
+      const { unmount } = renderNavigation(role);
+      expect(screen.queryByText("ALAGA AI")).not.toBeInTheDocument();
+      unmount();
+    }
   });
 });

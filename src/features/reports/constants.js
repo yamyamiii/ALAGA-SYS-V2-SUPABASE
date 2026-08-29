@@ -31,8 +31,8 @@ const roleCategories = Object.freeze({
     "residents",
     "appointments",
   ],
-  [USER_ROLES.NURSE]: [],
-  [USER_ROLES.MIDWIFE]: [],
+  [USER_ROLES.NURSE]: ["appointments"],
+  [USER_ROLES.MIDWIFE]: ["appointments"],
   [USER_ROLES.RESIDENT]: [],
 });
 

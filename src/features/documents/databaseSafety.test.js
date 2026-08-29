@@ -65,6 +65,15 @@ describe("printable healthcare document database boundary", () => {
     }
     expect(body).not.toMatch(/'reason'|'operational_notes'|'resident_id'/);
     expect(body).toMatch(/public\.current_resident_id\(\)/);
+    expect(body).toMatch(
+      /actor_role = 'nurse'[\s\S]*assigned_staff_id is distinct from actor_id/,
+    );
+    expect(body).toMatch(
+      /actor_role = 'midwife'[\s\S]*assigned_staff_id is distinct from actor_id[\s\S]*service_type not in \('Maternal Care', 'Child Health'\)/,
+    );
+    expect(body).toMatch(
+      /actor_role not in \([\s\S]*'admin'[\s\S]*'barangay_health_worker'/,
+    );
   });
 
   it("limits consultation documents to signed or amended narrative-authorized roles", () => {

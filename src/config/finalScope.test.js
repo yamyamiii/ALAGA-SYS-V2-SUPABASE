@@ -5,9 +5,11 @@ import { describe, expect, it } from "vitest";
 import {
   FINAL_SCOPE_FEATURES,
   FINAL_SCOPE_REPORT_CATEGORIES,
+  FINAL_SCOPE_REPORT_ROLES,
   HIDDEN_FINAL_SCOPE_ROUTES,
 } from "@/config/finalScope";
 import { ROUTES } from "@/config/routes";
+import { USER_ROLES } from "@/features/auth/permissions";
 
 describe("approved final thesis scope", () => {
   it("keeps inactive extensions disabled in one visibility contract", () => {
@@ -25,6 +27,12 @@ describe("approved final thesis scope", () => {
       "residents",
       "appointments",
       "staff_workload",
+    ]);
+    expect(FINAL_SCOPE_REPORT_ROLES).toEqual([
+      USER_ROLES.ADMINISTRATOR,
+      USER_ROLES.BARANGAY_HEALTH_WORKER,
+      USER_ROLES.NURSE,
+      USER_ROLES.MIDWIFE,
     ]);
   });
 

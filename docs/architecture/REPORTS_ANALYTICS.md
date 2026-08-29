@@ -26,13 +26,20 @@ reasons, diagnoses, assessments, plans, or other clinical narratives.
 | ---------------------- | --------------------------------------------------------------------- |
 | Administrator          | Overview, Resident summary, Appointment reports, Appointment workload |
 | Barangay Health Worker | Overview, Resident summary, Appointment reports                       |
-| Nurse                  | None in the approved final presentation                               |
-| Midwife                | None in the approved final presentation                               |
+| Nurse                  | Appointment reports, limited by assigned-appointment RLS              |
+| Midwife                | Appointment reports, limited by assigned service and appointment RLS  |
 | Resident               | None                                                                  |
 
 Administrator workload rows visibly show appointment assignments and completed
 appointments only. Workload is an operational volume indicator, not a
 performance or quality score.
+
+Nurse and Midwife report access reuses the existing appointment-only report
+category. Those functions are `security invoker`, so list, chart, export, PDF,
+and print aggregates contain only appointment rows already visible through the
+caller's RLS policies. They do not receive Overview, Resident summary,
+Appointment workload, barangay-wide clinical reports, or raw appointment and
+Resident records. Residents remain denied at both route and database scope.
 
 Health-record analytics, maternal care, child care, pregnancy, prenatal,
 delivery, postnatal, growth, and immunization categories are not present in the

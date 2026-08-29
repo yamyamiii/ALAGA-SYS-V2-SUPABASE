@@ -1,8 +1,28 @@
 import { describe, expect, it } from "vitest";
 
-import { reportSummaryEntries } from "@/features/reports/constants";
+import { USER_ROLES } from "@/features/auth/permissions";
+import {
+  categoriesForRole,
+  reportSummaryEntries,
+} from "@/features/reports/constants";
 
 describe("final-scope report presentation", () => {
+  it("keeps full and operational categories role-scoped", () => {
+    expect(
+      categoriesForRole(USER_ROLES.ADMINISTRATOR).map(({ id }) => id),
+    ).toEqual(["overview", "residents", "appointments", "staff_workload"]);
+    expect(
+      categoriesForRole(USER_ROLES.BARANGAY_HEALTH_WORKER).map(({ id }) => id),
+    ).toEqual(["overview", "residents", "appointments"]);
+    expect(categoriesForRole(USER_ROLES.NURSE).map(({ id }) => id)).toEqual([
+      "appointments",
+    ]);
+    expect(categoriesForRole(USER_ROLES.MIDWIFE).map(({ id }) => id)).toEqual([
+      "appointments",
+    ]);
+    expect(categoriesForRole(USER_ROLES.RESIDENT)).toEqual([]);
+  });
+
   it("shows only appointment and resident operations in the overview", () => {
     const entries = reportSummaryEntries("overview", {
       active_residents: 120,

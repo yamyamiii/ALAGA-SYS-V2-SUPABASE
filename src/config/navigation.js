@@ -5,7 +5,6 @@ import {
   HeartPulse,
   LayoutDashboard,
   Megaphone,
-  MessageCircleMore,
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
@@ -66,18 +65,11 @@ export const navigationItems = [
     roles: [USER_ROLES.RESIDENT],
   },
   {
-    label: "ALAGA AI",
-    action: "open_ai_assistant",
-    icon: MessageCircleMore,
-    permission: PERMISSIONS.VIEW_DASHBOARD,
-    roles: ALL_ROLES,
-  },
-  {
     label: "Reports",
     path: ROUTES.reports,
     icon: FileBarChart,
     permission: PERMISSIONS.VIEW_REPORTS,
-    roles: [USER_ROLES.ADMINISTRATOR, USER_ROLES.BARANGAY_HEALTH_WORKER],
+    roles: STAFF_ROLES,
   },
   {
     label: "User Management",

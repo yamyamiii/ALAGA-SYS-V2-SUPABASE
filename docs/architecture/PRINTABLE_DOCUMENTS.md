@@ -14,10 +14,17 @@ the database boundary. Its security-definer RPCs use an empty `search_path` and
 return only document fields. They do not grant table access, weaken RLS, or use
 a service-role key in the browser.
 
-| Visible document     | Trusted RPC                     | Database authorization                                     |
-| -------------------- | ------------------------------- | ---------------------------------------------------------- |
-| Appointment Slip     | `document_appointment_slip`     | Valid appointment state plus existing role/ownership scope |
-| Consultation Summary | `document_consultation_summary` | Signed/amended and narrative-authorized role/owner         |
+| Visible document     | Trusted RPC                     | Database authorization                                                                                   |
+| -------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Appointment Slip     | `document_appointment_slip`     | Admin/BHW operational scope; assigned Nurse/Midwife scope; Resident ownership; valid non-archived status |
+| Consultation Summary | `document_consultation_summary` | Signed/amended and narrative-authorized Nurse/Midwife or owning Resident                                 |
+
+Appointment slips contain only the appointment number, permitted Resident
+display name, service and appointment type, current schedule, assigned staff,
+and status. They exclude appointment reasons, operational notes, diagnoses,
+clinical narratives, identifiers, and health-record history. The frontend
+mirrors role and assignment visibility for usability, while the trusted RPC
+remains authoritative against manually crafted requests.
 
 Referral Form, Prenatal Summary, and Child Health Summary actions are removed
 from pages and dialogs. Their database functions, tables, policies, and model

@@ -222,6 +222,63 @@ describe("AppointmentDetailDialog rescheduling lineage", () => {
     expect(screen.queryByText(/^undefined|null$/i)).not.toBeInTheDocument();
   });
 
+  it.each([
+    ["admin", null, "General Consultation"],
+    ["barangay_health_worker", null, "General Consultation"],
+    ["resident", null, "General Consultation"],
+    ["nurse", "55555555-5555-4555-8555-555555555555", "General Consultation"],
+    ["midwife", "55555555-5555-4555-8555-555555555555", "Maternal Care"],
+  ])(
+    "shows the appointment-slip action for an authorized %s appointment",
+    (role, assignedStaffId, serviceType) => {
+      useAuth.mockReturnValue({
+        profile: {
+          id: "55555555-5555-4555-8555-555555555555",
+          role,
+        },
+      });
+      useAppointment.mockReturnValue({
+        data: appointment({
+          assigned_staff_id: assignedStaffId,
+          service_type: serviceType,
+        }),
+        isLoading: false,
+        isError: false,
+        refetch: vi.fn(),
+      });
+
+      renderDialog();
+
+      expect(
+        screen.getByRole("button", { name: "Print Appointment Slip" }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it("hides the appointment-slip action outside assigned clinical scope", () => {
+    useAuth.mockReturnValue({
+      profile: {
+        id: "55555555-5555-4555-8555-555555555555",
+        role: "midwife",
+      },
+    });
+    useAppointment.mockReturnValue({
+      data: appointment({
+        assigned_staff_id: "another-staff-id",
+        service_type: "General Consultation",
+      }),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderDialog();
+
+    expect(
+      screen.queryByRole("button", { name: "Print Appointment Slip" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps a missing Resident cancellation reason out of the detail layout", () => {
     useAuth.mockReturnValue({
       profile: { id: "55555555-5555-4555-8555-555555555555", role: "resident" },

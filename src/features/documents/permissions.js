@@ -26,12 +26,27 @@ export function canQueryReferral(role, encounter) {
   return canPrintConsultationSummary(role, encounter);
 }
 
-export function canPrintAppointmentSlip(appointment) {
-  return (
-    Boolean(appointment) &&
-    !appointment.archived_at &&
-    ["confirmed", "checked_in", "in_progress", "completed"].includes(
+export function canPrintAppointmentSlip(role, appointment, profileId) {
+  if (
+    !appointment ||
+    appointment.archived_at ||
+    !["confirmed", "checked_in", "in_progress", "completed"].includes(
       appointment.status,
     )
+  ) {
+    return false;
+  }
+  if (
+    role === USER_ROLES.ADMINISTRATOR ||
+    role === USER_ROLES.BARANGAY_HEALTH_WORKER ||
+    role === USER_ROLES.RESIDENT
+  ) {
+    return true;
+  }
+  if (appointment.assigned_staff_id !== profileId) return false;
+  if (role === USER_ROLES.NURSE) return true;
+  return (
+    role === USER_ROLES.MIDWIFE &&
+    ["Maternal Care", "Child Health"].includes(appointment.service_type)
   );
 }
