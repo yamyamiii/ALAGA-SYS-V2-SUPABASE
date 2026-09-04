@@ -13,6 +13,12 @@ import { PERMISSIONS } from "@/features/auth/permissions";
 import { RoleGuard } from "@/features/auth/RoleGuard";
 
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const ResidentRegistrationPage = lazy(
+  () => import("@/pages/ResidentRegistrationPage"),
+);
+const ResidentRegistrationStatusPage = lazy(
+  () => import("@/pages/ResidentRegistrationStatusPage"),
+);
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const AccessDeniedPage = lazy(() => import("@/pages/AccessDeniedPage"));
 const AccountSettingsPage = lazy(() => import("@/pages/AccountSettingsPage"));
@@ -70,6 +76,14 @@ export function AppRouter() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path={ROUTES.login} element={<LoginPage />} />
+        <Route
+          path={ROUTES.residentRegistration}
+          element={<ResidentRegistrationPage />}
+        />
+        <Route
+          path={ROUTES.registrationStatus}
+          element={<ResidentRegistrationStatusPage />}
+        />
         <Route
           path={ROUTES.configurationError}
           element={<ConfigurationErrorPage />}

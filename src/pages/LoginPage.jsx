@@ -5,10 +5,11 @@ import {
   LoaderCircle,
   LockKeyhole,
   ShieldCheck,
+  UserRoundPlus,
 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import { OfficialLogo } from "@/components/common/OfficialLogo";
@@ -20,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { ROUTES } from "@/config/routes";
 import { AuthLoadingScreen } from "@/features/auth/AuthLoadingScreen";
 import { useAuth } from "@/features/auth/authContext";
+import { AUTH_ERROR_CODES } from "@/services/authService";
 
 const loginSchema = z.object({
   email: z
@@ -71,6 +73,23 @@ export default function LoginPage() {
       await auth.signIn(values);
       navigate(safeDestination(location.state?.from), { replace: true });
     } catch (error) {
+      if (
+        [
+          AUTH_ERROR_CODES.PROFILE_PENDING,
+          AUTH_ERROR_CODES.PROFILE_REJECTED,
+        ].includes(error?.code)
+      ) {
+        navigate(ROUTES.registrationStatus, {
+          replace: true,
+          state: {
+            registrationStatus:
+              error.code === AUTH_ERROR_CODES.PROFILE_REJECTED
+                ? "rejected"
+                : "pending",
+          },
+        });
+        return;
+      }
       setAuthError(error);
     }
   }
@@ -121,7 +140,7 @@ export default function LoginPage() {
               Sign in to ALAGA-SYS
             </h2>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Use the account issued by your system administrator.
+              Sign in with your ALAGA-SYS account.
             </p>
           </div>
 
@@ -202,9 +221,15 @@ export default function LoginPage() {
             </Button>
           </form>
 
+          <Button asChild variant="outline" size="lg" className="mt-4 w-full">
+            <Link to={ROUTES.residentRegistration}>
+              <UserRoundPlus /> Create resident account
+            </Link>
+          </Button>
+
           <p className="mt-8 text-center text-xs leading-5 text-muted-foreground">
-            ALAGA-SYS does not offer public staff registration. Contact your
-            administrator if you need access.
+            Residents may create an account to access ALAGA-SYS. Staff accounts
+            are issued by the Barangay Health Center.
           </p>
         </div>
       </section>

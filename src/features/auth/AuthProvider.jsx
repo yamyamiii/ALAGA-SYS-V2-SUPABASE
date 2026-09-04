@@ -43,6 +43,17 @@ export function AuthProvider({ children }) {
       });
     } catch (error) {
       if (currentRequest !== requestId.current) return;
+      if (
+        error instanceof AuthServiceError &&
+        [
+          AUTH_ERROR_CODES.PROFILE_PENDING,
+          AUTH_ERROR_CODES.PROFILE_REJECTED,
+        ].includes(error.code)
+      ) {
+        queryClient.clear();
+        setState({ status: "unauthenticated", profile: null, error: null });
+        return;
+      }
       if (silent && error instanceof AuthServiceError && error.recoverable) {
         reportAuthDiagnostic(reason ?? "session_revalidation_deferred", error);
         setState((current) =>
