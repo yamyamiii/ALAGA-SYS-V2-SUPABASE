@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  Trash2,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -39,9 +40,16 @@ import { Input } from "@/components/ui/input";
 import { getRoleLabel, USER_ROLES } from "@/features/auth/permissions";
 import { useAuth } from "@/features/auth/authContext";
 import { AccountChangeDialog } from "@/features/user-management/AccountChangeDialog";
+import {
+  isPermanentDeleteCandidate,
+  isPermanentRetirementCandidate,
+} from "@/features/user-management/accountDeletion";
 import { ACCOUNT_STATUSES } from "@/features/user-management/schemas";
 import { UserDetailDialog } from "@/features/user-management/UserDetailDialog";
 import { UserFormDialog } from "@/features/user-management/UserFormDialog";
+import { ResidentRegistrationReview } from "@/features/user-management/ResidentRegistrationReview";
+import { PermanentDeleteAccountDialog } from "@/features/user-management/PermanentDeleteAccountDialog";
+import { PermanentRetireAccountDialog } from "@/features/user-management/PermanentRetireAccountDialog";
 import { userManagementService } from "@/services/userManagementService";
 
 const PAGE_SIZE = 10;
@@ -76,6 +84,8 @@ export default function UserManagementPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [detailUserId, setDetailUserId] = useState(null);
   const [change, setChange] = useState({ type: null, user: null });
+  const [deleteUser, setDeleteUser] = useState(null);
+  const [retireUser, setRetireUser] = useState(null);
 
   const query = useQuery({
     queryKey: ["managed-users", page, deferredSearch, role, status],
@@ -124,6 +134,19 @@ export default function UserManagementPage() {
 
   function actions(user) {
     const self = user.id === profile.id;
+    const selfRegistered = Boolean(user.registration_status);
+    const registrationAwaitingDecision = ["pending", "rejected"].includes(
+      user.registration_status,
+    );
+    const permanentDeleteCandidate = isPermanentDeleteCandidate({
+      currentUserId: profile.id,
+      currentUserRole: profile.role,
+      user,
+    });
+    const canDeletePermanently =
+      permanentDeleteCandidate && user.permanent_delete_eligible;
+    const canRetirePermanently =
+      permanentDeleteCandidate && isPermanentRetirementCandidate(user);
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -140,24 +163,43 @@ export default function UserManagementPage() {
           <DropdownMenuItem onSelect={() => setDetailUserId(user.id)}>
             <Eye /> View details
           </DropdownMenuItem>
-          {user.account_status === "invited" ? (
+          {user.account_status === "invited" && !selfRegistered ? (
             <DropdownMenuItem onSelect={() => resend(user)}>
               <MailPlus /> Resend invitation
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            disabled={self}
+            disabled={self || selfRegistered}
             onSelect={() => setChange({ type: "role", user })}
           >
             <RefreshCw /> Change role
           </DropdownMenuItem>
           <DropdownMenuItem
-            disabled={self}
+            disabled={self || registrationAwaitingDecision}
             onSelect={() => setChange({ type: "status", user })}
           >
             <ShieldAlert /> Change status
           </DropdownMenuItem>
+          {canDeletePermanently ? (
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => setDeleteUser(user)}
+            >
+              <Trash2 /> Delete account permanently
+            </DropdownMenuItem>
+          ) : canRetirePermanently ? (
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => setRetireUser(user)}
+            >
+              <ShieldAlert /> Remove account access permanently
+            </DropdownMenuItem>
+          ) : permanentDeleteCandidate ? (
+            <DropdownMenuItem disabled>
+              <ShieldAlert /> Permanent deletion unavailable
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -175,6 +217,8 @@ export default function UserManagementPage() {
           </Button>
         }
       />
+
+      <ResidentRegistrationReview />
 
       <Card>
         <CardContent className="space-y-5 p-5 sm:p-6">
@@ -273,9 +317,16 @@ export default function UserManagementPage() {
                           </Badge>
                         </td>
                         <td className="px-3 py-4">
-                          <Badge variant={statusVariant(user.account_status)}>
-                            {user.account_status}
-                          </Badge>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant={statusVariant(user.account_status)}>
+                              {user.account_status}
+                            </Badge>
+                            {user.registration_status ? (
+                              <Badge variant="outline">
+                                Registration {user.registration_status}
+                              </Badge>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-3 py-4 text-muted-foreground">
                           {displayDate(user.last_login_at)}
@@ -309,6 +360,11 @@ export default function UserManagementPage() {
                       <Badge variant={statusVariant(user.account_status)}>
                         {user.account_status}
                       </Badge>
+                      {user.registration_status ? (
+                        <Badge variant="outline">
+                          Registration {user.registration_status}
+                        </Badge>
+                      ) : null}
                     </div>
                     <p className="mt-3 text-xs text-muted-foreground">
                       Created {displayDate(user.created_at)}
@@ -375,16 +431,48 @@ export default function UserManagementPage() {
         onChanged={changed}
         onRequestRole={(user) => setChange({ type: "role", user })}
         onRequestStatus={(user) => setChange({ type: "status", user })}
+        onRequestDelete={(user) => {
+          setDetailUserId(null);
+          setDeleteUser(user);
+        }}
+        onRequestRetire={(user) => {
+          setDetailUserId(null);
+          setRetireUser(user);
+        }}
         currentUserId={profile.id}
+        currentUserRole={profile.role}
       />
       <AccountChangeDialog
         type={change.type}
         user={change.user}
+        currentUserId={profile.id}
         open={Boolean(change.type && change.user)}
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setChange({ type: null, user: null });
         }}
         onSuccess={changed}
+      />
+      <PermanentDeleteAccountDialog
+        account={deleteUser}
+        open={Boolean(deleteUser)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setDeleteUser(null);
+        }}
+        onSuccess={async () => {
+          setDeleteUser(null);
+          await changed();
+        }}
+      />
+      <PermanentRetireAccountDialog
+        account={retireUser}
+        open={Boolean(retireUser)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setRetireUser(null);
+        }}
+        onSuccess={async () => {
+          setRetireUser(null);
+          await changed();
+        }}
       />
     </div>
   );

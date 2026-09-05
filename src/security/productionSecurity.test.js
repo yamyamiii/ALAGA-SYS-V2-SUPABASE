@@ -6,7 +6,10 @@ const read = (file) => fs.readFileSync(file, "utf8");
 const migration = read(
   "supabase/migrations/20260720003400_production_security_hardening.sql",
 );
-const manageUser = read("supabase/functions/manage-user/index.ts");
+const manageUser = [
+  read("supabase/functions/manage-user/index.ts"),
+  read("supabase/functions/manage-user/cors.ts"),
+].join("\n");
 const backupAdmin = read("supabase/functions/backup-admin/index.ts");
 const backupProcessor = read("supabase/functions/process-backups/index.ts");
 const notificationProcessor = read(

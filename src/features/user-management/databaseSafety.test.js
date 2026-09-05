@@ -16,6 +16,15 @@ describe("trusted user-management migration", () => {
     expect(migration).toMatch(/before delete on public\.profiles/i);
   });
 
+  it("evaluates the final-administrator guard only when an active Administrator is removed", () => {
+    expect(migration).toMatch(
+      /removes_active_admin\s*:=\s*old\.role\s*=\s*'admin'::public\.app_role[\s\S]*old\.account_status\s*=\s*'active'::public\.account_status/i,
+    );
+    expect(migration).toMatch(
+      /if not removes_active_admin then[\s\S]*return new;/i,
+    );
+  });
+
   it("removes direct browser-admin profile mutation", () => {
     expect(migration).toMatch(
       /drop policy if exists profiles_update_admin on public\.profiles/i,

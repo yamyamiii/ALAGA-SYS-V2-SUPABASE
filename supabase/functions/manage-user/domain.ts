@@ -13,6 +13,12 @@ export const ACCOUNT_STATUSES = [
   "suspended",
 ] as const;
 
+export const RESIDENT_REGISTRATION_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+] as const;
+
 export const MANAGE_USER_ACTIONS = [
   "invite_user",
   "create_user",
@@ -27,10 +33,18 @@ export const MANAGE_USER_ACTIONS = [
   "link_resident_account",
   "unlink_resident_account",
   "invite_resident_account",
+  "list_resident_registrations",
+  "approve_resident_registration",
+  "reject_resident_registration",
+  "delete_resident_registration_account",
+  "delete_user_account",
+  "retire_user_account",
 ] as const;
 
 type UserRole = (typeof USER_ROLES)[number];
 type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+type ResidentRegistrationStatus =
+  (typeof RESIDENT_REGISTRATION_STATUSES)[number];
 type ManageUserAction = (typeof MANAGE_USER_ACTIONS)[number];
 type UnknownRecord = Record<string, unknown>;
 
@@ -130,6 +144,30 @@ function validStatus(value: unknown): AccountStatus {
     );
   }
   return value as AccountStatus;
+}
+
+function validRegistrationStatus(value: unknown): ResidentRegistrationStatus {
+  if (
+    !RESIDENT_REGISTRATION_STATUSES.includes(
+      value as ResidentRegistrationStatus,
+    )
+  ) {
+    throw new ManageUserError(
+      "invalid_registration_status",
+      "Select a supported Resident registration status.",
+    );
+  }
+  return value as ResidentRegistrationStatus;
+}
+
+function positiveInteger(value: unknown, field: string): number {
+  if (!Number.isInteger(value) || Number(value) < 1) {
+    throw new ManageUserError(
+      "validation_error",
+      `${field} must be a positive integer.`,
+    );
+  }
+  return Number(value);
 }
 
 function validUuid(value: unknown, field = "User"): string {
@@ -459,6 +497,95 @@ export function validateManageUserRequest(input: unknown): {
         },
       };
     }
+    case "list_resident_registrations": {
+      rejectUnknownKeys(
+        payload,
+        ["page", "page_size", "status"],
+        "Action payload",
+      );
+      const page = payload.page ?? 1;
+      const pageSize = payload.page_size ?? 20;
+      if (!Number.isInteger(page) || Number(page) < 1) {
+        throw new ManageUserError(
+          "validation_error",
+          "Page must be a positive integer.",
+        );
+      }
+      if (
+        !Number.isInteger(pageSize) ||
+        Number(pageSize) < 1 ||
+        Number(pageSize) > 100
+      ) {
+        throw new ManageUserError(
+          "validation_error",
+          "Page size must be between 1 and 100.",
+        );
+      }
+      return {
+        action,
+        payload: {
+          page: Number(page),
+          page_size: Number(pageSize),
+          status:
+            payload.status === undefined ||
+            payload.status === null ||
+            payload.status === ""
+              ? null
+              : validRegistrationStatus(payload.status),
+        },
+      };
+    }
+    case "approve_resident_registration":
+      rejectUnknownKeys(
+        payload,
+        ["registration_id", "resident_id", "version"],
+        "Action payload",
+      );
+      return {
+        action,
+        payload: {
+          registration_id: validUuid(payload.registration_id, "Registration"),
+          resident_id:
+            payload.resident_id === undefined ||
+            payload.resident_id === null ||
+            payload.resident_id === ""
+              ? null
+              : validUuid(payload.resident_id, "Resident"),
+          version: positiveInteger(payload.version, "Version"),
+        },
+      };
+    case "reject_resident_registration":
+      rejectUnknownKeys(
+        payload,
+        ["registration_id", "version"],
+        "Action payload",
+      );
+      return {
+        action,
+        payload: {
+          registration_id: validUuid(payload.registration_id, "Registration"),
+          version: positiveInteger(payload.version, "Version"),
+        },
+      };
+    case "delete_resident_registration_account":
+    case "delete_user_account":
+      rejectUnknownKeys(payload, ["user_id", "version"], "Action payload");
+      return {
+        action,
+        payload: {
+          user_id: validUuid(payload.user_id),
+          version:
+            payload.version === undefined || payload.version === null
+              ? null
+              : positiveInteger(payload.version, "Version"),
+        },
+      };
+    case "retire_user_account":
+      rejectUnknownKeys(payload, ["user_id"], "Action payload");
+      return {
+        action,
+        payload: { user_id: validUuid(payload.user_id) },
+      };
   }
 }
 
@@ -523,6 +650,42 @@ export function mapDatabaseError(error: unknown): ManageUserError {
       409,
     );
   }
+  if (/dependency-free accounts must use permanent deletion/i.test(message)) {
+    return new ManageUserError(
+      "account_retirement_not_required",
+      "This account has no protected history and should use permanent deletion instead.",
+      409,
+    );
+  }
+  if (
+    /Administrator accounts cannot be retired|administrators cannot retire their own account/i.test(
+      message,
+    )
+  ) {
+    return new ManageUserError(
+      "account_retirement_forbidden",
+      "Administrator accounts cannot be retired.",
+      403,
+    );
+  }
+  if (
+    /account state is not eligible for retirement|retired account state is inconsistent|account retirement state is inconsistent/i.test(
+      message,
+    )
+  ) {
+    return new ManageUserError(
+      "account_retirement_not_eligible",
+      "This account cannot be safely retired in its current state.",
+      409,
+    );
+  }
+  if (/retired account profile is immutable/i.test(message)) {
+    return new ManageUserError(
+      "account_retired",
+      "This account has been permanently retired and cannot be reactivated.",
+      409,
+    );
+  }
   if (/profile not found|Auth user profile was not created/i.test(message)) {
     return new ManageUserError(
       "profile_not_found",
@@ -535,6 +698,76 @@ export function mapDatabaseError(error: unknown): ManageUserError {
       "resident_not_found",
       "The requested resident was not found.",
       404,
+    );
+  }
+  if (
+    /possible resident match requires explicit linkage review/i.test(message)
+  ) {
+    return new ManageUserError(
+      "resident_match_requires_review",
+      "A matching Resident already exists. Review and explicitly link the correct record.",
+      409,
+    );
+  }
+  if (/registration was changed|no longer pending/i.test(message)) {
+    return new ManageUserError(
+      "registration_conflict",
+      "This registration was already reviewed or changed. Refresh the list.",
+      409,
+    );
+  }
+  if (/this Resident has existing records/i.test(message)) {
+    return new ManageUserError(
+      "resident_delete_has_dependencies",
+      "This Resident has existing records and cannot be permanently deleted. Remove account access permanently instead.",
+      409,
+    );
+  }
+  if (/Administrator accounts cannot be permanently deleted/i.test(message)) {
+    return new ManageUserError(
+      "account_delete_not_eligible",
+      "Administrator accounts cannot be permanently deleted.",
+      409,
+    );
+  }
+  if (
+    /protected records|protected dependencies|linked Resident record|must be deactivated instead/i.test(
+      message,
+    )
+  ) {
+    return new ManageUserError(
+      "account_delete_has_dependencies",
+      "This account has existing records and cannot be permanently deleted. Remove account access permanently instead.",
+      409,
+    );
+  }
+  if (
+    /permanent deletion (?:is limited to|requires)|invalid account deletion/i.test(
+      message,
+    )
+  ) {
+    return new ManageUserError(
+      "account_delete_not_eligible",
+      "This account is not eligible for permanent deletion.",
+      409,
+    );
+  }
+  if (/registration was not found/i.test(message)) {
+    return new ManageUserError(
+      "registration_not_found",
+      "The Resident registration was not found.",
+      404,
+    );
+  }
+  if (
+    /selected resident.*not active|already has a portal account|does not match/i.test(
+      message,
+    )
+  ) {
+    return new ManageUserError(
+      "resident_link_not_available",
+      "The selected Resident cannot be linked to this registration.",
+      409,
     );
   }
   if (/already linked/i.test(message)) {
@@ -581,5 +814,40 @@ export function sanitizeUser(value: unknown) {
     created_at: value.created_at ?? null,
     invitation_sent_at: value.invitation_sent_at ?? null,
     status_changed_at: value.status_changed_at ?? null,
+    registration_status: value.registration_status ?? null,
+    registration_version: value.registration_version ?? null,
+    permanent_delete_eligible: value.permanent_delete_eligible ?? false,
+    permanent_delete_kind: value.permanent_delete_kind ?? null,
+    permanent_delete_blocker: value.permanent_delete_blocker ?? null,
   };
+}
+
+export function accountDeletionBlockerMessage(
+  blocker: unknown,
+  deletionKind: unknown,
+) {
+  const subject =
+    deletionKind === "resident" ? "This Resident" : "This account";
+  switch (blocker) {
+    case "appointment_history":
+      return `${subject} has appointment history and cannot be permanently deleted. Remove account access permanently instead.`;
+    case "clinical_history":
+      return `${subject} has protected clinical history and cannot be permanently deleted. Remove account access permanently instead.`;
+    case "audit_history":
+      return `${subject} has required audit history and cannot be permanently deleted. Remove account access permanently instead.`;
+    case "inquiry_history":
+      return `${subject} has retained inquiry history and cannot be permanently deleted. Remove account access permanently instead.`;
+    case "notification_history":
+      return `${subject} has retained notification-delivery history and cannot be permanently deleted. Remove account access permanently instead.`;
+    case "household_dependency":
+      return `${subject} is still required by household history and cannot be permanently deleted. Remove account access permanently instead.`;
+    case "retained_media":
+      return `${subject} has retained profile or Resident media and cannot be permanently deleted. Remove account access permanently instead.`;
+    case "self_account":
+      return "Administrators cannot permanently delete their own account.";
+    case "administrator_account":
+      return "Administrator accounts cannot be permanently deleted.";
+    default:
+      return `${subject} has protected historical records and cannot be permanently deleted. Remove account access permanently instead.`;
+  }
 }

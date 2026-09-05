@@ -28,6 +28,7 @@ const statusLabels = {
 export function AccountChangeDialog({
   type,
   user,
+  currentUserId,
   open,
   onOpenChange,
   onSuccess,
@@ -36,6 +37,8 @@ export function AccountChangeDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const roleChange = type === "role";
+  const isSelf = Boolean(user?.id && user.id === currentUserId);
+  const isAdministratorTarget = user?.role === USER_ROLES.ADMINISTRATOR;
   const options = useMemo(
     () =>
       roleChange
@@ -82,13 +85,27 @@ export function AccountChangeDialog({
             workflow.
           </DialogDescription>
         </DialogHeader>
-        <Alert>
-          <ShieldAlert className="h-4 w-4" />
-          <AlertDescription>
-            You cannot change your own role or status, or remove the final
-            active administrator.
-          </AlertDescription>
-        </Alert>
+        {isSelf ? (
+          <Alert>
+            <ShieldAlert className="h-4 w-4" />
+            <AlertDescription>
+              You cannot change your own role or account status here.
+            </AlertDescription>
+          </Alert>
+        ) : isAdministratorTarget ? (
+          <Alert>
+            <ShieldAlert className="h-4 w-4" />
+            <AlertDescription>
+              Administrator changes are server-validated. The final active
+              administrator cannot be demoted, deactivated, or suspended.
+            </AlertDescription>
+          </Alert>
+        ) : !roleChange ? (
+          <p className="text-sm leading-6 text-muted-foreground">
+            Changing status updates this account&apos;s access. Existing records
+            and retained history are not deleted.
+          </p>
+        ) : null}
         {error ? (
           <Alert variant="destructive">
             <AlertDescription>{error.message}</AlertDescription>

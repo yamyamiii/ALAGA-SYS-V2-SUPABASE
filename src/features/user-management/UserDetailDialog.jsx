@@ -7,6 +7,7 @@ import {
   Pencil,
   RefreshCw,
   ShieldAlert,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -27,6 +28,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getRoleLabel } from "@/features/auth/permissions";
+import {
+  isPermanentDeleteCandidate,
+  isPermanentRetirementCandidate,
+  permanentDeleteRetentionMessage,
+} from "@/features/user-management/accountDeletion";
 import { profileFieldsSchema } from "@/features/user-management/schemas";
 import { useDialogDraftLifecycle } from "@/hooks/useDialogDraftLifecycle";
 import { userManagementService } from "@/services/userManagementService";
@@ -61,6 +67,9 @@ export function UserDetailDialog({
   onRequestRole,
   onRequestStatus,
   currentUserId,
+  currentUserRole,
+  onRequestDelete,
+  onRequestRetire,
 }) {
   const [editing, setEditing] = useState(false);
   const [serviceError, setServiceError] = useState(null);
@@ -150,6 +159,15 @@ export function UserDetailDialog({
 
   const user = query.data;
   const isSelf = user?.id === currentUserId;
+  const permanentDeleteCandidate = isPermanentDeleteCandidate({
+    currentUserId,
+    currentUserRole,
+    user,
+  });
+  const canDeletePermanently =
+    permanentDeleteCandidate && user?.permanent_delete_eligible;
+  const canRetirePermanently =
+    permanentDeleteCandidate && isPermanentRetirementCandidate(user);
 
   return (
     <Dialog
@@ -286,6 +304,32 @@ export function UserDetailDialog({
               </form>
             ) : null}
 
+            {!editing && permanentDeleteCandidate && !canDeletePermanently ? (
+              <Alert>
+                <ShieldAlert className="h-4 w-4" />
+                <AlertDescription className="space-y-3">
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Permanent deletion unavailable
+                    </p>
+                    <p className="mt-1">
+                      {permanentDeleteRetentionMessage(user)}
+                    </p>
+                  </div>
+                  {canRetirePermanently ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => onRequestRetire(user)}
+                    >
+                      <ShieldAlert /> Remove account access permanently
+                    </Button>
+                  ) : null}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
             {!editing ? (
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -295,7 +339,8 @@ export function UserDetailDialog({
                 >
                   <Pencil /> Edit safe profile fields
                 </Button>
-                {user.account_status === "invited" ? (
+                {user.account_status === "invited" &&
+                !user.registration_status ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -314,7 +359,7 @@ export function UserDetailDialog({
                   type="button"
                   variant="outline"
                   onClick={() => onRequestRole(user)}
-                  disabled={isSelf}
+                  disabled={isSelf || Boolean(user.registration_status)}
                 >
                   <RefreshCw /> Change role
                 </Button>
@@ -322,10 +367,23 @@ export function UserDetailDialog({
                   type="button"
                   variant="outline"
                   onClick={() => onRequestStatus(user)}
-                  disabled={isSelf}
+                  disabled={
+                    isSelf ||
+                    ["pending", "rejected"].includes(user.registration_status)
+                  }
                 >
                   <ShieldAlert /> Change status
                 </Button>
+                {canDeletePermanently ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => onRequestDelete(user)}
+                    disabled={isSelf}
+                  >
+                    <Trash2 /> Delete account permanently
+                  </Button>
+                ) : null}
               </div>
             ) : null}
 

@@ -5,6 +5,7 @@ import {
   authorizeAdministrator,
   isAllowedStatusTransition,
   mapAuthAdminError,
+  mapDatabaseError,
   sanitizeUser,
   validateManageUserRequest,
 } from "./domain.ts";
@@ -143,6 +144,11 @@ describe("manage-user trust boundary", () => {
       created_at: null,
       invitation_sent_at: null,
       status_changed_at: null,
+      registration_status: null,
+      registration_version: null,
+      permanent_delete_eligible: false,
+      permanent_delete_kind: null,
+      permanent_delete_blocker: null,
     });
   });
 
@@ -188,5 +194,106 @@ describe("manage-user trust boundary", () => {
         payload: { resident_id: targetId, delete_auth_user: true },
       }),
     ).toThrowError(expect.objectContaining({ code: "unknown_field" }));
+  });
+
+  it("validates Administrator-only Resident registration review actions", () => {
+    expect(
+      validateManageUserRequest({
+        action: "list_resident_registrations",
+        payload: { page: 1, page_size: 20, status: "pending" },
+      }),
+    ).toMatchObject({
+      payload: { page: 1, page_size: 20, status: "pending" },
+    });
+    expect(
+      validateManageUserRequest({
+        action: "approve_resident_registration",
+        payload: {
+          registration_id: targetId,
+          resident_id: null,
+          version: 1,
+        },
+      }),
+    ).toMatchObject({
+      payload: {
+        registration_id: targetId,
+        resident_id: null,
+        version: 1,
+      },
+    });
+    expect(() =>
+      validateManageUserRequest({
+        action: "approve_resident_registration",
+        payload: {
+          registration_id: targetId,
+          role: "admin",
+          version: 1,
+        },
+      }),
+    ).toThrowError(expect.objectContaining({ code: "unknown_field" }));
+    expect(() =>
+      validateManageUserRequest({
+        action: "reject_resident_registration",
+        payload: { registration_id: targetId, version: 0 },
+      }),
+    ).toThrowError(expect.objectContaining({ code: "validation_error" }));
+    expect(
+      validateManageUserRequest({
+        action: "delete_resident_registration_account",
+        payload: { user_id: targetId, version: 2 },
+      }),
+    ).toMatchObject({
+      payload: { user_id: targetId, version: 2 },
+    });
+    expect(
+      validateManageUserRequest({
+        action: "delete_resident_registration_account",
+        payload: { user_id: targetId, version: null },
+      }),
+    ).toMatchObject({
+      payload: { user_id: targetId, version: null },
+    });
+    expect(
+      validateManageUserRequest({
+        action: "delete_user_account",
+        payload: { user_id: targetId, version: null },
+      }),
+    ).toMatchObject({
+      action: "delete_user_account",
+      payload: { user_id: targetId, version: null },
+    });
+    expect(() =>
+      validateManageUserRequest({
+        action: "delete_resident_registration_account",
+        payload: { user_id: targetId, version: 2, force: true },
+      }),
+    ).toThrowError(expect.objectContaining({ code: "unknown_field" }));
+  });
+
+  it("maps permanent deletion dependency failures to a safe deactivation message", () => {
+    expect(
+      mapDatabaseError({
+        code: "23503",
+        message:
+          "this account has protected records and cannot be permanently deleted",
+      }),
+    ).toMatchObject({
+      code: "account_delete_has_dependencies",
+      status: 409,
+      message:
+        "This account has existing records and cannot be permanently deleted. Remove account access permanently instead.",
+    });
+    expect(
+      mapDatabaseError({
+        code: "23503",
+        message:
+          "this Resident has existing records and cannot be permanently deleted",
+      }),
+    ).toMatchObject({
+      code: "resident_delete_has_dependencies",
+      status: 409,
+      message:
+        "This Resident has existing records and cannot be permanently deleted. Remove account access permanently instead.",
+    });
   });
 });

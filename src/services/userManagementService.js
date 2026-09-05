@@ -49,6 +49,13 @@ export function createUserManagementService(
     return data.data;
   }
 
+  function deleteAccountPermanently(userId, version) {
+    return invoke("delete_user_account", {
+      user_id: userId,
+      version: version ?? null,
+    });
+  }
+
   return {
     listUsers(filters) {
       return invoke("list_users", filters);
@@ -107,6 +114,33 @@ export function createUserManagementService(
         resident_id: residentId,
         ...values,
       }).then((result) => result.account);
+    },
+    listResidentRegistrations(filters = {}) {
+      return invoke("list_resident_registrations", {
+        page: filters.page ?? 1,
+        page_size: filters.page_size ?? 20,
+        status: filters.status ?? "pending",
+      });
+    },
+    approveResidentRegistration(registrationId, version, residentId = null) {
+      return invoke("approve_resident_registration", {
+        registration_id: registrationId,
+        resident_id: residentId,
+        version,
+      });
+    },
+    rejectResidentRegistration(registrationId, version) {
+      return invoke("reject_resident_registration", {
+        registration_id: registrationId,
+        version,
+      });
+    },
+    deleteAccountPermanently,
+    retireAccountPermanently(userId) {
+      return invoke("retire_user_account", { user_id: userId });
+    },
+    deleteResidentRegistrationAccount(userId, version) {
+      return deleteAccountPermanently(userId, version);
     },
   };
 }
