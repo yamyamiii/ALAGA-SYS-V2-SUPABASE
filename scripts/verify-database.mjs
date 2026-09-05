@@ -48,6 +48,9 @@ const expectedMigrations = [
   "20260720004100_optional_authorized_cancellation_reason.sql",
   "20260720004200_simplify_appointment_completion.sql",
   "20260720004300_cleanup_archived_announcement_notifications.sql",
+  "20260720004400_resident_self_registration.sql",
+  "20260720004500_fix_resident_registration_approval.sql",
+  "20260720005600_enforce_appointment_start_slots.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -229,7 +232,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly forty-three expected migrations exist in lexical order",
+  "Exactly forty-six expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({

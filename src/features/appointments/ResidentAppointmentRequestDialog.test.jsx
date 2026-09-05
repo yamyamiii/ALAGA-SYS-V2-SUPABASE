@@ -33,7 +33,28 @@ describe("ResidentAppointmentRequestDialog", () => {
 
     expect(screen.getByLabelText("Service")).toBeInTheDocument();
     expect(screen.getByLabelText("Preferred date")).toBeInTheDocument();
-    expect(screen.getByLabelText("Preferred start time")).toBeInTheDocument();
+    const startTime = screen.getByLabelText("Preferred start time");
+    expect(startTime).toBeInstanceOf(HTMLSelectElement);
+    expect(Array.from(startTime.options, (option) => option.value)).toEqual([
+      "08:00",
+      "08:30",
+      "09:00",
+      "09:30",
+      "10:00",
+      "10:30",
+      "11:00",
+      "11:30",
+      "12:00",
+      "12:30",
+      "13:00",
+      "13:30",
+      "14:00",
+      "14:30",
+      "15:00",
+      "15:30",
+      "16:00",
+    ]);
+    expect(startTime).not.toHaveAttribute("type", "time");
     expect(
       screen.queryByLabelText("Preferred end time"),
     ).not.toBeInTheDocument();
@@ -43,6 +64,7 @@ describe("ResidentAppointmentRequestDialog", () => {
     expect(
       screen.getByText(/provisional 30-minute duration/i),
     ).toBeInTheDocument();
+    expect(screen.getByText(/8:00 AM through 4:00 PM/i)).toBeInTheDocument();
     expect(screen.queryByText("Resident", { selector: "label" })).toBeNull();
     expect(screen.queryByText(/assigned staff/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/priority/i)).not.toBeInTheDocument();

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AppointmentStartTimeSelect } from "@/features/appointments/AppointmentStartTimeSelect";
 import { SERVICE_TYPES } from "@/features/appointments/constants";
 import { useAppointmentMutation } from "@/features/appointments/hooks";
 import { residentAppointmentRequestSchema } from "@/features/appointments/schemas";
@@ -134,12 +135,15 @@ export function ResidentAppointmentRequestDialog({
               <Label htmlFor="resident-request-start">
                 Preferred start time
               </Label>
-              <Input
+              <AppointmentStartTimeSelect
                 id="resident-request-start"
-                type="time"
                 disabled={mutation.isPending}
                 {...register("start_time")}
               />
+              <p className="text-xs text-muted-foreground">
+                Available every 30 minutes from 8:00 AM through 4:00 PM,
+                Asia/Manila.
+              </p>
               <FieldError error={errors.start_time} />
             </div>
           </div>

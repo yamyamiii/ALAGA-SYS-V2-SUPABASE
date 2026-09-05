@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  APPOINTMENT_START_TIME_OPTIONS,
+  APPOINTMENT_START_TIMES,
   APPOINTMENT_STATUSES,
   INITIAL_APPOINTMENT_FILTERS,
+  nextAppointmentStartTime,
   SERVICE_TYPES,
 } from "@/features/appointments/constants";
 import { buildAppointmentListParameters } from "@/services/appointmentService";
@@ -40,6 +43,63 @@ describe("appointment foundations", () => {
     expect(SERVICE_TYPES).toContain("Maternal Care");
     expect(SERVICE_TYPES).toContain("Other");
     expect(SERVICE_TYPES).toHaveLength(8);
+  });
+
+  it("defines every 30-minute start slot from 8:00 AM through 4:00 PM", () => {
+    expect(APPOINTMENT_START_TIMES).toHaveLength(17);
+    expect(APPOINTMENT_START_TIME_OPTIONS.at(0)).toEqual({
+      value: "08:00",
+      label: "8:00 AM",
+    });
+    expect(APPOINTMENT_START_TIME_OPTIONS).toContainEqual({
+      value: "12:30",
+      label: "12:30 PM",
+    });
+    expect(APPOINTMENT_START_TIME_OPTIONS.at(-1)).toEqual({
+      value: "16:00",
+      label: "4:00 PM",
+    });
+    expect(nextAppointmentStartTime("07:45")).toBe("08:00");
+    expect(nextAppointmentStartTime("09:01")).toBe("09:30");
+    expect(nextAppointmentStartTime("16:45")).toBe("16:00");
+  });
+
+  it.each([
+    ["minimum", "08:00", true],
+    ["intermediate", "11:30", true],
+    ["maximum", "16:00", true],
+    ["before opening", "07:30", false],
+    ["after final slot", "16:30", false],
+    ["off interval", "08:15", false],
+  ])("validates the %s appointment start time", (_, startTime, valid) => {
+    const staffAppointment = {
+      resident_id: "22222222-2222-4222-8222-222222222222",
+      appointment_type: "scheduled",
+      service_type: "General Consultation",
+      scheduled_date: "2026-08-01",
+      start_time: startTime,
+      end_time: "16:30",
+      priority: "normal",
+      assigned_staff_id: "",
+      reason: "Routine visit",
+    };
+    const residentRequest = {
+      service_type: "General Consultation",
+      scheduled_date: "2026-08-01",
+      start_time: startTime,
+      reason: "",
+    };
+    const reschedule = {
+      scheduled_date: "2026-08-01",
+      start_time: startTime,
+      end_time: "16:30",
+    };
+
+    expect(appointmentSchema.safeParse(staffAppointment).success).toBe(valid);
+    expect(
+      residentAppointmentRequestSchema.safeParse(residentRequest).success,
+    ).toBe(valid);
+    expect(rescheduleSchema.safeParse(reschedule).success).toBe(valid);
   });
 
   it("validates time order and requires reasons outside walk-ins", () => {

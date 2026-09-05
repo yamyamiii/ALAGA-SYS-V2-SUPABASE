@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AppointmentStartTimeSelect } from "@/features/appointments/AppointmentStartTimeSelect";
 import {
   ACTION_LABELS,
   ACTION_TARGET_STATUS,
@@ -222,11 +223,14 @@ export function AppointmentActionDialog({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="reschedule-start">Start</Label>
-                  <Input
+                  <AppointmentStartTimeSelect
                     id="reschedule-start"
-                    type="time"
                     {...register("start_time")}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    8:00 AM–4:00 PM, Asia/Manila.
+                  </p>
+                  <FieldError error={errors.start_time} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="reschedule-end">End</Label>

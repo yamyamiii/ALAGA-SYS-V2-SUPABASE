@@ -86,6 +86,14 @@ describe("AppointmentFormDialog Resident-request editing", () => {
     );
 
     expect(screen.getByLabelText("Reason (optional)")).toHaveValue("");
+    const startTime = screen.getByLabelText("Start time");
+    expect(startTime).toBeInstanceOf(HTMLSelectElement);
+    expect(Array.from(startTime.options, (option) => option.value)).toEqual(
+      expect.arrayContaining(["08:00", "11:30", "16:00"]),
+    );
+    expect(Array.from(startTime.options, (option) => option.value)).not.toEqual(
+      expect.arrayContaining(["07:30", "16:30"]),
+    );
     expect(
       screen.queryByLabelText(/operational notes/i),
     ).not.toBeInTheDocument();

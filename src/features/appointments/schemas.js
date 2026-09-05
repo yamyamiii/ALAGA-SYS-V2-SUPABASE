@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   APPOINTMENT_PRIORITIES,
+  APPOINTMENT_START_TIMES,
   APPOINTMENT_TYPES,
   SERVICE_TYPES,
 } from "@/features/appointments/constants";
@@ -16,13 +17,16 @@ const dateValue = z
 const timeValue = z
   .string()
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid time.");
+const appointmentStartTimeValue = z.enum(APPOINTMENT_START_TIMES, {
+  error: "Select a start time from 8:00 AM through 4:00 PM.",
+});
 
 const appointmentFieldsSchema = z.object({
   resident_id: z.string().uuid("Select an active resident."),
   appointment_type: z.enum(APPOINTMENT_TYPES),
   service_type: z.enum(SERVICE_TYPES, { error: "Select a service." }),
   scheduled_date: dateValue,
-  start_time: timeValue,
+  start_time: appointmentStartTimeValue,
   end_time: timeValue,
   priority: z.enum(APPOINTMENT_PRIORITIES),
   assigned_staff_id: optionalUuid,
@@ -78,7 +82,7 @@ export const rejectionSchema = z.object({
 export const residentAppointmentRequestSchema = z.object({
   service_type: z.enum(SERVICE_TYPES, { error: "Select a service." }),
   scheduled_date: dateValue,
-  start_time: timeValue,
+  start_time: appointmentStartTimeValue,
   reason: z
     .string()
     .trim()
@@ -88,7 +92,7 @@ export const residentAppointmentRequestSchema = z.object({
 export const rescheduleSchema = z
   .object({
     scheduled_date: dateValue,
-    start_time: timeValue,
+    start_time: appointmentStartTimeValue,
     end_time: timeValue,
   })
   .refine((values) => values.end_time > values.start_time, {

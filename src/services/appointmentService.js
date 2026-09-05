@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
+  isAppointmentStartTime,
   STAFF_SEARCH_DEFAULT_PAGE_SIZE,
   STAFF_SEARCH_MAX_PAGE_SIZE,
 } from "@/features/appointments/constants";
@@ -95,7 +96,9 @@ function mapError(error, fallback) {
     });
   }
   if (
-    /past|current Manila date|start time must be in the future/i.test(message)
+    /past|current Manila date|start time must be in the future|appointment start time must be a 30-minute slot/i.test(
+      message,
+    )
   ) {
     return new AppointmentServiceError("invalid_schedule_time", message, {
       cause: error,
@@ -137,6 +140,15 @@ function ensureOnline() {
     throw new AppointmentServiceError(
       "offline",
       "You are offline. Reconnect before accessing appointments.",
+    );
+  }
+}
+
+function ensureAppointmentStartTime(value) {
+  if (!isAppointmentStartTime(value)) {
+    throw new AppointmentServiceError(
+      "invalid_schedule_time",
+      "Select a start time from 8:00 AM through 4:00 PM in 30-minute intervals.",
     );
   }
 }
@@ -458,6 +470,7 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
     },
 
     async createAppointment(values, requestKey = crypto.randomUUID()) {
+      ensureAppointmentStartTime(values.start_time);
       const data = await rpc(
         client(),
         "appointment_create",
@@ -480,6 +493,7 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
     },
 
     async requestResidentAppointment(values, requestKey = crypto.randomUUID()) {
+      ensureAppointmentStartTime(values.start_time);
       const data = await rpc(
         client(),
         "resident_appointment_request",
@@ -510,6 +524,7 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
     },
 
     async updateAppointment(appointment, values) {
+      ensureAppointmentStartTime(values.start_time);
       const data = await rpc(
         client(),
         "appointment_update_schedule",
@@ -562,6 +577,7 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
     },
 
     async reschedule(appointment, values, requestKey = crypto.randomUUID()) {
+      ensureAppointmentStartTime(values.start_time);
       const data = await rpc(
         client(),
         "appointment_reschedule",

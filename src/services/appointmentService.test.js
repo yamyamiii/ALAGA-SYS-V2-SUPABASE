@@ -347,6 +347,55 @@ describe("appointment service", () => {
     expect(payload).not.toHaveProperty("p_end_time");
   });
 
+  it.each(["07:30", "08:15", "16:30"])(
+    "rejects a manipulated Resident start time of %s before the RPC",
+    async (startTime) => {
+      const client = rpcClient({ data: [], error: null });
+      const service = createAppointmentService(() => client);
+
+      await expect(
+        service.requestResidentAppointment(
+          {
+            service_type: "General Consultation",
+            scheduled_date: "2026-08-01",
+            start_time: startTime,
+            reason: "Routine visit",
+          },
+          requestKey,
+        ),
+      ).rejects.toEqual(
+        expect.objectContaining({ code: "invalid_schedule_time" }),
+      );
+      expect(client.rpc).not.toHaveBeenCalled();
+    },
+  );
+
+  it("maps the authoritative database slot guard to a schedule error", async () => {
+    const client = rpcClient({
+      data: null,
+      error: {
+        code: "22007",
+        message:
+          "appointment start time must be a 30-minute slot between 08:00 and 16:00 Asia/Manila",
+      },
+    });
+    const service = createAppointmentService(() => client);
+
+    await expect(
+      service.requestResidentAppointment(
+        {
+          service_type: "General Consultation",
+          scheduled_date: "2026-08-01",
+          start_time: "08:00",
+          reason: "Routine visit",
+        },
+        requestKey,
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining({ code: "invalid_schedule_time" }),
+    );
+  });
+
   it("keeps unlinked residents blocked with health-center guidance", async () => {
     const client = rpcClient({
       data: null,

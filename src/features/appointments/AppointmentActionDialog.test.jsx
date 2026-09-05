@@ -245,6 +245,14 @@ describe("AppointmentActionDialog cancellation accountability", () => {
     expect(
       screen.queryByText("Assigned staff (optional)"),
     ).not.toBeInTheDocument();
+    const startTime = screen.getByLabelText("Start");
+    expect(startTime).toBeInstanceOf(HTMLSelectElement);
+    expect(Array.from(startTime.options, (option) => option.value).at(0)).toBe(
+      "08:00",
+    );
+    expect(Array.from(startTime.options, (option) => option.value).at(-1)).toBe(
+      "16:00",
+    );
     await capturedMutation({
       scheduled_date: "2026-08-20",
       start_time: "09:00",

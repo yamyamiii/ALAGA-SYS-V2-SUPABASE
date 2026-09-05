@@ -16,10 +16,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AppointmentStartTimeSelect } from "@/features/appointments/AppointmentStartTimeSelect";
 import {
   APPOINTMENT_PRIORITIES,
   APPOINTMENT_TYPE_LABELS,
   APPOINTMENT_TYPES,
+  nextAppointmentStartTime,
   PRIORITY_LABELS,
   SERVICE_TYPES,
 } from "@/features/appointments/constants";
@@ -48,6 +50,7 @@ function FieldError({ error }) {
 function defaults(walkIn = false) {
   const now = new Date();
   const currentTime = manilaTimeKey(now);
+  const startTime = walkIn ? nextAppointmentStartTime(currentTime) : "08:00";
   return {
     resident_id: "",
     appointment_type: walkIn ? "walk_in" : "scheduled",
@@ -55,8 +58,8 @@ function defaults(walkIn = false) {
     scheduled_date: walkIn
       ? manilaDateKey(now)
       : addDaysToDateKey(manilaDateKey(now), 1),
-    start_time: walkIn ? currentTime : "08:00",
-    end_time: walkIn ? addMinutesToTime(currentTime, 30) : "08:30",
+    start_time: startTime,
+    end_time: addMinutesToTime(startTime, 30),
     priority: "normal",
     assigned_staff_id: "",
     reason: "",
@@ -244,11 +247,13 @@ export function AppointmentFormDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="appointment-start">Start time</Label>
-              <Input
+              <AppointmentStartTimeSelect
                 id="appointment-start"
-                type="time"
                 {...register("start_time")}
               />
+              <p className="text-xs text-muted-foreground">
+                30-minute start slots, 8:00 AM–4:00 PM.
+              </p>
               <FieldError error={errors.start_time} />
             </div>
             <div className="space-y-2">
