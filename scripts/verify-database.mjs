@@ -50,6 +50,16 @@ const expectedMigrations = [
   "20260720004300_cleanup_archived_announcement_notifications.sql",
   "20260720004400_resident_self_registration.sql",
   "20260720004500_fix_resident_registration_approval.sql",
+  "20260720004600_guard_resident_account_deletion.sql",
+  "20260720004700_extend_safe_resident_account_deletion.sql",
+  "20260720004800_fix_resident_delete_ambiguity.sql",
+  "20260720004900_generalize_safe_account_deletion.sql",
+  "20260720005000_fix_resident_household_unassignment.sql",
+  "20260720005100_archive_sole_member_household.sql",
+  "20260720005200_fix_account_cleanup_eligibility.sql",
+  "20260720005300_retire_protected_accounts.sql",
+  "20260720005400_resident_registration_notification_type.sql",
+  "20260720005500_notify_pending_resident_registration.sql",
   "20260720005600_enforce_appointment_start_slots.sql",
 ];
 const completedMigrationHashes = {
@@ -111,6 +121,22 @@ const completedMigrationHashes = {
     "252cb4306ec04fafcdd3cc3774c8f44563a882c61f561da1ad5ae60bc0dc676b",
   "20260720002900_ai_assistant_rate_limit.sql":
     "f0045e8159826e46fa2b7eab65a0a2a1692e40c4f6fc4aed2991971fcb46655a",
+  "20260720004400_resident_self_registration.sql":
+    "9344ca9d60c27ae861e90bc294b2c60761e745e096b699e77aef3f588b08b88b",
+  "20260720004500_fix_resident_registration_approval.sql":
+    "a5aa30184191b65c253347ebd4f0a8d19bfc67b457590e93fea4dad6196600fb",
+  "20260720004600_guard_resident_account_deletion.sql":
+    "625ee0cd5b74867a15db0e8a68d808a3763f16a0109113d42fce491928e1664e",
+  "20260720004700_extend_safe_resident_account_deletion.sql":
+    "b3e9c8ad0fe0cc63c1a49a80657a9a62e09c3b6dbe49e9e10d7bd6b3d707025a",
+  "20260720004800_fix_resident_delete_ambiguity.sql":
+    "0b57d56d527f9a9e835b01c63d4f0e57835c0155b1efd67d5095f5de60b5a0b5",
+  "20260720004900_generalize_safe_account_deletion.sql":
+    "b88104ac700ae8610f338d9402d292f0c7131c38a87e44db8e7a5547f588c9d9",
+  "20260720005000_fix_resident_household_unassignment.sql":
+    "3147a7c263b20b0264fca2f55abc085dcb2a05c444b35d856f078f611c1f4ce9",
+  "20260720005100_archive_sole_member_household.sql":
+    "5e8fb7d62655fb1ffb563c318bfb27e82114f3a234c3f1987e9e91e573f73406",
 };
 const reviewedPendingMigrationHashes = {
   "20260720003000_ai_grounding_context.sql":
@@ -137,8 +163,13 @@ const reviewedPendingMigrationHashes = {
     "041dd1fd15ae302e5f899dd94bb6ddb6329f991d67551917486483ba79b3e8bd",
   "20260720004100_optional_authorized_cancellation_reason.sql":
     "15ad5784562fc387cfe1c60f00c616e9ad2b8585e5a2fca3597365130cde39e0",
+  "20260720004200_simplify_appointment_completion.sql":
+    "cbedfb8940d720b278bb548248fbdfe9740c8c6420c056ff074f2506e934a448",
+  "20260720004300_cleanup_archived_announcement_notifications.sql":
+    "503aaa16bdc1f13ce6a3c503c674741a2abf8beeda2b1db6786e28e874f22346",
 };
 const expectedTables = [
+  "account_retirements",
   "admin_action_rate_limits",
   "ai_request_rate_limits",
   "announcements",
@@ -168,9 +199,11 @@ const expectedTables = [
   "outbound_notification_jobs",
   "profiles",
   "puroks",
+  "resident_account_deletion_staging",
   "resident_allergies",
   "resident_inquiries",
   "resident_medical_history",
+  "resident_registration_requests",
   "residents",
   "restore_jobs",
   "vital_signs",
@@ -232,7 +265,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly forty-six expected migrations exist in lexical order",
+  "Exactly fifty-six expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -243,6 +276,42 @@ const allSql = migrationEntries.map(({ sql }) => sql).join("\n");
 const securityHardeningMigration =
   migrationEntries.find(({ file }) =>
     file.includes("production_security_hardening"),
+  )?.sql ?? "";
+const residentApprovalCorrection =
+  migrationEntries.find(({ file }) =>
+    file.includes("fix_resident_registration_approval"),
+  )?.sql ?? "";
+const residentAccountDeletionGuard =
+  migrationEntries.find(({ file }) =>
+    file.includes("guard_resident_account_deletion"),
+  )?.sql ?? "";
+const residentAccountDeletionExtension =
+  migrationEntries.find(({ file }) =>
+    file.includes("extend_safe_resident_account_deletion"),
+  )?.sql ?? "";
+const residentAccountDeletionAmbiguityFix =
+  migrationEntries.find(({ file }) =>
+    file.includes("fix_resident_delete_ambiguity"),
+  )?.sql ?? "";
+const generalizedAccountDeletion =
+  migrationEntries.find(({ file }) =>
+    file.includes("generalize_safe_account_deletion"),
+  )?.sql ?? "";
+const accountCleanupEligibility =
+  migrationEntries.find(({ file }) =>
+    file.includes("fix_account_cleanup_eligibility"),
+  )?.sql ?? "";
+const protectedAccountRetirement =
+  migrationEntries.find(({ file }) =>
+    file.includes("retire_protected_accounts"),
+  )?.sql ?? "";
+const residentRegistrationNotificationType =
+  migrationEntries.find(({ file }) =>
+    file.includes("resident_registration_notification_type"),
+  )?.sql ?? "";
+const residentRegistrationNotification =
+  migrationEntries.find(({ file }) =>
+    file.includes("notify_pending_resident_registration"),
   )?.sql ?? "";
 
 check(
@@ -288,6 +357,344 @@ check(
       securityHardeningMigration,
     ),
   "Function volatility matches read-only reports and context-setting admin lookups",
+);
+check(
+  /admin_approve_resident_registration[\s\S]*assert_active_administrator\(p_actor_id\)[\s\S]*set_config\('app\.trusted_resident_linking', 'on', true\)[\s\S]*(?:update|insert into) public\.residents/i.test(
+    residentApprovalCorrection,
+  ),
+  "Resident registration approval enables trusted linking after Administrator validation",
+);
+check(
+  /request_record\.version <> p_expected_version/i.test(
+    residentApprovalCorrection,
+  ) &&
+    /possible resident match requires explicit linkage review/i.test(
+      residentApprovalCorrection,
+    ),
+  "Resident registration approval preserves concurrency and duplicate review",
+);
+check(
+  /revoke all on function public\.admin_approve_resident_registration[\s\S]*from public, anon, authenticated/i.test(
+    residentApprovalCorrection,
+  ) &&
+    /grant execute on function public\.admin_approve_resident_registration[\s\S]*to service_role/i.test(
+      residentApprovalCorrection,
+    ) &&
+    !/grant execute on function public\.admin_approve_resident_registration[\s\S]*to authenticated/i.test(
+      residentApprovalCorrection,
+    ),
+  "Resident registration approval remains service-role-only",
+);
+check(
+  /admin_prepare_resident_account_deletion[\s\S]*assert_active_administrator\(p_actor_id\)[\s\S]*registration_record\.status not in \([\s\S]*'pending'[\s\S]*'rejected'/i.test(
+    residentAccountDeletionGuard,
+  ) &&
+    /where resident\.linked_profile_id = p_target_profile_id[\s\S]*cannot be permanently deleted/i.test(
+      residentAccountDeletionGuard,
+    ),
+  "Permanent account deletion is limited to unlinked pending or rejected self-registrations",
+);
+check(
+  /pg_catalog\.pg_constraint[\s\S]*resident_account_delete_protected_dependencies/i.test(
+    residentAccountDeletionGuard,
+  ) &&
+    !/delete from public\.(appointments|health_encounters|residents|audit_logs|clinical_referrals)/i.test(
+      residentAccountDeletionGuard,
+    ),
+  "Permanent account deletion fails closed on protected dependencies",
+);
+check(
+  /revoke all on function public\.admin_prepare_resident_account_deletion[\s\S]*from public, anon, authenticated/i.test(
+    residentAccountDeletionGuard,
+  ) &&
+    /grant execute on function public\.admin_prepare_resident_account_deletion[\s\S]*to service_role/i.test(
+      residentAccountDeletionGuard,
+    ) &&
+    !/grant execute on function public\.admin_prepare_resident_account_deletion[\s\S]*to authenticated/i.test(
+      residentAccountDeletionGuard,
+    ),
+  "Permanent account deletion remains Administrator-validated and service-role-only",
+);
+check(
+  /create table public\.resident_account_deletion_staging[\s\S]*enable row level security[\s\S]*revoke all on table public\.resident_account_deletion_staging[\s\S]*from public, anon, authenticated, service_role/i.test(
+    residentAccountDeletionExtension,
+  ),
+  "Resident deletion compensation snapshots remain browser- and service-role-inaccessible",
+);
+check(
+  /resident_account_deletion_blocker[\s\S]*pg_catalog\.pg_constraint[\s\S]*foreign_key\.confrelid = 'public\.profiles'::pg_catalog\.regclass[\s\S]*foreign_key\.confrelid = 'public\.residents'::pg_catalog\.regclass/i.test(
+    residentAccountDeletionExtension,
+  ) &&
+    /unknown_profile_reference[\s\S]*unknown_resident_reference/i.test(
+      residentAccountDeletionExtension,
+    ),
+  "Linked Resident deletion checks current and future profile/Resident dependencies",
+);
+check(
+  /admin_prepare_resident_account_deletion[\s\S]*registration_record\.status not in \([\s\S]*'pending'[\s\S]*'rejected'[\s\S]*'approved'[\s\S]*set account_status = 'suspended'[\s\S]*delete from public\.resident_registration_requests[\s\S]*delete from public\.residents/i.test(
+    residentAccountDeletionExtension,
+  ),
+  "Dependency-free pending, rejected, approved, and active Resident accounts use an atomic prepare boundary",
+);
+check(
+  /admin_restore_resident_account_deletion[\s\S]*app\.trusted_resident_account_restore[\s\S]*insert into public\.residents[\s\S]*insert into public\.resident_registration_requests[\s\S]*insert into public\.notification_preferences[\s\S]*staged_record\.previous_account_status/i.test(
+    residentAccountDeletionExtension,
+  ),
+  "Auth deletion failure restores staged Resident identity and disposable state",
+);
+check(
+  !/delete from public\.(appointments|health_encounters|vital_signs|resident_allergies|resident_medical_history|clinical_referrals|resident_inquiries|outbound_notification_jobs|audit_logs)/i.test(
+    residentAccountDeletionExtension,
+  ) &&
+    /grant execute on function public\.admin_resident_account_deletion_eligibility[\s\S]*to service_role/i.test(
+      residentAccountDeletionExtension,
+    ) &&
+    !/grant (delete|all) on (table )?public\.(residents|profiles)[\s\S]*to authenticated/i.test(
+      residentAccountDeletionExtension,
+    ),
+  "Resident account deletion preserves protected history and grants no browser mutation capability",
+);
+check(
+  /returns table \(\s*profile_id uuid,\s*registration_id uuid,\s*previous_account_status public\.account_status\s*\)/i.test(
+    residentAccountDeletionAmbiguityFix,
+  ) &&
+    /delete from public\.notification_preferences as preferences_to_delete\s*where preferences_to_delete\.profile_id = target_profile\.id/i.test(
+      residentAccountDeletionAmbiguityFix,
+    ) &&
+    /delete from public\.resident_registration_requests as registration_to_delete\s*where registration_to_delete\.profile_id = target_profile\.id/i.test(
+      residentAccountDeletionAmbiguityFix,
+    ) &&
+    !/where\s+(profile_id|registration_id|previous_account_status)\s*[=<>]/i.test(
+      residentAccountDeletionAmbiguityFix,
+    ),
+  "Resident deletion predicates cannot collide with PL/pgSQL OUT parameters",
+);
+check(
+  /create or replace function public\.admin_restore_resident_account_deletion[\s\S]*update public\.profiles as profile_to_restore[\s\S]*where profile_to_restore\.id = p_target_profile_id[\s\S]*delete from public\.resident_account_deletion_staging as staging_to_delete[\s\S]*where staging_to_delete\.profile_id = p_target_profile_id/i.test(
+    residentAccountDeletionAmbiguityFix,
+  ),
+  "Resident deletion compensation uses qualified target predicates",
+);
+check(
+  /admin_prepare_resident_account_deletion[\s\S]*assert_active_administrator\(p_actor_id\)[\s\S]*for update[\s\S]*resident_account_deletion_blocker[\s\S]*account\.permanent_delete_prepared/i.test(
+    residentAccountDeletionAmbiguityFix,
+  ) &&
+    /revoke all on function public\.admin_prepare_resident_account_deletion[\s\S]*from public, anon, authenticated, service_role[\s\S]*grant execute on function public\.admin_prepare_resident_account_deletion[\s\S]*to service_role/i.test(
+      residentAccountDeletionAmbiguityFix,
+    ) &&
+    !/grant execute on function public\.admin_(prepare|restore)_resident_account_deletion[\s\S]*to authenticated/i.test(
+      residentAccountDeletionAmbiguityFix,
+    ),
+  "Migration 48 preserves deletion guards and service-role-only execution",
+);
+check(
+  /admin_prepare_account_deletion[\s\S]*assert_active_administrator\(p_actor_id\)[\s\S]*'resident'::public\.app_role[\s\S]*'barangay_health_worker'::public\.app_role[\s\S]*'nurse'::public\.app_role[\s\S]*'midwife'::public\.app_role/i.test(
+    generalizedAccountDeletion,
+  ) &&
+    /Administrator accounts cannot be permanently deleted/i.test(
+      generalizedAccountDeletion,
+    ) &&
+    /if p_target_profile_id = p_actor_id[\s\S]*errcode = '42501'/i.test(
+      generalizedAccountDeletion,
+    ),
+  "General account deletion supports only non-Administrator targets and preserves self-delete protection",
+);
+check(
+  /admin_prepare_account_deletion[\s\S]*for update[\s\S]*resident_account_deletion_blocker[\s\S]*account\.permanent_delete_prepared/i.test(
+    generalizedAccountDeletion,
+  ) &&
+    /admin_restore_account_deletion[\s\S]*account\.permanent_delete_restored/i.test(
+      generalizedAccountDeletion,
+    ),
+  "General account deletion locks, checks, stages, audits, and compensates safely",
+);
+check(
+  !/delete from public\.(appointments|health_encounters|vital_signs|resident_allergies|resident_medical_history|clinical_referrals|resident_inquiries|outbound_notification_jobs|audit_logs|announcements)/i.test(
+    generalizedAccountDeletion,
+  ) &&
+    /delete from public\.notification_preferences as preferences_to_delete/i.test(
+      generalizedAccountDeletion,
+    ) &&
+    /if has_resident then\s*delete from public\.residents as resident_to_delete/i.test(
+      generalizedAccountDeletion,
+    ),
+  "General account deletion removes only staged Resident identity and disposable account state",
+);
+check(
+  /revoke all on function public\.admin_account_deletion_eligibility[\s\S]*from public, anon, authenticated, service_role/i.test(
+    generalizedAccountDeletion,
+  ) &&
+    /revoke all on function public\.admin_prepare_account_deletion[\s\S]*from public, anon, authenticated, service_role/i.test(
+      generalizedAccountDeletion,
+    ) &&
+    /revoke all on function public\.admin_restore_account_deletion[\s\S]*from public, anon, authenticated, service_role/i.test(
+      generalizedAccountDeletion,
+    ) &&
+    /grant execute on function public\.admin_account_deletion_eligibility[\s\S]*to service_role/i.test(
+      generalizedAccountDeletion,
+    ) &&
+    /grant execute on function public\.admin_prepare_account_deletion[\s\S]*to service_role/i.test(
+      generalizedAccountDeletion,
+    ) &&
+    /grant execute on function public\.admin_restore_account_deletion[\s\S]*to service_role/i.test(
+      generalizedAccountDeletion,
+    ) &&
+    !/grant execute on function public\.admin_(account_deletion_eligibility|prepare_account_deletion|restore_account_deletion)[\s\S]*to authenticated/i.test(
+      generalizedAccountDeletion,
+    ),
+  "General account deletion RPCs remain service-role-only",
+);
+check(
+  /where profile_to_suspend\.id = target_profile\.id/i.test(
+    generalizedAccountDeletion,
+  ) &&
+    /where preferences_to_delete\.profile_id = target_profile\.id/i.test(
+      generalizedAccountDeletion,
+    ) &&
+    /where registration_to_delete\.profile_id = target_profile\.id/i.test(
+      generalizedAccountDeletion,
+    ) &&
+    /where resident_to_delete\.id = resident_record\.id/i.test(
+      generalizedAccountDeletion,
+    ) &&
+    !/where\s+(profile_id|registration_id|previous_account_status|resident_id|status|version|id)\s*[=<>]/i.test(
+      generalizedAccountDeletion,
+    ),
+  "Migration 49 qualifies deletion predicates against PL/pgSQL and OUT names",
+);
+check(
+  /resident_account_deletion_blocker[\s\S]*'active'::public\.resident_status[\s\S]*'inactive'::public\.resident_status[\s\S]*'archived'::public\.resident_status[\s\S]*resident_protected_lifecycle/i.test(
+    accountCleanupEligibility,
+  ) && !/return 'resident_archived'/i.test(accountCleanupEligibility),
+  "Archived Resident identity alone does not block dependency-safe account cleanup",
+);
+check(
+  /admin_account_deletion_assessment[\s\S]*assert_active_administrator\(p_actor_id\)[\s\S]*resident_account_deletion_blocker[\s\S]*appointment_history[\s\S]*clinical_history[\s\S]*audit_history/i.test(
+    accountCleanupEligibility,
+  ) &&
+    /revoke all on function public\.admin_account_deletion_assessment[\s\S]*from public, anon, authenticated, service_role[\s\S]*grant execute on function public\.admin_account_deletion_assessment[\s\S]*to service_role/i.test(
+      accountCleanupEligibility,
+    ) &&
+    !/grant execute on function public\.admin_account_deletion_assessment[\s\S]*to authenticated/i.test(
+      accountCleanupEligibility,
+    ),
+  "Account cleanup assessment returns only service-role-scoped non-sensitive blocker categories",
+);
+const retirementDeclarationAudit = auditPlpgsqlIntoTargets(
+  protectedAccountRetirement,
+);
+check(
+  retirementDeclarationAudit.functionCount === 6 &&
+    retirementDeclarationAudit.undeclared.length === 0,
+  "Every account-retirement PL/pgSQL SELECT INTO target is declared",
+);
+check(
+  /add column retired_at timestamptz/i.test(protectedAccountRetirement) &&
+    /create table public\.account_retirements/i.test(
+      protectedAccountRetirement,
+    ) &&
+    /account_status = 'inactive'::public\.account_status/i.test(
+      protectedAccountRetirement,
+    ) &&
+    !/delete from public\.(?:profiles|residents|appointments|health_encounters|audit_logs)/i.test(
+      protectedAccountRetirement,
+    ),
+  "Protected-history retirement retains profile and operational records",
+);
+check(
+  /admin_prepare_account_retirement[\s\S]*assert_active_administrator\(p_actor_id\)[\s\S]*p_target_profile_id = p_actor_id[\s\S]*Administrator accounts cannot be retired/i.test(
+    protectedAccountRetirement,
+  ) &&
+    /deletion_assessment\.eligible[\s\S]*dependency-free accounts must use permanent deletion/i.test(
+      protectedAccountRetirement,
+    ) &&
+    /appointment_history[\s\S]*clinical_history[\s\S]*audit_history/i.test(
+      protectedAccountRetirement,
+    ),
+  "Account retirement is Administrator-only and requires protected history",
+);
+check(
+  /protect_retired_profile_lifecycle[\s\S]*retired account profile is immutable/i.test(
+    protectedAccountRetirement,
+  ) &&
+    /app\.trusted_account_retirement_restore/i.test(
+      protectedAccountRetirement,
+    ) &&
+    /profile\.retired_at is null/i.test(protectedAccountRetirement),
+  "Retired identities cannot reactivate and are excluded from normal management",
+);
+check(
+  /revoke all on table public\.account_retirements[\s\S]*public, anon, authenticated, service_role/i.test(
+    protectedAccountRetirement,
+  ) &&
+    /revoke all on function public\.admin_prepare_account_retirement[\s\S]*public, anon, authenticated, service_role/i.test(
+      protectedAccountRetirement,
+    ) &&
+    /grant execute on function public\.admin_prepare_account_retirement[\s\S]*to service_role/i.test(
+      protectedAccountRetirement,
+    ) &&
+    !/grant execute on function public\.admin_(?:prepare|restore)_account_retirement[^;]*to authenticated/i.test(
+      protectedAccountRetirement,
+    ),
+  "Account retirement state and RPCs remain service-role-only",
+);
+check(
+  /alter type public\.assistance_notification_type[\s\S]*add value if not exists 'resident_registration_pending'/i.test(
+    residentRegistrationNotificationType,
+  ) &&
+    !/assistance_notifications|create trigger/i.test(
+      residentRegistrationNotificationType,
+    ),
+  "Resident registration notification enum commits before later use",
+);
+const registrationNotificationDeclarationAudit = auditPlpgsqlIntoTargets(
+  residentRegistrationNotification,
+);
+check(
+  registrationNotificationDeclarationAudit.functionCount === 3 &&
+    registrationNotificationDeclarationAudit.undeclared.length === 0,
+  "Every registration-notification PL/pgSQL SELECT INTO target is declared",
+);
+check(
+  /registration\.status = 'pending'::public\.resident_registration_status[\s\S]*auth_user\.email_confirmed_at is not null/i.test(
+    residentRegistrationNotification,
+  ) &&
+    /after insert on public\.resident_registration_requests/i.test(
+      residentRegistrationNotification,
+    ) &&
+    /after update of email_confirmed_at on auth\.users/i.test(
+      residentRegistrationNotification,
+    ),
+  "Only confirmed pending Resident registrations become actionable notifications",
+);
+check(
+  /from public\.profiles as administrator[\s\S]*administrator\.role = 'admin'::public\.app_role[\s\S]*administrator\.account_status = 'active'::public\.account_status/i.test(
+    residentRegistrationNotification,
+  ) &&
+    /on conflict \(recipient_profile_id, dedup_key\) do nothing/i.test(
+      residentRegistrationNotification,
+    ),
+  "Every active Administrator receives one deduplicated registration notification",
+);
+check(
+  /'resident_registration',[\s\S]*p_registration_id,[\s\S]*'\/user-management'/i.test(
+    residentRegistrationNotification,
+  ) &&
+    !/registration\.(?:first_name|middle_name|last_name|date_of_birth|phone_number|address_line)/i.test(
+      residentRegistrationNotification,
+    ),
+  "Registration notifications use trusted navigation metadata without private applicant fields",
+);
+check(
+  (
+    residentRegistrationNotification.match(
+      /revoke all on function public\.resident_registration_notify_[\s\S]*?from public, anon, authenticated, service_role/gi,
+    ) ?? []
+  ).length === 3 &&
+    !/grant\s+(?:insert|update|delete|all)\s+on\s+(?:table\s+)?public\.assistance_notifications[^;]*authenticated/i.test(
+      residentRegistrationNotification,
+    ),
+  "Registration notification creation remains unavailable to browser roles",
 );
 
 for (const [file, expectedHash] of Object.entries(completedMigrationHashes)) {
@@ -489,7 +896,13 @@ check(
 check(
   /registry_search_households/i.test(allSql) &&
     /security\s+invoker/i.test(allSql) &&
-    /h\.archived_at is null/i.test(allSql),
+    /h\.archived_at is null/i.test(allSql) &&
+    /from public\.registry_get_deployment_context\(\) as deployment_context/i.test(
+      allSql,
+    ) &&
+    !/grant execute on function public\.deployment_barangay_id\(\)\s+to authenticated/i.test(
+      allSql,
+    ),
   "Household picker search is paginated, current-only, and RLS-preserving",
 );
 check(
@@ -504,6 +917,21 @@ check(
     /admin_link_resident_profile[\s\S]*to service_role/i.test(allSql) &&
     !/admin_link_resident_profile[^;]*to authenticated/i.test(allSql),
   "Resident profile linking is restricted to the trusted service-role workflow",
+);
+check(
+  /registry_archive_sole_member_household[\s\S]*security definer[\s\S]*administrator\.role = 'admin'[\s\S]*administrator\.account_status = 'active'/i.test(
+    allSql,
+  ) &&
+    /lock table public\.households, public\.residents[\s\S]*share row exclusive/i.test(
+      allSql,
+    ) &&
+    /v_active_member_count <> 1[\s\S]*explicit replacement head/i.test(
+      allSql,
+    ) &&
+    /head_resident_id = null[\s\S]*household_id = null[\s\S]*status = 'archived'/i.test(
+      allSql,
+    ),
+  "Sole-member household archive is Administrator-only, serialized, and atomic",
 );
 check(
   /revoke insert, update on table public\.appointments from authenticated/i.test(
