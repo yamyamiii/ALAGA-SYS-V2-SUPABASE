@@ -47,6 +47,23 @@ function residentDetailClient(result) {
   };
 }
 
+function residentUpdateClient(result) {
+  const single = vi.fn().mockResolvedValue(result);
+  const select = vi.fn(() => ({ single }));
+  const eq = vi.fn(() => ({ select }));
+  const update = vi.fn(() => ({ eq }));
+  const from = vi.fn(() => ({ update }));
+
+  return {
+    client: { from },
+    from,
+    update,
+    eq,
+    select,
+    single,
+  };
+}
+
 describe("registry service", () => {
   it("builds bounded server pagination parameters", () => {
     expect(
@@ -210,6 +227,9 @@ describe("registry service", () => {
         "household:households!residents_household_matches_location",
       ),
     );
+    expect(detail.select).toHaveBeenCalledWith(
+      expect.stringContaining("head_resident_id"),
+    );
     expect(detail.eq).toHaveBeenCalledWith("id", residentId);
     expect(detail.maybeSingle).toHaveBeenCalledOnce();
   });
@@ -322,6 +342,261 @@ describe("registry service", () => {
       p_offset: 10,
     });
     expect(result).toMatchObject({ total: 31, page: 2 });
+  });
+
+  it("removes only the resident household relationship", async () => {
+    const updateClient = residentUpdateClient({
+      data: { id: residentId, household_id: null },
+      error: null,
+    });
+    const service = createRegistryService(() => updateClient.client);
+
+    await expect(
+      service.removeResidentFromHousehold(residentId),
+    ).resolves.toEqual({ id: residentId, household_id: null });
+    expect(updateClient.from).toHaveBeenCalledWith("residents");
+    expect(updateClient.update).toHaveBeenCalledWith({ household_id: null });
+    expect(updateClient.eq).toHaveBeenCalledWith("id", residentId);
+  });
+
+  it("maps household-head protection to an actionable error", async () => {
+    const updateClient = residentUpdateClient({
+      data: null,
+      error: {
+        code: "P0001",
+        message:
+          "reassign the household head before moving or archiving this resident",
+      },
+    });
+    const service = createRegistryService(() => updateClient.client);
+
+    await expect(
+      service.removeResidentFromHousehold(residentId),
+    ).rejects.toMatchObject({
+      code: "household_head_conflict",
+      message:
+        "This Resident is the household head. Assign a new household head or resolve the household first.",
+    });
+  });
+
+  it("atomically reassigns only the expected current household head", async () => {
+    const householdId = "11111111-1111-4111-8111-111111111111";
+    const replacementId = "44444444-4444-4444-8444-444444444444";
+    const builder = {
+      update: vi.fn(),
+      eq: vi.fn(),
+      is: vi.fn(),
+      select: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { id: householdId, head_resident_id: replacementId },
+        error: null,
+      }),
+    };
+    builder.update.mockReturnValue(builder);
+    builder.eq.mockReturnValue(builder);
+    builder.is.mockReturnValue(builder);
+    builder.select.mockReturnValue(builder);
+    const from = vi.fn(() => builder);
+    const service = createRegistryService(() => ({ from }));
+
+    await expect(
+      service.reassignHouseholdHead(householdId, residentId, replacementId),
+    ).resolves.toEqual({
+      id: householdId,
+      head_resident_id: replacementId,
+    });
+    expect(from).toHaveBeenCalledWith("households");
+    expect(builder.update).toHaveBeenCalledWith({
+      head_resident_id: replacementId,
+    });
+    expect(builder.eq).toHaveBeenNthCalledWith(1, "id", householdId);
+    expect(builder.eq).toHaveBeenNthCalledWith(
+      2,
+      "head_resident_id",
+      residentId,
+    );
+  });
+
+  it("fails safely when a concurrent change replaces the household head", async () => {
+    const builder = {
+      update: vi.fn(),
+      eq: vi.fn(),
+      is: vi.fn(),
+      select: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    };
+    builder.update.mockReturnValue(builder);
+    builder.eq.mockReturnValue(builder);
+    builder.is.mockReturnValue(builder);
+    builder.select.mockReturnValue(builder);
+    const service = createRegistryService(() => ({
+      from: vi.fn(() => builder),
+    }));
+
+    await expect(
+      service.reassignHouseholdHead(
+        "11111111-1111-4111-8111-111111111111",
+        residentId,
+        "44444444-4444-4444-8444-444444444444",
+      ),
+    ).rejects.toMatchObject({
+      code: "household_changed",
+      message:
+        "The household changed while you were editing it. Refresh and try again.",
+    });
+  });
+
+  it("maps invalid household-head candidates without exposing database details", async () => {
+    const builder = {
+      update: vi.fn(),
+      eq: vi.fn(),
+      is: vi.fn(),
+      select: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: null,
+        error: {
+          code: "P0001",
+          message: "household head must be an active member of the household",
+        },
+      }),
+    };
+    builder.update.mockReturnValue(builder);
+    builder.eq.mockReturnValue(builder);
+    builder.is.mockReturnValue(builder);
+    builder.select.mockReturnValue(builder);
+    const service = createRegistryService(() => ({
+      from: vi.fn(() => builder),
+    }));
+
+    await expect(
+      service.reassignHouseholdHead(
+        "11111111-1111-4111-8111-111111111111",
+        residentId,
+        "55555555-5555-4555-8555-555555555555",
+      ),
+    ).rejects.toMatchObject({
+      code: "invalid_household_head_candidate",
+      message:
+        "Select an active Resident from this household as the new household head.",
+    });
+  });
+
+  it("maps denied household-head writes to the household-specific safe message", async () => {
+    const builder = {
+      update: vi.fn(),
+      eq: vi.fn(),
+      is: vi.fn(),
+      select: vi.fn(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: "42501", message: "permission denied for households" },
+      }),
+    };
+    builder.update.mockReturnValue(builder);
+    builder.eq.mockReturnValue(builder);
+    builder.is.mockReturnValue(builder);
+    builder.select.mockReturnValue(builder);
+    const service = createRegistryService(() => ({
+      from: vi.fn(() => builder),
+    }));
+
+    await expect(
+      service.reassignHouseholdHead(
+        "11111111-1111-4111-8111-111111111111",
+        residentId,
+        "55555555-5555-4555-8555-555555555555",
+      ),
+    ).rejects.toMatchObject({
+      code: "permission_denied",
+      message: "You do not have permission to manage this household.",
+    });
+  });
+
+  it("calls the trusted sole-member archive RPC with optimistic timestamps", async () => {
+    const householdId = "11111111-1111-4111-8111-111111111111";
+    const residentUpdatedAt = "2026-08-21T01:00:00.000Z";
+    const householdUpdatedAt = "2026-08-21T01:01:00.000Z";
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        resident_id: residentId,
+        resident_status: "archived",
+        household_id: householdId,
+        household_status: "archived",
+      },
+      error: null,
+    });
+    const rpc = vi.fn(() => ({ single }));
+    const service = createRegistryService(() => ({ rpc }));
+
+    await expect(
+      service.archiveSoleMemberHousehold({
+        residentId,
+        householdId,
+        residentUpdatedAt,
+        householdUpdatedAt,
+      }),
+    ).resolves.toMatchObject({
+      resident_status: "archived",
+      household_status: "archived",
+    });
+    expect(rpc).toHaveBeenCalledWith("registry_archive_sole_member_household", {
+      p_resident_id: residentId,
+      p_household_id: householdId,
+      p_expected_resident_updated_at: residentUpdatedAt,
+      p_expected_household_updated_at: householdUpdatedAt,
+    });
+  });
+
+  it("keeps the replacement-head requirement for multi-member households", async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: "P0001",
+        message:
+          "another active household member requires an explicit replacement head",
+      },
+    });
+    const service = createRegistryService(() => ({
+      rpc: vi.fn(() => ({ single })),
+    }));
+
+    await expect(
+      service.archiveSoleMemberHousehold({
+        residentId,
+        householdId: "11111111-1111-4111-8111-111111111111",
+        residentUpdatedAt: "2026-08-21T01:00:00.000Z",
+        householdUpdatedAt: "2026-08-21T01:01:00.000Z",
+      }),
+    ).rejects.toMatchObject({
+      code: "replacement_household_head_required",
+      message:
+        "Select another active household member as the new household head before archiving this Resident.",
+    });
+  });
+
+  it("maps unauthorized sole-member archive attempts safely", async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: "42501",
+        message: "active administrator permission is required",
+      },
+    });
+    const service = createRegistryService(() => ({
+      rpc: vi.fn(() => ({ single })),
+    }));
+
+    await expect(
+      service.archiveSoleMemberHousehold({
+        residentId,
+        householdId: "11111111-1111-4111-8111-111111111111",
+        residentUpdatedAt: "2026-08-21T01:00:00.000Z",
+        householdUpdatedAt: "2026-08-21T01:01:00.000Z",
+      }),
+    ).rejects.toMatchObject({
+      code: "permission_denied",
+      message: "You do not have permission to archive this household.",
+    });
   });
 
   it("passes normalized identity inputs to the RLS-safe duplicate RPC", async () => {

@@ -35,6 +35,10 @@ const registryService = fs.readFileSync(
   "src/services/registryService.js",
   "utf8",
 );
+const residentHeadDialog = fs.readFileSync(
+  "src/features/registry/ResidentHouseholdHeadDialog.jsx",
+  "utf8",
+);
 
 describe("registry UI boundaries", () => {
   it.each([
@@ -123,5 +127,24 @@ describe("registry UI boundaries", () => {
     expect(residentForm).toMatch(/Possible duplicate resident found/);
     expect(residentForm).toMatch(/Save anyway and record override/);
     expect(residentForm).toMatch(/duplicateMatchCount/);
+  });
+
+  it("provides an explicit household-head resolution path before archive", () => {
+    expect(residentPage).toMatch(/ResidentHouseholdHeadDialog/);
+    expect(residentPage).toMatch(/continueToArchive/);
+    expect(residentHeadDialog).toMatch(/New household head/);
+    expect(residentHeadDialog).toMatch(/member\.household_id === householdId/);
+    expect(residentHeadDialog).toMatch(/member\.status === "active"/);
+    expect(householdDetail).toMatch(/member\.status === "active"/);
+    expect(householdDetail).toMatch(/reassignHouseholdHead/);
+    expect(residentHeadDialog).not.toMatch(/setHouseholdHead\([^,]+,\s*""\)/);
+  });
+
+  it("keeps sole-member household archival explicit and Administrator-scoped", () => {
+    expect(residentPage).toMatch(/canArchiveSoleHousehold=\{canRestore\}/);
+    expect(residentHeadDialog).toMatch(/Archive Resident and Household/);
+    expect(residentHeadDialog).toMatch(/archiveSoleMemberHousehold/);
+    expect(residentHeadDialog).toMatch(/continueToArchive/);
+    expect(residentHeadDialog).not.toMatch(/delete\s*\(/i);
   });
 });

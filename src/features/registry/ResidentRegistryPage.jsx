@@ -32,6 +32,7 @@ import { ResidentDetailDialog } from "@/features/registry/ResidentDetailDialog";
 import { ResidentAccountDialog } from "@/features/registry/ResidentAccountDialog";
 import { ResidentFormDialog } from "@/features/registry/ResidentFormDialog";
 import { ResidentHouseholdDialog } from "@/features/registry/ResidentHouseholdDialog";
+import { ResidentHouseholdHeadDialog } from "@/features/registry/ResidentHouseholdHeadDialog";
 import { useDebouncedValue } from "@/features/registry/useDebouncedValue";
 import { registryService } from "@/services/registryService";
 
@@ -59,6 +60,10 @@ export default function ResidentRegistryPage() {
   const [form, setForm] = useState({ open: false, record: null });
   const [detailId, setDetailId] = useState(null);
   const [householdRecord, setHouseholdRecord] = useState(null);
+  const [headResolution, setHeadResolution] = useState({
+    record: null,
+    continueToArchive: false,
+  });
   const [accountRecord, setAccountRecord] = useState(null);
   const [action, setAction] = useState({ record: null, restoring: false });
   const statusMutation = useRegistryMutation(({ id, status }) =>
@@ -72,6 +77,41 @@ export default function ResidentRegistryPage() {
   function clearFilters() {
     setSearch("");
     setFilters({ ...initialResidentFilters });
+  }
+
+  function requestStatusChange(record, restoring) {
+    const isHouseholdHead =
+      Boolean(record.household_id) &&
+      record.household?.head_resident_id === record.id;
+    if (!restoring && isHouseholdHead) {
+      setHeadResolution({ record, continueToArchive: true });
+      return;
+    }
+    setAction({ record, restoring });
+  }
+
+  function resolveHeadConflict() {
+    const record = action.record;
+    statusMutation.reset();
+    setAction({ record: null, restoring: false });
+    setHeadResolution({ record, continueToArchive: true });
+  }
+
+  function finishHeadResolution({ newHeadId }) {
+    const resolved = headResolution;
+    setHeadResolution({ record: null, continueToArchive: false });
+    if (resolved.continueToArchive && resolved.record) {
+      setAction({
+        record: {
+          ...resolved.record,
+          household: {
+            ...resolved.record.household,
+            head_resident_id: newHeadId,
+          },
+        },
+        restoring: false,
+      });
+    }
   }
 
   async function confirmStatus() {
@@ -407,8 +447,11 @@ export default function ResidentRegistryPage() {
         canRestore={canRestore}
         canLinkAccount={canLinkAccount}
         onEdit={(record) => setForm({ open: true, record })}
-        onArchive={(record, restoring) => setAction({ record, restoring })}
+        onArchive={requestStatusChange}
         onHousehold={setHouseholdRecord}
+        onChangeHouseholdHead={(record) =>
+          setHeadResolution({ record, continueToArchive: false })
+        }
         onAccount={setAccountRecord}
       />
       <ResidentAccountDialog
@@ -425,6 +468,22 @@ export default function ResidentRegistryPage() {
         }}
         resident={householdRecord}
         onSaved={() => setHouseholdRecord(null)}
+      />
+      <ResidentHouseholdHeadDialog
+        open={Boolean(headResolution.record)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHeadResolution({ record: null, continueToArchive: false });
+          }
+        }}
+        resident={headResolution.record}
+        continueToArchive={headResolution.continueToArchive}
+        canArchiveSoleHousehold={canRestore}
+        onResolved={finishHeadResolution}
+        onSoleArchived={() => {
+          setHeadResolution({ record: null, continueToArchive: false });
+          setDetailId(null);
+        }}
       />
       <RegistryActionDialog
         open={Boolean(action.record)}
@@ -443,6 +502,16 @@ export default function ResidentRegistryPage() {
         restoring={action.restoring}
         pending={statusMutation.isPending}
         error={statusMutation.error}
+        errorActionLabel={
+          statusMutation.error?.code === "household_head_conflict"
+            ? "Change household head"
+            : undefined
+        }
+        onErrorAction={
+          statusMutation.error?.code === "household_head_conflict"
+            ? resolveHeadConflict
+            : undefined
+        }
         onConfirm={confirmStatus}
       />
       <div className="flex items-start gap-2 rounded-xl border bg-card p-4 text-xs text-muted-foreground">

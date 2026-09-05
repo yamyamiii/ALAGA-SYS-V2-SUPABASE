@@ -30,6 +30,14 @@ const referenceReconciliation = fs.readFileSync(
   "supabase/migrations/20260720001700_reconcile_bagongpook_reference.sql",
   "utf8",
 );
+const householdUnassignmentFix = fs.readFileSync(
+  "supabase/migrations/20260720005000_fix_resident_household_unassignment.sql",
+  "utf8",
+);
+const soleMemberHouseholdArchive = fs.readFileSync(
+  "supabase/migrations/20260720005100_archive_sole_member_household.sql",
+  "utf8",
+);
 const deterministicPurokIds = Array.from(
   { length: 8 },
   (_, index) =>
@@ -233,6 +241,24 @@ describe("registry database safety", () => {
     expect(hardening).toMatch(/resident\.duplicate_override/i);
   });
 
+  it("repairs household search without exposing the private deployment resolver", () => {
+    expect(householdUnassignmentFix).toMatch(
+      /registry_search_households[\s\S]*security invoker/i,
+    );
+    expect(householdUnassignmentFix).toMatch(
+      /from public\.registry_get_deployment_context\(\) as deployment_context/i,
+    );
+    expect(householdUnassignmentFix).not.toMatch(
+      /grant execute on function public\.deployment_barangay_id\(\)[\s\S]*authenticated/i,
+    );
+    expect(householdUnassignmentFix).toMatch(
+      /h\.archived_at is null[\s\S]*h\.status <> 'archived'/i,
+    );
+    expect(householdUnassignmentFix).toMatch(
+      /grant execute on function public\.registry_search_households[\s\S]*to authenticated, service_role/i,
+    );
+  });
+
   it("requires the trusted administrator workflow for account linking", () => {
     expect(residentSchema).toMatch(
       /constraint residents_linked_profile_unique unique \(linked_profile_id\)/i,
@@ -263,5 +289,64 @@ describe("registry database safety", () => {
       /household head must be an active member of the household/i,
     );
     expect(hardening).not.toMatch(/delete\s+from\s+public\.residents/i);
+  });
+
+  it("keeps household-head reassignment under existing Admin/BHW RLS", () => {
+    expect(policies).toMatch(
+      /households_update_admin[\s\S]*using \(public\.is_admin\(\)\)[\s\S]*with check \(public\.is_admin\(\)\)/i,
+    );
+    expect(policies).toMatch(
+      /households_update_bhw_active[\s\S]*current_profile_role\(\) = 'barangay_health_worker'[\s\S]*archived_at is null/i,
+    );
+    expect(workflow).toMatch(
+      /head_resident_id[\s\S]*r\.household_id = new\.id[\s\S]*r\.archived_at is null/i,
+    );
+    expect(hardening).toMatch(
+      /new\.head_resident_id[\s\S]*r\.household_id = new\.id[\s\S]*r\.status = 'active'/i,
+    );
+    expect(policies).not.toMatch(/households_update_(nurse|midwife|resident)/i);
+  });
+
+  it("archives a sole-member household and Resident in one guarded Administrator transaction", () => {
+    expect(soleMemberHouseholdArchive).toMatch(
+      /registry_archive_sole_member_household[\s\S]*security definer[\s\S]*set search_path = ''/i,
+    );
+    expect(soleMemberHouseholdArchive).toMatch(
+      /administrator\.role = 'admin'[\s\S]*administrator\.account_status = 'active'[\s\S]*for share[\s\S]*errcode = '42501'/i,
+    );
+    expect(soleMemberHouseholdArchive).toMatch(
+      /lock table public\.households, public\.residents[\s\S]*share row exclusive/i,
+    );
+    expect(soleMemberHouseholdArchive).toMatch(
+      /count\(\*\)[\s\S]*member\.household_id = p_household_id[\s\S]*member\.status = 'active'/i,
+    );
+    expect(soleMemberHouseholdArchive).toMatch(
+      /v_active_member_count <> 1[\s\S]*explicit replacement head/i,
+    );
+    expect(soleMemberHouseholdArchive).toMatch(
+      /update public\.households[\s\S]*head_resident_id = null[\s\S]*status = 'archived'[\s\S]*update public\.residents[\s\S]*household_id = null[\s\S]*status = 'archived'/i,
+    );
+    expect(soleMemberHouseholdArchive).toMatch(
+      /updated_at = p_expected_household_updated_at[\s\S]*updated_at = p_expected_resident_updated_at/i,
+    );
+    expect(soleMemberHouseholdArchive).toMatch(
+      /remaining_member\.household_id = p_household_id[\s\S]*remaining_member\.status = 'active'/i,
+    );
+    expect(soleMemberHouseholdArchive).not.toMatch(
+      /delete\s+from\s+public\.(households|residents|profiles)/i,
+    );
+  });
+
+  it("grants sole-member resolution only through the self-authorizing RPC", () => {
+    expect(soleMemberHouseholdArchive).toMatch(
+      /revoke all on function public\.registry_archive_sole_member_household[\s\S]*from public, anon/i,
+    );
+    expect(soleMemberHouseholdArchive).toMatch(
+      /grant execute on function public\.registry_archive_sole_member_household[\s\S]*to authenticated/i,
+    );
+    expect(soleMemberHouseholdArchive).not.toMatch(
+      /current_profile_role\(\).*barangay_health_worker/i,
+    );
+    expect(soleMemberHouseholdArchive).not.toMatch(/service[_-]?role/i);
   });
 });

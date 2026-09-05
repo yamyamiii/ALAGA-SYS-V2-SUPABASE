@@ -64,6 +64,35 @@ function pick(values, fields) {
 
 function mapError(error, fallback) {
   const message = error?.message ?? "";
+  if (/active administrator permission is required/i.test(message)) {
+    return new RegistryServiceError(
+      "permission_denied",
+      "You do not have permission to archive this household.",
+      { cause: error },
+    );
+  }
+  if (
+    /another active household member requires an explicit replacement head/i.test(
+      message,
+    )
+  ) {
+    return new RegistryServiceError(
+      "replacement_household_head_required",
+      "Select another active household member as the new household head before archiving this Resident.",
+      { cause: error },
+    );
+  }
+  if (
+    /resident changed while|household changed while|no longer the household head/i.test(
+      message,
+    )
+  ) {
+    return new RegistryServiceError(
+      "household_changed",
+      "The household changed while you were editing it. Refresh and try again.",
+      { cause: error },
+    );
+  }
   if (/Brgy\. Bagongpook|deployment context|deployment purok/i.test(message)) {
     return new RegistryServiceError(
       "deployment_context_invalid",
@@ -79,10 +108,21 @@ function mapError(error, fallback) {
       { cause: error },
     );
   }
+  if (
+    /household head must be (?:an active|a current) member|households_head_is_member/i.test(
+      message,
+    )
+  ) {
+    return new RegistryServiceError(
+      "invalid_household_head_candidate",
+      "Select an active Resident from this household as the new household head.",
+      { cause: error },
+    );
+  }
   if (/household head|head before moving|head before.*archiv/i.test(message)) {
     return new RegistryServiceError(
       "household_head_conflict",
-      "Assign a different household head before moving or archiving this resident.",
+      "This Resident is the household head. Assign a new household head or resolve the household first.",
       { cause: error },
     );
   }
@@ -372,7 +412,7 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       const { data, error } = await client()
         .from("residents")
         .select(
-          "id, resident_number, first_name, middle_name, last_name, suffix, date_of_birth, sex, status, archived_at",
+          "id, resident_number, first_name, middle_name, last_name, suffix, date_of_birth, sex, household_id, status, archived_at",
         )
         .eq("household_id", id)
         .is("archived_at", null)
@@ -395,7 +435,7 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       const { data, error } = await client()
         .from("residents")
         .select(
-          "id, resident_number, linked_profile_id, household_id, barangay_id, purok_id, first_name, middle_name, last_name, suffix, date_of_birth, sex, civil_status, blood_type, nationality, religion, phone_number, email, occupation, address_line, philhealth_number, emergency_contact_name, emergency_contact_number, emergency_contact_relationship, is_senior_citizen, is_pwd, pregnancy_status, status, photo_path, created_by, updated_by, created_at, updated_at, archived_at, barangay:barangays(id,name,city_or_municipality,province), purok:puroks(id,name,code), household:households!residents_household_matches_location(id,household_number,address_line,status)",
+          "id, resident_number, linked_profile_id, household_id, barangay_id, purok_id, first_name, middle_name, last_name, suffix, date_of_birth, sex, civil_status, blood_type, nationality, religion, phone_number, email, occupation, address_line, philhealth_number, emergency_contact_name, emergency_contact_number, emergency_contact_relationship, is_senior_citizen, is_pwd, pregnancy_status, status, photo_path, created_by, updated_by, created_at, updated_at, archived_at, barangay:barangays(id,name,city_or_municipality,province), purok:puroks(id,name,code), household:households!residents_household_matches_location(id,household_number,address_line,status,head_resident_id,updated_at,archived_at)",
         )
         .eq("id", id)
         .maybeSingle();
@@ -590,6 +630,60 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
           .select("id, head_resident_id")
           .single(),
         "The household head could not be changed.",
+      );
+    },
+
+    async reassignHouseholdHead(id, currentHeadId, residentId) {
+      let query = client()
+        .from("households")
+        .update({ head_resident_id: residentId })
+        .eq("id", id);
+      query = currentHeadId
+        ? query.eq("head_resident_id", currentHeadId)
+        : query.is("head_resident_id", null);
+
+      const { data, error } = await query
+        .select("id, head_resident_id")
+        .maybeSingle();
+      if (error) {
+        const mapped = mapError(
+          error,
+          "The household head could not be changed.",
+        );
+        if (mapped.code === "permission_denied") {
+          throw new RegistryServiceError(
+            "permission_denied",
+            "You do not have permission to manage this household.",
+            { cause: error },
+          );
+        }
+        throw mapped;
+      }
+      if (!data) {
+        throw new RegistryServiceError(
+          "household_changed",
+          "The household changed while you were editing it. Refresh and try again.",
+        );
+      }
+      return data;
+    },
+
+    archiveSoleMemberHousehold({
+      residentId,
+      householdId,
+      residentUpdatedAt,
+      householdUpdatedAt,
+    }) {
+      return singleResult(
+        client()
+          .rpc("registry_archive_sole_member_household", {
+            p_resident_id: residentId,
+            p_household_id: householdId,
+            p_expected_resident_updated_at: residentUpdatedAt,
+            p_expected_household_updated_at: householdUpdatedAt,
+          })
+          .single(),
+        "The Resident and household could not be archived.",
       );
     },
 

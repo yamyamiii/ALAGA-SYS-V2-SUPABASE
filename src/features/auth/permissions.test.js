@@ -47,6 +47,15 @@ describe("role permissions", () => {
       true,
     );
     expect(
+      hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.MANAGE_RESIDENTS),
+    ).toBe(false);
+    expect(
+      hasPermission(USER_ROLES.MIDWIFE, PERMISSIONS.MANAGE_HOUSEHOLDS),
+    ).toBe(false);
+    expect(hasPermission(USER_ROLES.NURSE, PERMISSIONS.MANAGE_HOUSEHOLDS)).toBe(
+      false,
+    );
+    expect(
       hasPermission(
         USER_ROLES.BARANGAY_HEALTH_WORKER,
         PERMISSIONS.RESTORE_ARCHIVED_REGISTRY,
@@ -90,6 +99,9 @@ describe("role permissions", () => {
     ).toBe(false);
     expect(
       hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.MANAGE_RESIDENTS),
+    ).toBe(false);
+    expect(
+      hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.MANAGE_HOUSEHOLDS),
     ).toBe(false);
     expect(hasPermission(USER_ROLES.RESIDENT, PERMISSIONS.VIEW_RESIDENTS)).toBe(
       false,

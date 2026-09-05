@@ -1,4 +1,4 @@
-import { LoaderCircle, UsersRound } from "lucide-react";
+import { Home, LoaderCircle, Search, UsersRound, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -25,6 +25,7 @@ export function ResidentHouseholdDialog({
   onSaved,
 }) {
   const [selectedHousehold, setSelectedHousehold] = useState(null);
+  const [assignmentMode, setAssignmentMode] = useState("none");
   const mutation = useRegistryMutation(async (household) => {
     if (!household) {
       return registryService.removeResidentFromHousehold(resident.id);
@@ -36,7 +37,7 @@ export function ResidentHouseholdDialog({
     open,
     draftKey: resident?.id ?? "none",
     resetDraft: () => {
-      setSelectedHousehold(
+      const currentHousehold =
         resident?.household_id && resident?.household
           ? {
               ...resident.household,
@@ -44,11 +45,23 @@ export function ResidentHouseholdDialog({
               barangay_id: resident.barangay_id,
               purok_id: resident.purok_id,
             }
-          : null,
-      );
+          : null;
+      setSelectedHousehold(currentHousehold);
+      setAssignmentMode(currentHousehold ? "selected" : "none");
       mutation.reset();
     },
   });
+
+  function chooseHousehold(household) {
+    setSelectedHousehold(household);
+    setAssignmentMode(household ? "selected" : "none");
+  }
+
+  function clearAssignment() {
+    setSelectedHousehold(null);
+    setAssignmentMode("none");
+    mutation.reset();
+  }
 
   async function save() {
     await mutation.mutateAsync(selectedHousehold);
@@ -79,13 +92,61 @@ export function ResidentHouseholdDialog({
         ) : null}
         <div className="space-y-2">
           <Label>Household</Label>
-          <HouseholdSearchField
-            purokId={resident?.purok_id}
-            value={selectedHousehold?.id ?? ""}
-            selectedHousehold={selectedHousehold}
-            onChange={setSelectedHousehold}
-            disabled={mutation.isPending}
-          />
+          {assignmentMode === "selected" && selectedHousehold ? (
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-2">
+                  <Home className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0">
+                    <p className="font-semibold">
+                      {selectedHousehold.household_number}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {selectedHousehold.address_line || "No address recorded"}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Clear household assignment"
+                  onClick={clearAssignment}
+                  disabled={mutation.isPending}
+                >
+                  <X />
+                </Button>
+              </div>
+            </div>
+          ) : assignmentMode === "search" ? (
+            <HouseholdSearchField
+              purokId={resident?.purok_id}
+              value=""
+              selectedHousehold={null}
+              onChange={chooseHousehold}
+              disabled={mutation.isPending}
+            />
+          ) : (
+            <div className="space-y-3 rounded-lg border border-dashed p-3">
+              <div>
+                <p className="font-semibold">No household</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {resident?.household_id
+                    ? "Save this assignment to remove the Resident from the current household."
+                    : "The Resident is not assigned to a household."}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAssignmentMode("search")}
+                disabled={mutation.isPending}
+              >
+                <Search /> Search for a household
+              </Button>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button

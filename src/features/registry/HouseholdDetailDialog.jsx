@@ -46,7 +46,13 @@ export function HouseholdDetailDialog({
   const [memberOpen, setMemberOpen] = useState(false);
   const [actionError, setActionError] = useState(null);
   const headMutation = useRegistryMutation(() =>
-    registryService.setHouseholdHead(householdId, headId),
+    headId
+      ? registryService.reassignHouseholdHead(
+          householdId,
+          household.data?.head_resident_id ?? null,
+          headId,
+        )
+      : registryService.setHouseholdHead(householdId, null),
   );
   const removeMutation = useRegistryMutation((residentId) =>
     registryService.removeResidentFromHousehold(residentId),
@@ -190,11 +196,16 @@ export function HouseholdDetailDialog({
                         className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:min-w-52"
                       >
                         <option value="">No household head</option>
-                        {(members.data ?? []).map((member) => (
-                          <option key={member.id} value={member.id}>
-                            {formatPersonName(member)}
-                          </option>
-                        ))}
+                        {(members.data ?? [])
+                          .filter(
+                            (member) =>
+                              member.status === "active" && !member.archived_at,
+                          )
+                          .map((member) => (
+                            <option key={member.id} value={member.id}>
+                              {formatPersonName(member)}
+                            </option>
+                          ))}
                       </select>
                       <Button
                         type="button"

@@ -19,6 +19,8 @@ export function RegistryActionDialog({
   restoring = false,
   pending = false,
   error,
+  errorActionLabel,
+  onErrorAction,
   onConfirm,
 }) {
   const action = restoring ? "restore" : "archive";
@@ -41,9 +43,16 @@ export function RegistryActionDialog({
           {recordLabel}
         </div>
         {error ? (
-          <Alert variant="destructive">
-            <AlertDescription>{error.message}</AlertDescription>
-          </Alert>
+          <div className="space-y-3">
+            <Alert variant="destructive">
+              <AlertDescription>{error.message}</AlertDescription>
+            </Alert>
+            {errorActionLabel && onErrorAction ? (
+              <Button type="button" variant="outline" onClick={onErrorAction}>
+                {errorActionLabel}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
         <DialogFooter>
           <Button

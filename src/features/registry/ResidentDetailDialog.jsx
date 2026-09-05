@@ -1,4 +1,11 @@
-import { Archive, Home, Link2, Pencil, RotateCcw } from "lucide-react";
+import {
+  Archive,
+  Home,
+  Link2,
+  Pencil,
+  RotateCcw,
+  UserRoundCog,
+} from "lucide-react";
 
 import { ErrorState, LoadingState } from "@/components/common/StateDisplay";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -25,7 +32,7 @@ import {
   formatPersonName,
   titleCaseStatus,
 } from "@/features/registry/formatters";
-import { useResident } from "@/features/registry/hooks";
+import { useHouseholdMembers, useResident } from "@/features/registry/hooks";
 import { ResidentPhoto } from "@/features/registry/ResidentPhoto";
 
 function Value({ label, children, wide = false }) {
@@ -66,11 +73,22 @@ export function ResidentDetailDialog({
   onEdit,
   onArchive,
   onHousehold,
+  onChangeHouseholdHead,
   onAccount,
 }) {
   const resident = useResident(residentId, open);
   const record = resident.data;
+  const householdMembers = useHouseholdMembers(
+    record?.household_id,
+    open && Boolean(record?.household_id),
+  );
   const archived = Boolean(record?.archived_at);
+  const isHouseholdHead =
+    Boolean(record?.household_id) &&
+    record?.household?.head_resident_id === record?.id;
+  const activeHouseholdMemberCount = (householdMembers.data ?? []).filter(
+    (member) => member.status === "active" && !member.archived_at,
+  ).length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -159,7 +177,21 @@ export function ResidentDetailDialog({
 
             <DetailSection title="3. Household Information">
               <Value label="Household number">
-                {record.household?.household_number}
+                {record.household?.household_number ?? "No household"}
+              </Value>
+              <Value label="Role">
+                {record.household_id
+                  ? isHouseholdHead
+                    ? "Household Head"
+                    : "Household Member"
+                  : "Not assigned"}
+              </Value>
+              <Value label="Members">
+                {record.household_id
+                  ? householdMembers.isLoading
+                    ? "Loading…"
+                    : String(activeHouseholdMemberCount)
+                  : "Not applicable"}
               </Value>
               <Value label="Barangay">{record.barangay?.name}</Value>
               <Value label="Purok">{record.purok?.name}</Value>
@@ -231,6 +263,15 @@ export function ResidentDetailDialog({
                     >
                       <Home /> Household assignment
                     </Button>
+                    {isHouseholdHead ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => onChangeHouseholdHead?.(record)}
+                      >
+                        <UserRoundCog /> Change household head
+                      </Button>
+                    ) : null}
                     <Button
                       type="button"
                       variant="destructive"
