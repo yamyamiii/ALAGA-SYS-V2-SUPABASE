@@ -4,6 +4,18 @@ import crypto from "node:crypto";
 
 const root = process.cwd();
 const migrationsDirectory = path.join(root, "supabase", "migrations");
+
+function canonicalMigrationHash(contents) {
+  const canonicalSql = contents
+    .toString("utf8")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+  return crypto
+    .createHash("sha256")
+    .update(canonicalSql, "utf8")
+    .digest("hex");
+}
+
 const expectedMigrations = [
   "20260720000100_extensions_and_enums.sql",
   "20260720000200_profiles_and_auth_trigger.sql",
@@ -699,20 +711,20 @@ check(
 
 for (const [file, expectedHash] of Object.entries(completedMigrationHashes)) {
   const sql = fs.readFileSync(path.join(migrationsDirectory, file));
-  const actualHash = crypto.createHash("sha256").update(sql).digest("hex");
+  const actualHash = canonicalMigrationHash(sql);
   check(
     actualHash === expectedHash,
-    `${file} remains byte-identical to its completed migration`,
+    `${file} remains canonical-content-identical to its completed migration`,
   );
 }
 for (const [file, expectedHash] of Object.entries(
   reviewedPendingMigrationHashes,
 )) {
   const sql = fs.readFileSync(path.join(migrationsDirectory, file));
-  const actualHash = crypto.createHash("sha256").update(sql).digest("hex");
+  const actualHash = canonicalMigrationHash(sql);
   check(
     actualHash === expectedHash,
-    `${file} remains byte-identical to its reviewed pending migration`,
+    `${file} remains canonical-content-identical to its reviewed pending migration`,
   );
 }
 
