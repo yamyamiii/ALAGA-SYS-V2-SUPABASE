@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AuthContext } from "@/features/auth/authContext";
 import { hasPermission, hasRole } from "@/features/auth/permissions";
+import { ROUTES } from "@/config/routes";
 import { queryClient } from "@/lib/query/client";
 import {
   AUTH_ERROR_CODES,
@@ -100,10 +101,20 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let active = true;
-    recover();
+    if (window.location.pathname === ROUTES.resetPassword) {
+      setState({ status: "unauthenticated", profile: null, error: null });
+    } else {
+      recover();
+    }
 
     const subscription = authService.onAuthStateChange((event) => {
       if (!active || event === "INITIAL_SESSION") return;
+      if (
+        event === "PASSWORD_RECOVERY" ||
+        authService.isPasswordRecoveryActive?.()
+      ) {
+        return;
+      }
       if (
         ["SIGNED_OUT", "SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(
           event,

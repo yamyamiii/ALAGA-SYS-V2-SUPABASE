@@ -24,6 +24,9 @@ export const AUTH_ERROR_CODES = Object.freeze({
   PROFILE_SUSPENDED: "profile_suspended",
   INVALID_ROLE: "invalid_role",
   RECOVERY_FAILED: "recovery_failed",
+  RECOVERY_LINK_INVALID: "recovery_link_invalid",
+  PASSWORD_UPDATE_FAILED: "password_update_failed",
+  CURRENT_PASSWORD_INVALID: "current_password_invalid",
   UNKNOWN: "unknown",
 });
 
@@ -56,6 +59,12 @@ const ERROR_MESSAGES = Object.freeze({
     "Your account has an unsupported role. Contact an administrator.",
   [AUTH_ERROR_CODES.RECOVERY_FAILED]:
     "We could not verify your session. Check your connection and try again.",
+  [AUTH_ERROR_CODES.RECOVERY_LINK_INVALID]:
+    "This password reset link is invalid or has expired. Request a new reset link.",
+  [AUTH_ERROR_CODES.PASSWORD_UPDATE_FAILED]:
+    "Your password could not be updated. Please try again.",
+  [AUTH_ERROR_CODES.CURRENT_PASSWORD_INVALID]:
+    "Your current password is incorrect.",
   [AUTH_ERROR_CODES.UNKNOWN]:
     "Authentication could not be completed. Please try again.",
 });
@@ -161,8 +170,54 @@ function mapEmailDeliveryError(error) {
   });
 }
 
+function mapPasswordUpdateError(error) {
+  if (error instanceof AuthServiceError) return error;
+  const rateLimitError = mapRateLimitError(error);
+  if (rateLimitError) return rateLimitError;
+  if (isNetworkError(error)) {
+    return new AuthServiceError(AUTH_ERROR_CODES.RECOVERY_FAILED, {
+      cause: error,
+      recoverable: true,
+    });
+  }
+  return new AuthServiceError(AUTH_ERROR_CODES.PASSWORD_UPDATE_FAILED, {
+    cause: error,
+  });
+}
+
 function applicationRedirect(path) {
   return `${window.location.origin}${path}`;
+}
+
+function readRecoveryParameters() {
+  const url = new URL(window.location.href);
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+  const value = (name) => hash.get(name) ?? url.searchParams.get(name);
+  return {
+    url,
+    type: value("type"),
+    accessToken: value("access_token"),
+    refreshToken: value("refresh_token"),
+    code: url.searchParams.get("code"),
+    tokenHash: value("token_hash"),
+    error: value("error") ?? value("error_code"),
+  };
+}
+
+function clearRecoveryParameters() {
+  const url = new URL(window.location.href);
+  for (const parameter of [
+    "code",
+    "token_hash",
+    "type",
+    "error",
+    "error_code",
+    "error_description",
+  ]) {
+    url.searchParams.delete(parameter);
+  }
+  url.hash = "";
+  window.history.replaceState(window.history.state, "", url.toString());
 }
 
 function accountStatusError(status) {
@@ -175,6 +230,9 @@ function accountStatusError(status) {
 }
 
 export function createAuthService(clientProvider = getSupabaseClient) {
+  let recoveryUserId = null;
+  let recoveryEstablishing = false;
+  let passwordResetRequest = null;
   let confirmationResendRequest = null;
 
   function client() {
@@ -319,6 +377,29 @@ export function createAuthService(clientProvider = getSupabaseClient) {
       }
     },
 
+    requestPasswordReset(email) {
+      if (passwordResetRequest) return passwordResetRequest;
+      passwordResetRequest = (async () => {
+        try {
+          let error;
+          try {
+            ({ error } = await client().auth.resetPasswordForEmail(
+              email.trim(),
+              {
+                redirectTo: applicationRedirect(ROUTES.resetPassword),
+              },
+            ));
+          } catch (requestError) {
+            throw mapEmailDeliveryError(requestError);
+          }
+          if (error) throw mapEmailDeliveryError(error);
+        } finally {
+          passwordResetRequest = null;
+        }
+      })();
+      return passwordResetRequest;
+    },
+
     resendConfirmation(email) {
       if (confirmationResendRequest) return confirmationResendRequest;
       confirmationResendRequest = (async () => {
@@ -341,6 +422,159 @@ export function createAuthService(clientProvider = getSupabaseClient) {
         }
       })();
       return confirmationResendRequest;
+    },
+
+    async establishPasswordRecovery() {
+      const parameters = readRecoveryParameters();
+      const onRecoveryRoute = window.location.pathname === ROUTES.resetPassword;
+      const implicitRecovery =
+        parameters.type === "recovery" &&
+        parameters.accessToken &&
+        parameters.refreshToken;
+      const otpRecovery =
+        parameters.type === "recovery" && parameters.tokenHash;
+      const pkceRecovery = Boolean(parameters.code);
+
+      if (
+        !onRecoveryRoute ||
+        parameters.error ||
+        (!implicitRecovery && !otpRecovery && !pkceRecovery)
+      ) {
+        if (
+          onRecoveryRoute &&
+          (parameters.error ||
+            parameters.accessToken ||
+            parameters.refreshToken ||
+            parameters.code ||
+            parameters.tokenHash)
+        ) {
+          clearRecoveryParameters();
+        }
+        throw new AuthServiceError(AUTH_ERROR_CODES.RECOVERY_LINK_INVALID);
+      }
+
+      const supabaseClient = client();
+      recoveryEstablishing = true;
+      let establishedSession = false;
+      try {
+        let result;
+        if (implicitRecovery) {
+          result = await supabaseClient.auth.setSession({
+            access_token: parameters.accessToken,
+            refresh_token: parameters.refreshToken,
+          });
+        } else if (otpRecovery) {
+          result = await supabaseClient.auth.verifyOtp({
+            type: "recovery",
+            token_hash: parameters.tokenHash,
+          });
+        } else {
+          result = await supabaseClient.auth.exchangeCodeForSession(
+            parameters.code,
+          );
+        }
+
+        if (result.error || !result.data?.session?.user?.id) {
+          const rateLimitError = mapRateLimitError(result.error);
+          if (rateLimitError) throw rateLimitError;
+          throw new AuthServiceError(AUTH_ERROR_CODES.RECOVERY_LINK_INVALID, {
+            cause: result.error,
+          });
+        }
+        establishedSession = true;
+        const { data: userData, error: userError } =
+          await supabaseClient.auth.getUser(result.data.session.access_token);
+        if (userError || userData.user?.id !== result.data.session.user.id) {
+          throw new AuthServiceError(AUTH_ERROR_CODES.RECOVERY_LINK_INVALID, {
+            cause: userError,
+          });
+        }
+
+        recoveryUserId = userData.user.id;
+        clearRecoveryParameters();
+        return Object.freeze({ userId: recoveryUserId });
+      } catch (error) {
+        recoveryUserId = null;
+        clearRecoveryParameters();
+        if (establishedSession) {
+          try {
+            await supabaseClient.auth.signOut({ scope: "local" });
+          } finally {
+            clearAuthStorage();
+          }
+        }
+        if (error instanceof AuthServiceError) throw error;
+        throw new AuthServiceError(AUTH_ERROR_CODES.RECOVERY_LINK_INVALID, {
+          cause: error,
+        });
+      } finally {
+        recoveryEstablishing = false;
+      }
+    },
+
+    isPasswordRecoveryActive() {
+      return recoveryEstablishing || Boolean(recoveryUserId);
+    },
+
+    async completePasswordRecovery(newPassword) {
+      if (!recoveryUserId) {
+        throw new AuthServiceError(AUTH_ERROR_CODES.RECOVERY_LINK_INVALID);
+      }
+      const supabaseClient = client();
+      const { data: userData, error: userError } =
+        await supabaseClient.auth.getUser();
+      if (userError || userData.user?.id !== recoveryUserId) {
+        recoveryUserId = null;
+        throw new AuthServiceError(AUTH_ERROR_CODES.RECOVERY_LINK_INVALID, {
+          cause: userError,
+        });
+      }
+
+      const { error } = await supabaseClient.auth.updateUser({
+        password: newPassword,
+      });
+      if (error) throw mapPasswordUpdateError(error);
+
+      recoveryUserId = null;
+      try {
+        const { error: signOutError } = await supabaseClient.auth.signOut({
+          scope: "global",
+        });
+        if (signOutError) {
+          await supabaseClient.auth.signOut({ scope: "local" });
+        }
+      } finally {
+        clearAuthStorage();
+      }
+    },
+
+    async changePassword({ currentPassword, newPassword }) {
+      const supabaseClient = client();
+      const { data: userData, error: userError } =
+        await supabaseClient.auth.getUser();
+      if (userError || !userData.user?.email) {
+        throw new AuthServiceError(AUTH_ERROR_CODES.INVALID_SESSION, {
+          cause: userError,
+        });
+      }
+
+      const { data: signInData, error: signInError } =
+        await supabaseClient.auth.signInWithPassword({
+          email: userData.user.email,
+          password: currentPassword,
+        });
+      if (signInError || !signInData.session) {
+        if (isNetworkError(signInError)) throw mapSignInError(signInError);
+        throw new AuthServiceError(AUTH_ERROR_CODES.CURRENT_PASSWORD_INVALID, {
+          cause: signInError,
+        });
+      }
+
+      await validateSession(supabaseClient, signInData.session);
+      const { error: updateError } = await supabaseClient.auth.updateUser({
+        password: newPassword,
+      });
+      if (updateError) throw mapPasswordUpdateError(updateError);
     },
 
     async recoverSession() {

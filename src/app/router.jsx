@@ -13,6 +13,8 @@ import { PERMISSIONS } from "@/features/auth/permissions";
 import { RoleGuard } from "@/features/auth/RoleGuard";
 
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
 const ResidentRegistrationPage = lazy(
   () => import("@/pages/ResidentRegistrationPage"),
 );
@@ -76,6 +78,8 @@ export function AppRouter() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path={ROUTES.login} element={<LoginPage />} />
+        <Route path={ROUTES.forgotPassword} element={<ForgotPasswordPage />} />
+        <Route path={ROUTES.resetPassword} element={<ResetPasswordPage />} />
         <Route
           path={ROUTES.residentRegistration}
           element={<ResidentRegistrationPage />}

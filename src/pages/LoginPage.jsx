@@ -4,10 +4,11 @@ import {
   EyeOff,
   LoaderCircle,
   LockKeyhole,
+  MailCheck,
   ShieldCheck,
   UserRoundPlus,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -21,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { ROUTES } from "@/config/routes";
 import { AuthLoadingScreen } from "@/features/auth/AuthLoadingScreen";
 import { useAuth } from "@/features/auth/authContext";
-import { AUTH_ERROR_CODES } from "@/services/authService";
+import { AUTH_ERROR_CODES, authService } from "@/services/authService";
 
 const loginSchema = z.object({
   email: z
@@ -47,9 +48,13 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState(null);
+  const [confirmationFeedback, setConfirmationFeedback] = useState(null);
+  const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
+  const resendConfirmationLock = useRef(false);
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(loginSchema),
@@ -69,6 +74,7 @@ export default function LoginPage() {
 
   async function onSubmit(values) {
     setAuthError(null);
+    setConfirmationFeedback(null);
     try {
       await auth.signIn(values);
       navigate(safeDestination(location.state?.from), { replace: true });
@@ -91,6 +97,26 @@ export default function LoginPage() {
         return;
       }
       setAuthError(error);
+    }
+  }
+
+  async function resendConfirmation() {
+    if (resendConfirmationLock.current) return;
+    resendConfirmationLock.current = true;
+    setIsResendingConfirmation(true);
+    setConfirmationFeedback(null);
+    try {
+      await authService.resendConfirmation(getValues("email"));
+      setConfirmationFeedback({
+        kind: "success",
+        message:
+          "If confirmation is still required, a new confirmation email has been sent.",
+      });
+    } catch (error) {
+      setConfirmationFeedback({ kind: "error", message: error.message });
+    } finally {
+      resendConfirmationLock.current = false;
+      setIsResendingConfirmation(false);
     }
   }
 
@@ -151,7 +177,40 @@ export default function LoginPage() {
           >
             {authError ? (
               <Alert variant="destructive">
-                <AlertDescription>{authError.message}</AlertDescription>
+                <AlertDescription className="space-y-3">
+                  <p>{authError.message}</p>
+                  {authError.code === AUTH_ERROR_CODES.EMAIL_NOT_CONFIRMED ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isResendingConfirmation}
+                      onClick={resendConfirmation}
+                    >
+                      {isResendingConfirmation ? (
+                        <LoaderCircle className="animate-spin" />
+                      ) : (
+                        <MailCheck />
+                      )}
+                      {isResendingConfirmation
+                        ? "Sending…"
+                        : "Resend confirmation email"}
+                    </Button>
+                  ) : null}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {confirmationFeedback ? (
+              <Alert
+                variant={
+                  confirmationFeedback.kind === "error"
+                    ? "destructive"
+                    : "default"
+                }
+              >
+                <AlertDescription>
+                  {confirmationFeedback.message}
+                </AlertDescription>
               </Alert>
             ) : null}
             <div className="space-y-2">
@@ -171,7 +230,15 @@ export default function LoginPage() {
               ) : null}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="password">Password</Label>
+                <Link
+                  to={ROUTES.forgotPassword}
+                  className="text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <Input
                   id="password"

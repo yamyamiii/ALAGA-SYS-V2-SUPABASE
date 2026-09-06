@@ -13,6 +13,7 @@ const authMocks = vi.hoisted(() => ({
   callback: null,
   recoverSession: vi.fn(),
   signOut: vi.fn(),
+  isPasswordRecoveryActive: vi.fn(),
   unsubscribe: vi.fn(),
 }));
 
@@ -24,6 +25,7 @@ vi.mock("@/services/authService", async (importOriginal) => {
       recoverSession: authMocks.recoverSession,
       signIn: vi.fn(),
       signOut: authMocks.signOut,
+      isPasswordRecoveryActive: authMocks.isPasswordRecoveryActive,
       onAuthStateChange: vi.fn((callback) => {
         authMocks.callback = callback;
         return { unsubscribe: authMocks.unsubscribe };
@@ -80,8 +82,9 @@ describe("AuthProvider focus recovery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMocks.callback = null;
-    authMocks.recoverSession.mockResolvedValue(profile);
-    authMocks.signOut.mockResolvedValue(undefined);
+    authMocks.recoverSession.mockReset().mockResolvedValue(profile);
+    authMocks.signOut.mockReset().mockResolvedValue(undefined);
+    authMocks.isPasswordRecoveryActive.mockReset().mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -96,7 +99,12 @@ describe("AuthProvider focus recovery", () => {
     await user.type(draft, "Clinical draft stays in memory");
 
     fireEvent.blur(window);
-    fireEvent.focus(window);
+    await waitFor(() => {
+      fireEvent.focus(window);
+      expect(authMocks.recoverSession.mock.calls.length).toBeGreaterThanOrEqual(
+        2,
+      );
+    });
     Object.defineProperty(document, "visibilityState", {
       configurable: true,
       value: "visible",
@@ -158,6 +166,21 @@ describe("AuthProvider focus recovery", () => {
     expect(onMount).toHaveBeenCalledTimes(1);
   });
 
+  it("does not turn a temporary password-recovery session into application access", async () => {
+    render(<TestRoutes onMount={vi.fn()} />);
+    await screen.findByLabelText("Unsaved draft");
+    const recoveriesBeforeEvent = authMocks.recoverSession.mock.calls.length;
+    authMocks.isPasswordRecoveryActive.mockReturnValue(true);
+
+    authMocks.callback("SIGNED_IN");
+    authMocks.callback("PASSWORD_RECOVERY");
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+    expect(authMocks.recoverSession).toHaveBeenCalledTimes(
+      recoveriesBeforeEvent,
+    );
+  });
+
   it("confirms a SIGNED_OUT event before clearing another tab", async () => {
     const onMount = vi.fn();
     render(<TestRoutes onMount={onMount} />);
@@ -194,7 +217,12 @@ describe("AuthProvider focus recovery", () => {
       new AuthServiceError(AUTH_ERROR_CODES.PROFILE_SUSPENDED),
     );
 
-    fireEvent.focus(window);
+    await waitFor(() => {
+      fireEvent.focus(window);
+      expect(authMocks.recoverSession.mock.calls.length).toBeGreaterThanOrEqual(
+        2,
+      );
+    });
 
     expect(
       await screen.findByText("Session verification unavailable"),
