@@ -139,8 +139,11 @@ not import the client directly.
 npm run dev
 ```
 
-Vite prints the local URL. Guests enter at `/login`; authenticated users enter
-the dashboard at `/`. Authorized Administrator/BHW accounts access residents
+Vite prints the local URL. Guests enter at `/login`; Residents may submit a
+pending account application at `/register/resident`; authenticated active users
+enter the dashboard at `/`. Only an Administrator can verify an application and
+create or explicitly link its Resident record. Public signup cannot create a
+staff account. Authorized Administrator/BHW accounts access residents
 at `/residents`; appointments remain at `/appointments`,
 `/appointments/calendar`, and `/appointments/queue`. Authorized accounts access
 basic consultation records at
@@ -204,11 +207,13 @@ preferences until staff assignment and confirmation.
 
 ## Deployment note
 
-Migrations 1-34 are the preserved database baseline. This scope-alignment
-release adds no migration and does not alter any historical migration.
-Application startup does not push migrations, functions, schedules, or provider
-configuration automatically. If the ALAGA AI parser changes are deployed, only
-the `alaga-ai` Edge Function requires redeployment.
+The repository contains exactly 56 tracked, ordered migrations. Migration 56 is
+the latest source migration and enforces the reviewed 08:00-16:00 appointment
+start slots. Repository presence does not prove that a migration, Edge Function,
+secret, Auth setting, schedule, or provider configuration has been applied to a
+hosted Supabase project. Review a linked `supabase db push --dry-run` and the
+deployed function/configuration inventory before every release. Application
+startup does not apply or deploy infrastructure automatically.
 
 See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Appointment architecture](docs/architecture/APPOINTMENTS.md),
@@ -241,6 +246,7 @@ See [Resident registry architecture](docs/architecture/RESIDENT_REGISTRY.md),
 [Daily queue](docs/workflows/DAILY_QUEUE.md),
 [Private photo storage](docs/architecture/STORAGE.md),
 [Resident account linking](docs/workflows/RESIDENT_ACCOUNT_LINKING.md),
+[Resident self-registration](docs/workflows/RESIDENT_SELF_REGISTRATION.md),
 [Storage deployment](docs/deployment/SUPABASE_STORAGE.md),
 [Authentication architecture](docs/architecture/AUTHENTICATION.md),
 [RLS matrix](docs/database/RLS_MATRIX.md), and

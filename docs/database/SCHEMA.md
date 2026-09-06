@@ -1,13 +1,16 @@
-# Database schema through Phase 3B
+# Database schema through Migration 56
 
 ## Scope
 
-Phase 1 adds the normalized PostgreSQL foundation for ALAGA-SYS V2. It creates
-only `profiles`, `barangays`, `puroks`, `households`, `residents`,
-`appointments`, and `audit_logs`. It does not add encounters, clinical notes,
-diagnoses, prescriptions, medicines, immunizations, maternal records,
-notifications, reports, or healthcare database queries. Phase 2B adds only
-trusted account-management support and one internal abuse-control table.
+The repository contains exactly 56 ordered, forward-only migrations. Migrations
+1-17 establish authentication-linked profiles, Bagongpook locality, the
+household/Resident registry, appointments, auditing, RLS, trusted account
+management, and registry hardening. Later migrations add the reviewed
+appointment, clinical, reporting, general-assistance, AI, printable-document,
+outbound-notification, backup, Resident-registration, account-lifecycle, and
+final workflow-hardening database boundaries. Some preserved database objects
+belong to inactive future extensions and are not visible in the approved final
+application scope.
 
 The schema uses UUID primary keys, real foreign keys, validated database values,
 soft archival for resident/household/appointment records, explicit grants, and
@@ -43,14 +46,93 @@ Apply every file in lexical order:
 17. `20260720001700_reconcile_bagongpook_reference.sql` — forward-only legacy
     seed reconciliation that preserves registry references, normalizes the
     deployment locality, and keeps only Purok 1 through Purok 7 active
+18. `20260720001800_appointment_workflows.sql` — trusted appointment scheduling,
+    state transitions, conflict handling, calendar, and daily queue
+19. `20260720001900_fix_appointment_rpc_contracts.sql` — stable appointment RPC
+    return types and least-privilege staff search
+20. `20260720002000_health_records_foundation.sql` — encounters, vital signs,
+    signing, amendments, clinical RLS, and trusted workflows
+21. `20260720002100_fix_clinical_manila_dates.sql` — explicit Asia/Manila
+    clinical date validation
+22. `20260720002200_resident_appointment_requests.sql` — trusted own-Resident
+    appointment requests and cancellation boundary
+23. `20260720002300_simplify_resident_request_duration.sql` — server-derived
+    provisional Resident-request duration
+24. `20260720002400_maternal_child_care.sql` — preserved maternal and child-care
+    schema, RLS, and trusted workflows
+25. `20260720002500_fix_maternal_child_trigger_columns.sql` — table-safe immutable
+    maternal/child identifiers
+26. `20260720002600_reports_analytics.sql` — privacy-safe report aggregates and
+    export contracts
+27. `20260720002700_general_assistance.sql` — announcements, notifications,
+    health-center information, FAQs, and inquiries
+28. `20260720002800_final_qa_fixes.sql` — reviewed cross-role and data-safety
+    corrections
+29. `20260720002900_ai_assistant_rate_limit.sql` — atomic service-role AI rate
+    limiting without conversation storage
+30. `20260720003000_ai_grounding_context.sql` — bounded read-only AI grounding
+31. `20260720003100_printable_healthcare_documents.sql` — authorized printable
+    appointment and clinical document contracts
+32. `20260720003200_outbound_notification_foundation.sql` — optional email/SMS
+    preferences, jobs, attempts, reminders, and worker RPCs
+33. `20260720003300_backup_restore_foundation.sql` — guarded application-aware
+    backup and restore foundation
+34. `20260720003400_production_security_hardening.sql` — production security and
+    least-privilege corrections
+35. `20260720003500_resident_clinical_document_safety.sql` — minimized Resident
+    clinical-document access
+36. `20260720003600_optional_resident_appointment_reason.sql` — optional reason
+    for trusted Resident appointment requests
+37. `20260720003700_preserve_optional_resident_appointment_reason.sql` — preserves
+    a null Resident reason during staff schedule edits
+38. `20260720003800_optional_resident_cancellation_reason.sql` — optional own-
+    Resident cancellation narrative
+39. `20260720003900_fix_reschedule_propagation_notifications.sql` — reschedule
+    propagation and notification corrections
+40. `20260720004000_enforce_single_row_appointment_lifecycle.sql` — in-place
+    rescheduling with one appointment row and number
+41. `20260720004100_optional_authorized_cancellation_reason.sql` — optional
+    cancellation narrative without relaxing required rejection justification
+42. `20260720004200_simplify_appointment_completion.sql` — trusted checked-in to
+    completed transition without mandatory encounter creation
+43. `20260720004300_cleanup_archived_announcement_notifications.sql` — excludes
+    notifications linked to archived announcements
+44. `20260720004400_resident_self_registration.sql` — Resident-only public signup
+    capture and Administrator review
+45. `20260720004500_fix_resident_registration_approval.sql` — corrected
+    create/link approval data flow and Resident-number generation
+46. `20260720004600_guard_resident_account_deletion.sql` — initial guarded
+    pending/rejected Resident account cleanup
+47. `20260720004700_extend_safe_resident_account_deletion.sql` — compensated
+    dependency-free linked Resident cleanup
+48. `20260720004800_fix_resident_delete_ambiguity.sql` — qualified deletion
+    predicates that avoid PL/pgSQL output-column ambiguity
+49. `20260720004900_generalize_safe_account_deletion.sql` — guarded cleanup for
+    dependency-free non-Administrator accounts
+50. `20260720005000_fix_resident_household_unassignment.sql` — RLS-preserving
+    Bagongpook household lookup for explicit assignment/unassignment
+51. `20260720005100_archive_sole_member_household.sql` — Administrator-only atomic
+    sole-member Resident and household archival
+52. `20260720005200_fix_account_cleanup_eligibility.sql` — archived-Resident
+    cleanup assessment and coarse protected-history classification
+53. `20260720005300_retire_protected_accounts.sql` — retained-history account
+    retirement with guarded preparation and compensation
+54. `20260720005400_resident_registration_notification_type.sql` — committed
+    pending-registration notification enum value
+55. `20260720005500_notify_pending_resident_registration.sql` — deduplicated
+    notifications for confirmed pending registrations to active Administrators
+56. `20260720005600_enforce_appointment_start_slots.sql` — 30-minute appointment
+    start slots from 08:00 through 16:00 in the Asia/Manila business schedule
 
 Migrations are forward-only and intended to be applied once by Supabase
-migration tooling. They contain no database reset or destructive database-level
-operation.
+migration tooling. Some later files perform narrowly scoped reconciliation,
+archival, or transient-notification cleanup; none is a general database reset.
+Review every pending file and its data predicates before application.
 
-The Phase 2B migration follows the eleven Phase 1 migrations and adds trusted
-account lifecycle metadata, abuse control, service-role-only RPCs, and
-final-active-administrator protection.
+The migration files are the source-of-truth history and are verified in lexical
+order by `npm run db:verify`. Repository presence does not prove which files are
+applied to a hosted project. Obtain that state from an authenticated linked dry
+run and review it before applying anything.
 
 ## Key design decisions
 
@@ -60,6 +142,9 @@ final-active-administrator protection.
 Supabase Auth. The `on_auth_user_created` trigger creates a minimal profile for a
 new Auth user and deliberately ignores any role or account-status value in user
 metadata. Every new profile starts with role `resident` and status `invited`.
+For self-registration, that invited profile remains blocked until an
+Administrator approves the matching request. Browser metadata is never used for
+role, status, barangay, Resident number, or staff authorization.
 
 RLS permits self-updates, while `profiles_protect_privileged_fields` prevents a
 user—including an admin—from changing their own role, account status, or
@@ -159,10 +244,9 @@ not applicable. Detailed maternal records remain outside Phase 1.
 
 ## Applying with the Supabase CLI
 
-An authenticated CLI dry run on July 20, 2026 confirmed that the linked project
-has migrations 1–11 and would apply only migration 12. The live push was not
-performed because the environment requires a fresh explicit confirmation for
-shared auth/RLS changes. To apply after review, run from the repository root:
+The repository does not establish the linked project's applied migration state.
+To inspect it and apply only an explicitly reviewed pending sequence, run from
+the repository root:
 
 ```bash
 supabase login
@@ -199,18 +283,15 @@ database password in chat.
 
 ## Safe verification queries
 
-Confirm RLS on all eight managed public tables:
+Review RLS status for every table in the public schema; do not rely on a stale
+hard-coded table count:
 
 ```sql
 select c.relname as table_name, c.relrowsecurity as rls_enabled
 from pg_catalog.pg_class as c
 join pg_catalog.pg_namespace as n on n.oid = c.relnamespace
 where n.nspname = 'public'
-  and c.relname in (
-    'profiles', 'barangays', 'puroks', 'households',
-    'residents', 'appointments', 'audit_logs',
-    'admin_action_rate_limits'
-  )
+  and c.relkind in ('r', 'p')
 order by c.relname;
 ```
 
@@ -229,19 +310,14 @@ where table_schema = 'public'
 order by table_name, grantee, privilege_type;
 ```
 
-Verify security-definer search paths:
+Verify every public security-definer function and review its fixed configuration:
 
 ```sql
 select n.nspname, p.proname, p.prosecdef, p.proconfig
 from pg_catalog.pg_proc as p
 join pg_catalog.pg_namespace as n on n.oid = p.pronamespace
 where n.nspname = 'public'
-  and p.proname in (
-    'handle_new_auth_user', 'set_resident_number',
-    'set_appointment_number', 'current_profile_role', 'is_admin',
-    'is_staff', 'current_resident_id', 'current_household_id',
-    'validate_appointment_relationships', 'audit_row_change'
-  )
+  and p.prosecdef
 order by p.proname;
 ```
 
@@ -250,23 +326,19 @@ development project. Test one account per role and verify allowed and denied
 operations through the publishable-key client. Never test with real resident or
 healthcare information, and never expose the service-role key to a browser.
 
-## Known limitations through Phase 2B
+## Repository and hosted-state boundary
 
-- Migration 12 and the `manage-user` Edge Function are implemented and locally
-  verified but are not deployed to the linked project.
-- Hosted Auth, SMTP, allowed-origin, and invitation-redirect settings require
-  project-owner review before production use.
-- Frontend and server validation use the canonical
-  `barangay_health_worker` role; the obsolete `health_worker` placeholder is
-  rejected by tests.
-- Nurse/midwife appointment access is assigned-only and read-only.
-- Resident self-booking is disabled.
-- Appointment conflict detection and state-transition enforcement are deferred.
-- `assigned_staff_id` is validated against active staff by a trigger; finer
-  service-specific staff eligibility remains a future workflow rule.
-- Pregnancy status is demographic context only; no maternal record exists.
-- Automatic auditing captures inserts, updates, and exceptional backend deletes
-  on six mutable foundation tables, but not Auth events, reads, failed changes,
-  storage operations, or external service activity.
-- A profile referenced as an audit actor cannot be physically deleted without an
-  explicit privileged retention procedure; this preserves append-only history.
+- The repository contains Migrations 1-56 and verifies their canonical LF
+  content, order, structural contracts, grants, and selected security invariants.
+- Repository verification does not prove that a hosted database, Auth setting,
+  Edge Function, scheduler, provider, storage policy, or secret matches source.
+- Run and review a linked dry run, database lint, direct role/RLS tests, storage
+  tests, and Edge Function checks before production approval.
+- Public signup remains Resident-only and pending until Administrator review;
+  staff provisioning remains trusted. Resident appointment requests and
+  cancellation remain narrow own-record RPC workflows.
+- Normal browser workflows archive important records. Guarded permanent account
+  cleanup is limited to dependency-free non-Administrator identities, while
+  protected history uses retirement and retained profile attribution.
+- Maternal/child and other preserved extension schemas remain protected even
+  where their user-interface routes are excluded from the final visible scope.

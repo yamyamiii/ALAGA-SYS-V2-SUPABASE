@@ -36,17 +36,85 @@ active administrator is also protected by a database trigger.
 - `link_resident_account`
 - `unlink_resident_account`
 - `invite_resident_account`
+- `list_resident_registrations`
+- `approve_resident_registration`
+- `reject_resident_registration`
+- `delete_resident_registration_account`
+- `delete_user_account`
+- `retire_user_account`
 
-There is no delete-user action. `create_user` marks the Auth user's server-side
-app metadata with `requires_password_change`; because Supabase does not provide a
-native forced-password-change state for this workflow, administrators must use
-the documented secure handoff. Invitations remain the preferred workflow.
+There is no unrestricted delete-user action. Migration 49 generalizes the
+narrowly scoped permanent-delete boundary to Resident, Barangay Health Worker,
+Nurse, and Midwife targets. Administrator targets are always rejected. The
+database must find the target free of appointments, clinical records, maternal
+or child records, documents, audit authorship, announcements, inquiries,
+notifications/outbound jobs, backup operations, photos, and every other current
+or future foreign-key dependency. Account status and creation source do not
+decide eligibility. The action remains unavailable to every browser role except
+through the active-Administrator-verified Edge Function.
+
+Pending and rejected Resident registration review is intentionally limited to
+Cancel, Reject, and Approve/Link decisions. A pending request has no permanent
+delete control. After rejection, its invited Auth/profile identity remains a
+historical rejected signup and may be cleaned up only from the separate normal
+managed-user row or detail view when the server reports no protected
+dependency. Approved and Administrator-created non-Administrator accounts use
+that same managed-user cleanup surface. The database remains final authority.
+
+For a dependency-free account, the generalized prepare RPC atomically locks and
+suspends the profile, stages any Resident, registration, and
+notification-preference rows in an RLS-protected table with no browser or direct
+service-role table grants, and removes only that disposable state before the
+Edge Function permanently deletes the Auth user. If Auth deletion fails, the
+private compensation RPC restores the exact Resident number, attribution,
+registration, preferences, and prior account status. Protected history is never
+deleted. Migration 53 gives those protected-history accounts a separate
+retirement workflow: the retained profile is marked inactive and retired, the
+Auth email is replaced by a UUID-based address under the reserved `.invalid`
+domain, and the Auth user is banned for 100 years. The permanent database
+retirement marker continues to deny access after that Auth ban duration, so the
+original email becomes reusable without deleting the historical identity.
+Migration 52 permits an archived Resident identity row itself to pass this
+assessment while retaining every real profile/Resident foreign-key, media, and
+lifecycle blocker. The service-role-only assessment returns only a coarse safe
+category such as appointment, clinical, audit, inquiry, notification, media, or
+other protected history; it never returns record content.
+
+Retired profiles are excluded from the normal User Management list and detail
+RPCs. They remain referenced by appointments, clinical records, audit entries,
+documents, and other protected history. Retirement is available only for a
+supported non-Administrator account that fails hard-delete eligibility for a
+recognized retention reason; dependency-free accounts must continue through
+the compensated hard-delete workflow. If the Auth retirement operation fails,
+the database compensation RPC restores the prior account status and removes the
+retirement marker.
+
+`create_user` marks the Auth user's server-side app metadata with
+`requires_password_change`; because Supabase does not provide a native
+forced-password-change state for this workflow, administrators must use the
+documented secure handoff. Invitations remain the preferred workflow.
 
 Resident-link actions are administrator-only and narrowly scoped. Candidate
 listing returns only active/invited, resident-role profiles not already linked.
 Resident invitation forces the resident role, compensates a failed link by
 removing only the newly created Auth user, and never exposes a general Auth
 Admin browser client. Unlinking never deletes Auth or profile rows.
+
+Resident self-registration review is also Administrator-only. The pending list
+shows validated application fields plus exact name-and-birth-date candidates.
+When a candidate exists, new-record creation fails until the Administrator
+explicitly selects the verified unlinked active Resident. Approval generates a
+Resident number through the existing database sequence, links the Auth profile,
+and activates it in one transaction. Rejection leaves the account unable to
+enter protected routes. BHW accounts have no review RPC or route permission.
+
+Email confirmation is the trusted readiness boundary for review notifications.
+Once a captured registration is still pending and its Auth email is confirmed,
+the database creates one privacy-minimized in-app notification for each active
+Administrator. Recipient-scoped deduplication prevents repeated confirmation
+callbacks from adding duplicate rows. The fixed symbolic destination is User
+Management; BHW, Nurse, Midwife, Resident, inactive, suspended, and retired
+profiles are never selected as recipients.
 
 ## Data minimization
 

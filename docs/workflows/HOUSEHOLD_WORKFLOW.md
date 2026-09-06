@@ -20,6 +20,15 @@ Choose a current member as household head. Clear or choose a replacement head
 before removing, moving, or archiving the current head. Database constraints and
 triggers enforce this even if a UI is bypassed.
 
+Resident details also provide the same explicit reassignment path. A guarded
+update checks that the household still has the expected current head; database
+foreign keys and triggers independently require the selected replacement to be
+an active member of that household. A concurrent edit fails without changing
+either relationship. A sole-active-member head is never modified automatically;
+an Administrator must explicitly confirm the atomic Resident-and-household
+archive workflow. The household and Resident remain retained as archived
+history, while the Auth/profile account is not deleted.
+
 ## Edit, archive, and restore
 
 Current records may be edited by administrator/BHW. Archive requires explicit

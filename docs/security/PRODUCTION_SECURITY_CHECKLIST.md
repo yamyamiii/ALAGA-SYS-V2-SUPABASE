@@ -4,15 +4,25 @@ Status: release gate for Phase 13. Complete this checklist in the production Sup
 
 ## Release gates
 
-- [ ] Review and apply the linked project's pending Migrations 32, 33, and 34, in order, with `npx supabase db push` during an approved maintenance window.
-- [ ] Redeploy `alaga-ai`, `manage-user`, `backup-admin`, `process-backups`, and `process-notification-jobs` after setting and independently reviewing their secrets.
-- [ ] Confirm migrations 1–33 remain byte-identical. The 2026-08-04 linked dry-run reported Migrations 32, 33, and 34 pending; investigate any different list before deployment.
+- [ ] Compare an authenticated linked-project dry run with the 56 reviewed
+      repository migrations. Apply only the exact pending sequence approved for
+      that environment during a maintenance window; source presence does not
+      prove hosted application.
+- [ ] Compare deployed revisions for all five function directories in current
+      source: `alaga-ai`, `manage-user`, `backup-admin`, `process-backups`, and
+      `process-notification-jobs`. Redeploy only reviewed revisions after their
+      secrets and callers are independently verified.
+- [ ] Confirm Migrations 1-56 remain canonical-content-identical after CRLF and
+      lone-CR normalization to LF, matching `npm run db:verify`.
 - [ ] Run `npm test`, `npm run lint`, `npm run format:check`, `npm run build`, `npm run db:verify`, `npm audit --omit=dev --audit-level=high`, and `git diff --check` from a clean release checkout.
 - [ ] Record the release commit, migration output, Edge Function versions, approver, operator, and rollback owner.
 
 ## Supabase Auth and sessions
 
-- [ ] Disable public and anonymous sign-up. Create staff only through the trusted administrator workflow.
+- [ ] Enable only email signup for the Resident registration path; keep
+      anonymous signup disabled. Verify every public account remains an invited
+      Resident until Administrator approval. Create staff only through the
+      trusted administrator workflow.
 - [ ] Set JWT expiry to 900 seconds, enable refresh-token rotation, and keep the reuse interval at 10 seconds or less.
 - [ ] Enable secure password changes and require lower/upper-case letters plus digits with at least eight characters. Apply a stronger organizational password policy if required.
 - [ ] Configure CAPTCHA or an upstream bot/WAF control for public login abuse. Keep the Supabase sign-in rate limit at 30 per five minutes per IP or lower.
@@ -34,7 +44,9 @@ Status: release gate for Phase 13. Complete this checklist in the production Sup
 
 ## Edge Functions, CORS, and secrets
 
-- [ ] Set `ALLOWED_ORIGINS` and `AI_ALLOWED_ORIGINS` to comma-separated exact HTTPS origins only: no wildcard, path, query, credentials, or trailing slash.
+- [ ] Set the shared `ALLOWED_ORIGINS` secret to comma-separated exact HTTPS
+      production origins only (plus explicitly reviewed development origins when
+      needed): no wildcard, path, query, credentials, or trailing slash.
 - [ ] Verify browser-facing functions reject a missing or unapproved Origin and scheduler functions reject browser Origin headers.
 - [ ] Keep `verify_jwt = true` for `alaga-ai`, `manage-user`, and `backup-admin`. Scheduler functions must additionally require their independent 32+ character secret tokens.
 - [ ] Store service-role, Gemini, provider, signing, and scheduler keys only as Supabase secrets. Never use a `VITE_` prefix for a secret.

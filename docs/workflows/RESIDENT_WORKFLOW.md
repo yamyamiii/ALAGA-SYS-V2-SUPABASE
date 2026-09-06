@@ -4,8 +4,9 @@
 
 Administrators and BHWs open `/residents`, select **Add resident**, complete the
 required name, birth date, sex, and Bagongpook purok fields, then add optional
-demographic/contact data. Middle name, household, address, contact details,
-PhilHealth number, and emergency contact are optional.
+demographic/contact data. Middle name, address, contact details, PhilHealth
+number, and emergency contact are optional. Household selection is not shown in
+the Resident create/edit form; it is handled separately from Resident details.
 
 Names are trimmed and internal whitespace normalized. Future birth dates,
 invalid locality combinations, unsuitable pregnancy fields, and malformed
@@ -28,7 +29,21 @@ update both succeed.
 Open resident details and choose **Household assignment**. Only current
 households in the resident's selected Bagongpook purok are returned by debounced,
 paginated search by number, head, or address. Choosing no
-household removes only the relationship. The resident record remains intact.
+household is an explicit state and does not start a replacement search. Saving
+it removes only the relationship. The resident record remains intact. A current
+household head must be replaced or cleared before that Resident can be removed
+from the household.
+
+Resident details identify the current **Household Head** and expose an explicit
+head-change action only to roles already authorized to manage registry
+relationships. The replacement list contains only active members of the same
+household and excludes the current head. An archive attempt opens this workflow
+first, then presents the normal archive confirmation after the guarded head
+update succeeds. If no other eligible active member exists, an Administrator
+may explicitly choose **Archive Resident and Household**. The trusted database
+workflow serializes registry writes, clears the head and Resident membership,
+and archives both records atomically. BHW and view-only roles do not receive
+this sole-member archive capability.
 
 Administrators may open **Manage portal account** to link an eligible existing
 resident profile, invite-and-link a new resident account, inspect status, or
@@ -45,7 +60,10 @@ browse the route; RLS permits only their own linked row.
 Archive requires confirmation and uses neutral `archived` status. `moved_out`
 and `deceased` also set the archive timestamp. BHW archival is one-way under
 existing RLS. Administrators can select archived-only/all filters and restore a
-neutral archived row to active. No permanent delete path exists.
+neutral archived row to active. The normal registry workflow never physically
+deletes a Resident. Separately, the trusted account-lifecycle backend may remove
+a linked Resident only when its fail-closed dependency scan proves that no
+protected history or current/future foreign-key dependency must be retained.
 
 ## Manual checks
 
@@ -68,3 +86,8 @@ neutral archived row to active. No permanent delete path exists.
     audit event exists only after explicit continuation.
 12. As administrator, link and unlink a resident account; confirm BHW and other
     roles cannot perform the action.
+13. As administrator, archive a household head with another active member;
+    choose the replacement, confirm the head changes, then complete archive.
+14. Confirm an outside, inactive, or archived Resident is never offered as a
+    replacement. For a sole-active-member head, confirm only an administrator
+    can explicitly archive the Resident and household together.

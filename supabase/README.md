@@ -1,13 +1,13 @@
 # Supabase database and trusted-function foundation
 
 This directory contains the reviewable PostgreSQL and Edge Function source for
-ALAGA-SYS through the release-candidate outbound notification foundation.
+ALAGA-SYS through the current 56-migration foundation.
 
 ```text
 supabase/
   bootstrap/   Reviewed manual first-administrator transaction
   functions/   Trusted Auth Admin, ALAGA AI, and notification Edge Functions
-  migrations/  Thirty-two ordered forward-only migrations
+  migrations/  Fifty-six ordered forward-only migrations
   policies/     Reserved for supplementary reviewed policy notes/fragments
   seed.sql      Optional fictional development reference data
 ```
@@ -19,8 +19,9 @@ The Phase 1 migrations create seven domain tables: `profiles`, `barangays`,
 create validated enums, number sequences, security helpers, timestamp/audit
 triggers, indexes, restrictive RLS policies, and explicit API-role grants.
 
-There are no clinical encounters, diagnoses, prescriptions, medicines,
-immunizations, maternal records, reports, or healthcare frontend queries.
+Those Phase 1 files contain no clinical encounters, diagnoses, prescriptions,
+medicines, immunizations, maternal records, reports, or healthcare frontend
+queries; later migrations add the reviewed foundations described below.
 
 Migration 12 adds profile invitation/status metadata, an internal rate-limit
 table, service-role-only administrator RPCs, and final-active-administrator
@@ -57,8 +58,9 @@ Migration 29 adds a metadata-only, service-role AI rate-limit table and atomic
 consume function. Migration 30 adds a service-role-only, read-only grounding
 RPC whose explicit output is limited to approved public operational text. It
 creates no content store and returns no database identifiers or author/contact
-fields. Migration 31 adds printable healthcare documents. Migrations 1 through
-31 are the applied remote baseline; Migration 32 remains pending.
+fields. Migration 31 adds printable healthcare documents. These are repository
+source facts only; determine the hosted project's applied migration state from
+an authenticated linked dry run rather than this document.
 
 The `alaga-ai` Edge Function revalidates the Supabase user and active profile,
 derives role context from the database, enforces the server rate limit, loads
@@ -67,14 +69,55 @@ storage disabled. Deterministic symbolic navigation is role checked before the
 provider. It does not query application healthcare data and must be deployed
 separately after Migration 30.
 
-Migration 31 adds the reviewed printable-document and clinical-referral
-boundary. Migration 32 adds opt-in notification preferences, an RLS-protected
+Migration 32 adds opt-in notification preferences, an RLS-protected
 outbound job queue, minimized delivery attempts, best-effort workflow triggers,
 Manila-aware appointment reminders, and service-role claim/completion RPCs.
 The `process-notification-jobs` Edge Function resolves confirmed Auth contacts
 server-side and uses provider-neutral email/SMS adapters. SMS is disabled by
 default. Migration, function, scheduler, and provider activation remain manual;
 see [`docs/deployment/EMAIL_SMS.md`](../docs/deployment/EMAIL_SMS.md).
+
+Migrations 33 through 43 preserve the reviewed backup, hardening, appointment,
+and notification UAT corrections. Migration 44 adds Resident-only public signup
+capture and Administrator review. It does not expose a staff-registration path:
+new public accounts remain invited Residents, review RPCs remain service-role
+only, and exact existing-Resident matches require explicit linking. Migration 45
+corrects the approval workflow so approved registrations create or explicitly
+link the intended Resident without weakening duplicate and locality checks.
+Migrations 46 and 47 add the Administrator-only permanent cleanup boundary for
+dependency-free Resident accounts. Migration 47 stages linked Resident and
+disposable preference state for compensation, while all appointment, clinical,
+document, audit, inquiry, and notification-job dependencies remain blockers.
+Migration 48 corrects the deployed Resident preparation predicates without
+changing that contract. Migration 49 adds service-role-only generalized
+eligibility, preparation, and compensation RPCs for dependency-free Resident,
+BHW, Nurse, and Midwife accounts. It rejects every Administrator target and
+reuses the fail-closed current/future foreign-key scanner; protected operational
+records are never removed to make an account eligible.
+Migration 50 restores the RLS-preserving Bagongpook household picker through the
+trusted deployment-context boundary. Migration 51 adds the active
+Administrator-only atomic workflow for archiving a sole-active-member household
+head and household without weakening the normal replacement-head rule.
+Migration 52 allows a dependency-free archived Resident identity to use the
+existing compensated permanent-account cleanup workflow. It preserves every
+real protected-history check and adds a service-role-only, non-sensitive
+retention assessment used to select guarded deletion or protected-history
+retirement.
+Migration 53 adds protected-history account retirement. It retains the profile
+and every operational foreign key, permanently marks the account inactive and
+retired, excludes it from normal User Management, and exposes only guarded
+service-role preparation/compensation RPCs. The Edge Function tombstones the
+Auth email under the reserved `.invalid` domain and applies the supported
+100-year Auth ban, allowing the original email to be reused without deleting
+the historical profile identity.
+Migration 54 adds the symbolic pending-Resident-registration notification enum
+value in its own committed migration. Migration 55 adds idempotent trusted
+triggers for auto-confirmed signup, later email confirmation, and existing
+confirmed pending registrations. Only active Administrators receive the
+privacy-minimized `/user-management` notification; browser roles cannot invoke
+the creation functions or choose recipients. Migration 56 preserves existing
+appointment history while requiring new or changed appointment start times to
+use 30-minute Asia/Manila slots from 08:00 through 16:00 inclusive.
 
 ## Applying migrations
 
@@ -116,7 +159,8 @@ historical references.
 - A publishable key identifies the project; RLS remains the authorization boundary.
 - Never place a secret or service-role key in frontend code, a `VITE_` variable,
   source control, logs, screenshots, documentation, or support messages.
-- `anon` has no Phase 1 table access.
+- `anon` has no table access. Its only Migration 44 database capability is the
+  read-only RPC that returns the seven active Bagongpook purok IDs and names.
 - `authenticated` operations require explicit grants and matching RLS policies.
 - Normal client roles receive no physical delete or direct audit-insert access.
 - Service-role credentials belong only in a trusted backend and are not needed

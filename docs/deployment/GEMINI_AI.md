@@ -1,8 +1,9 @@
 # Gemini AI deployment
 
-Phase 9A, Phase 9B, and Migration 30 are deployed. Phase 9C adds no database
-migration. Its updated `alaga-ai` Edge Function remains pending until reviewed
-and deployed manually.
+The repository contains the Phase 9A-9C ALAGA AI source and its Migration 29-30
+database dependencies. Source presence does not prove that either migration,
+the current `alaga-ai` Edge Function revision, or its hosted secrets have been
+deployed. Confirm the linked project state before a manual rollout.
 
 ## Runtime requirements
 
@@ -11,8 +12,8 @@ and the Gemini Interactions API. Google documents Interactions support in SDK
 2.3.0 and newer and recommends it for new applications:
 <https://ai.google.dev/gemini-api/docs/interactions-overview>.
 
-The documented production starting point is the current stable Flash model
-`gemini-3.6-flash`. Runtime source contains no fallback model; set
+The reviewed project baseline is `gemini-3.6-flash`; this is not a claim that it
+is Google's newest Flash model. Runtime source contains no fallback model; set
 `GEMINI_MODEL` explicitly so model replacement does not require a code change.
 Review Google's current model and deprecation pages before every rollout:
 <https://ai.google.dev/gemini-api/docs/models>.
@@ -21,12 +22,19 @@ Review Google's current model and deprecation pages before every rollout:
 
 - `GEMINI_API_KEY`
 - `GEMINI_MODEL`
-- `AI_ALLOWED_ORIGINS` — comma-separated exact origins, with no wildcard or path
+- `ALLOWED_ORIGINS` — the shared comma-separated exact-origin allowlist used by
+  browser-facing Edge Functions, with no wildcard or path
 
 Optional configuration:
 
 - `AI_MAX_REQUESTS_PER_HOUR` — integer 1–100; default `20`
 - `AI_MAX_INPUT_CHARACTERS` — integer 2,000–20,000; default `8000`
+
+The system instruction asks Gemini for concise, conversational plain text.
+Short paragraphs are preferred; simple numbered lists or hyphen bullets are
+used only when helpful. Decorative separators and routine Markdown emphasis are
+discouraged. The browser renders returned content as text rather than executable
+HTML.
 
 Standard Supabase-provided server values are also required:
 `SUPABASE_URL`, a publishable/anon key, and a secret/service-role key. Never
@@ -40,7 +48,7 @@ From the reviewed repository and linked project:
 ```bash
 npx supabase secrets set GEMINI_API_KEY=REPLACE_SECURELY
 npx supabase secrets set GEMINI_MODEL=gemini-3.6-flash
-npx supabase secrets set AI_ALLOWED_ORIGINS=https://REPLACE_WITH_APP_ORIGIN
+npx supabase secrets set ALLOWED_ORIGINS=https://alaga-sys.vercel.app,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5175,http://192.168.1.16:5173
 npx supabase secrets set AI_MAX_REQUESTS_PER_HOUR=20
 npx supabase secrets set AI_MAX_INPUT_CHARACTERS=8000
 

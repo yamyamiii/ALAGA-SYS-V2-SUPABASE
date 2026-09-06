@@ -16,15 +16,18 @@ and returns only:
     {
       "type": "navigate",
       "actionId": "open_appointments",
+      "label": "Open Appointments",
       "requiresConfirmation": true
     }
   ]
 }
 ```
 
-The response never contains a route or URL. The client uses a fixed local
-registry to translate an allowed action ID into a label and route. It discards
-unknown IDs, unexpected fields, and role-incompatible actions.
+The response never contains a route or URL. The server derives the action ID
+and display label from its fixed role-aware registry; it does not accept a label
+from Gemini. The client independently maps the allowed action ID to its fixed
+local label and route, then discards unknown IDs, unexpected fields, and
+role-incompatible actions.
 
 ## Role-aware destinations
 
@@ -101,11 +104,12 @@ archive, or clinical-documentation permissions.
 
 ## Resident appointment request form action
 
-For an active Resident account linked to an active resident record, approved
-appointment-request phrases may return the fixed `ui_action` ID
-`open_appointment_request_form`. Staff roles and unlinked resident accounts do
-not receive it. The Edge Function verifies the canonical profile and link before
-constructing the action; Gemini cannot create it.
+For an active account whose canonical profile role is Resident, approved
+English, Filipino, and Taglish appointment-request phrases return the fixed
+`ui_action` ID `open_appointment_request_form`. Staff roles do not receive it.
+The Edge Function verifies the canonical active profile role before constructing
+the action; Gemini cannot create it. Resident-link and request eligibility remain
+authoritative in the existing appointment form and trusted request RPC.
 
 The client maps the symbolic ID to the existing resident Appointments route. A
 single-use opaque token is held only in memory and carried in React Router state.

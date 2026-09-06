@@ -6,9 +6,10 @@ search engine, report generator, or record assistant.
 
 ## Starting a conversation
 
-Open **ALAGA AI** from the primary menu or floating button. The first screen offers short
-role-aware starter questions. You may select one or type in English, Filipino,
-or common Taglish. Press Enter to send and Shift+Enter for a new line.
+Open **ALAGA AI** from the floating assistant button or the existing Dashboard
+launcher. It is not a left-sidebar navigation item. The first screen offers
+short role-aware starter questions. You may select one or type in English,
+Filipino, or common Taglish. Press Enter to send and Shift+Enter for a new line.
 
 Useful examples include:
 
@@ -23,16 +24,46 @@ the trusted live ALAGA-SYS records. If that information is missing, inactive,
 archived, unpublished, or expired, it says that verified information could not
 be found rather than guessing.
 
+Responses use concise conversational plain text. Normal answers use short
+paragraphs; procedures may use simple numbered steps, and short collections may
+use hyphen bullets. Decorative Markdown separators and routine bold or italic
+emphasis are intentionally avoided.
+
+### Barangay Bagongpook health-service schedule
+
+The trusted Edge Function contains the healthcare-personnel-verified local
+service schedule as one structured catalog:
+
+- General Consultation: regular service days/every day under current barangay
+  practice
+- Pregnancy-related/Buntis services: Tuesday
+- Maternal Care: first Tuesday of the month
+- Immunization: first Wednesday of the month
+- Family Planning: Thursday
+- Postpartum Care: coordinated healthcare-personnel home visit after childbirth
+
+English, Filipino, and common Taglish schedule questions are answered directly
+from this catalog without Gemini or private application data. Schedule answers
+recommend confirming changes with the Barangay Health Center and never guarantee
+staff availability on a particular date.
+
+Service schedules are not official opening or closing hours. When the separate
+verified `operating_hours` value is unavailable, the assistant says so and
+recommends confirming directly with the Barangay Health Center; it does not infer
+hours from the service-day schedule.
+
 `Paano mag-request ng appointment?` is answered from the approved, read-only
 ALAGA-SYS workflow guide: open Appointments, select Request Appointment,
 complete the required information, submit the request, and wait for Barangay
 Health Center review. This guidance does not query or reveal resident or
 appointment data.
 
-For an active linked Resident, the same answer can include a **Request an
-Appointment** button. Selecting it opens the existing blank request form on the
-resident Appointments page. It does not choose a service, date, time, reason, or
-resident record and never submits a request automatically.
+For an active Resident profile, the same answer includes a **Request an
+Appointment** button in English, Filipino, and common Taglish. Selecting it
+opens the existing blank request form on the Resident Appointments page. It does
+not choose a service, date, time, reason, or resident record and never submits a
+request automatically. The form and trusted request RPC still enforce the
+linked-resident and appointment eligibility rules.
 
 ## Sources and navigation
 
