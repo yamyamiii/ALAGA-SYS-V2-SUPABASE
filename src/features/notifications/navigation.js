@@ -30,6 +30,10 @@ const NOTIFICATION_DESTINATIONS = Object.freeze({
     path: ROUTES.healthRecords,
     permission: PERMISSIONS.VIEW_HEALTH_RECORDS,
   },
+  resident_registration_pending: {
+    path: ROUTES.userManagement,
+    permission: PERMISSIONS.MANAGE_USERS,
+  },
 });
 
 export function resolveNotificationDestination(notification, can) {

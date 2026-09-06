@@ -81,6 +81,12 @@ describe("release-candidate role-aware UI", () => {
     expect(notificationNavigation).toMatch(
       /notification\.action_path !== target\.path/i,
     );
+    expect(notificationNavigation).toMatch(
+      /resident_registration_pending[\s\S]*ROUTES\.userManagement[\s\S]*PERMISSIONS\.MANAGE_USERS/i,
+    );
+    expect(fs.readFileSync("src/features/assistance/hooks.js", "utf8")).toMatch(
+      /refetchInterval:\s*enabled\s*\?\s*30_000\s*:\s*false/i,
+    );
   });
 
   it("retains hidden external-delivery service and hook infrastructure", () => {

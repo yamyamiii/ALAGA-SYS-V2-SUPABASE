@@ -269,6 +269,46 @@ describe("notification settings UI", () => {
     expect(navigate).toHaveBeenCalledWith("/announcements");
   });
 
+  it("marks an actionable Resident registration notification read and opens User Management", async () => {
+    const user = userEvent.setup();
+    useNotifications.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        items: [
+          {
+            id: "registration-notification",
+            notification_type: "resident_registration_pending",
+            title: "New Resident registration",
+            summary: "A new Resident registration is awaiting review.",
+            action_path: "/user-management",
+            available_at: "2026-08-15T03:00:00Z",
+            read_at: null,
+          },
+        ],
+        total: 1,
+        unread: 1,
+      },
+      refetch: vi.fn(),
+    });
+
+    render(<NotificationsPage />);
+    await user.click(
+      screen.getByRole("button", {
+        name: /read and open notification: new resident registration/i,
+      }),
+    );
+
+    expect(markRead).toHaveBeenCalledWith(
+      "registration-notification",
+      expect.any(Object),
+    );
+    expect(navigate).toHaveBeenCalledWith("/user-management");
+    expect(
+      screen.getByText(/Resident registration awaiting review/),
+    ).toBeInTheDocument();
+  });
+
   it("marks a no-destination notification without unsafe navigation", async () => {
     const user = userEvent.setup();
     useNotifications.mockReturnValue({

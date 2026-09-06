@@ -29,13 +29,14 @@ export function useAnnouncements(filters) {
   );
 }
 export function useNotifications(filters, enabled = true) {
-  return useQuery(
-    query(
+  return useQuery({
+    ...query(
       assistanceKeys.notifications(filters),
       ({ signal }) => assistanceService.listNotifications(filters, signal),
       enabled,
     ),
-  );
+    refetchInterval: enabled ? 30_000 : false,
+  });
 }
 export function useActivity(filters) {
   return useQuery(

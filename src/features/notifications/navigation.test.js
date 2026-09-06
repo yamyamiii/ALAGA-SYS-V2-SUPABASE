@@ -15,6 +15,7 @@ describe("notification navigation", () => {
     ["appointment_checked_in", ROUTES.appointments],
     ["new_announcement", ROUTES.announcements],
     ["health_encounter_signed", ROUTES.healthRecords],
+    ["resident_registration_pending", ROUTES.userManagement],
   ])("resolves the trusted %s destination", (notificationType, path) => {
     expect(
       resolveNotificationDestination(
@@ -57,5 +58,20 @@ describe("notification navigation", () => {
         allowed,
       ),
     ).toBeNull();
+  });
+
+  it("requires User Management permission for a registration review notification", () => {
+    const can = vi.fn((permission) => permission !== PERMISSIONS.MANAGE_USERS);
+
+    expect(
+      resolveNotificationDestination(
+        {
+          notification_type: "resident_registration_pending",
+          action_path: ROUTES.userManagement,
+        },
+        can,
+      ),
+    ).toBeNull();
+    expect(can).toHaveBeenCalledWith(PERMISSIONS.MANAGE_USERS);
   });
 });

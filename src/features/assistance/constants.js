@@ -43,6 +43,7 @@ export const NOTIFICATION_LABELS = Object.freeze({
   appointment_checked_in: "Appointment checked in",
   health_encounter_signed: "Health encounter signed",
   new_announcement: "New announcement",
+  resident_registration_pending: "Resident registration awaiting review",
   maternal_event: "Maternal care update",
   child_event: "Child care update",
 });
