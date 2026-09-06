@@ -18,6 +18,7 @@ import {
   requiresLiveGrounding,
   safetyResponseFor,
   sanitizeGroundingSources,
+  serviceScheduleResponseFor,
   validateConversationPayload,
   withWorkflowGrounding,
   uncertaintyMessageFor,
@@ -44,6 +45,10 @@ function firstNamedKey(variableName: string): string | null {
   }
 }
 
+function configuredAllowedOrigins() {
+  return parseAllowedOrigins(Deno.env.get("ALLOWED_ORIGINS"));
+}
+
 function environment() {
   const url = Deno.env.get("SUPABASE_URL");
   const publishableKey =
@@ -56,9 +61,6 @@ function environment() {
     firstNamedKey("SUPABASE_SECRET_KEYS");
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
   const model = Deno.env.get("GEMINI_MODEL")?.trim();
-  const allowedOrigins = parseAllowedOrigins(
-    Deno.env.get("AI_ALLOWED_ORIGINS"),
-  );
   const maximumRequestsPerHour = parsePositiveInteger(
     Deno.env.get("AI_MAX_REQUESTS_PER_HOUR"),
     20,
@@ -94,7 +96,6 @@ function environment() {
     secretKey,
     geminiApiKey,
     model,
-    allowedOrigins,
     maximumRequestsPerHour,
     maximumInputCharacters,
   };
@@ -193,27 +194,9 @@ async function activeProfile(admin: SupabaseClient, callerId: string) {
       403,
     );
   }
-  let hasActiveResidentLink = false;
-  if (data.role === "resident") {
-    const { count: residentCount, error: residentError } = await admin
-      .from("residents")
-      .select("linked_profile_id", { count: "exact", head: true })
-      .eq("linked_profile_id", data.id)
-      .eq("status", "active")
-      .is("archived_at", null);
-    if (residentError || residentCount === null || residentCount > 1) {
-      throw new AiAssistantError(
-        "authorization_unavailable",
-        "Resident account linking could not be verified. Try again later.",
-        503,
-      );
-    }
-    hasActiveResidentLink = residentCount === 1;
-  }
   return {
     id: data.id as string,
     role: data.role as CanonicalRole,
-    hasActiveResidentLink,
   };
 }
 
@@ -350,12 +333,13 @@ Deno.serve(async (request) => {
   let failureCategory = "internal_error";
 
   try {
-    const env = environment();
-    headers = exactOriginCorsHeaders(request, env.allowedOrigins);
+    const allowedOrigins = configuredAllowedOrigins();
+    headers = exactOriginCorsHeaders(request, allowedOrigins);
     if (request.method === "OPTIONS") {
       logRequest(requestId, null, "cors_preflight", startedAt);
       return new Response(null, { status: 204, headers });
     }
+    const env = environment();
     if (request.method !== "POST") {
       throw new AiAssistantError(
         "method_not_allowed",
@@ -452,7 +436,6 @@ Deno.serve(async (request) => {
     const workflowResponse = workflowResponseFor(
       finalUserMessage,
       profile.role,
-      profile.hasActiveResidentLink,
     );
     if (workflowResponse) {
       logRequest(requestId, profile.role, workflowResponse.category, startedAt);
@@ -487,6 +470,28 @@ Deno.serve(async (request) => {
             navigationResponse.message,
             [],
             navigationResponse.actions,
+          ),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+
+    const serviceScheduleResponse =
+      serviceScheduleResponseFor(finalUserMessage);
+    if (serviceScheduleResponse) {
+      logRequest(
+        requestId,
+        profile.role,
+        serviceScheduleResponse.category,
+        startedAt,
+      );
+      return jsonResponse(
+        {
+          data: assistantData(
+            serviceScheduleResponse.message,
+            serviceScheduleResponse.sources,
           ),
           request_id: requestId,
         },

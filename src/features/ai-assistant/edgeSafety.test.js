@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const index = fs.readFileSync("supabase/functions/alaga-ai/index.ts", "utf8");
 const domain = fs.readFileSync("supabase/functions/alaga-ai/domain.ts", "utf8");
+const edgeEnvironment = fs.readFileSync(
+  "supabase/functions/.env.example",
+  "utf8",
+);
 const config = fs.readFileSync("supabase/config.toml", "utf8");
 const groundingMigration = fs.readFileSync(
   "supabase/migrations/20260720003000_ai_grounding_context.sql",
@@ -47,23 +51,47 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(index).toMatch(/select\("id, role, account_status"\)/);
   });
 
-  it("verifies an active resident link before offering resident UI actions", () => {
-    expect(index).toMatch(/\.from\("residents"\)/);
-    expect(index).toMatch(/\.eq\("linked_profile_id", data\.id\)/);
-    expect(index).toMatch(/\.eq\("status", "active"\)/);
-    expect(index).toMatch(/\.is\("archived_at", null\)/);
-    expect(index).toMatch(/profile\.hasActiveResidentLink/);
+  it("authorizes resident UI actions by active profile role without reading resident data", () => {
+    expect(index).not.toMatch(/\.from\("residents"\)/);
+    expect(index).not.toMatch(/hasActiveResidentLink/);
     expect(domain).toMatch(
-      /role === "resident"[\s\S]*hasActiveResidentLink[\s\S]*open_appointment_request_form/,
+      /role === "resident"[\s\S]*actionDefinition\.roles\.includes\(role\)/,
     );
   });
 
   it("uses exact-origin CORS and strict request validation", () => {
+    expect(index).toContain('Deno.env.get("ALLOWED_ORIGINS")');
+    expect(index).not.toContain('Deno.env.get("AI_ALLOWED_ORIGINS")');
     expect(domain).toMatch(/!origin \|\| !allowedOrigins\.has\(origin\)/);
     expect(domain).toMatch(/values\.includes\("\*"\)/);
+    expect(domain).toContain(
+      '"Access-Control-Allow-Headers":\n      "authorization, x-client-info, apikey, content-type"',
+    );
+    expect(domain).toContain('"Access-Control-Allow-Methods": "POST, OPTIONS"');
+    expect(edgeEnvironment).toContain("https://alaga-sys.vercel.app");
+    expect(edgeEnvironment).toContain("http://localhost:5173");
+    expect(edgeEnvironment).toContain("http://127.0.0.1:5173");
+    expect(edgeEnvironment).toContain("http://localhost:5175");
+    expect(edgeEnvironment).toContain("http://192.168.1.16:5173");
+    expect(edgeEnvironment).not.toMatch(/ALLOWED_ORIGINS=.*\*/);
     expect(domain).toMatch(/rejectUnknownKeys\(input, \["messages"\]/);
     expect(domain).toMatch(/Conversation roles must alternate/);
     expect(index).toMatch(/MAX_BODY_BYTES/);
+  });
+
+  it("handles allowed preflights before auth and Gemini configuration", () => {
+    const handler = index.slice(index.indexOf("Deno.serve"));
+    const cors = handler.indexOf("exactOriginCorsHeaders");
+    const preflight = handler.indexOf('request.method === "OPTIONS"');
+    const runtime = handler.indexOf("const env = environment()");
+    const authentication = handler.indexOf("authenticatedCaller(");
+    const gemini = handler.indexOf("new GoogleGenAI");
+
+    expect(cors).toBeGreaterThan(-1);
+    expect(preflight).toBeGreaterThan(cors);
+    expect(runtime).toBeGreaterThan(preflight);
+    expect(authentication).toBeGreaterThan(runtime);
+    expect(gemini).toBeGreaterThan(authentication);
   });
 
   it("uses the current Gemini SDK server-side and disables provider storage", () => {
@@ -79,10 +107,7 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(index).not.toMatch(
       /\.from\("(?:appointments|health_encounters|vital_signs|maternal_|child_)"\)/i,
     );
-    expect(index.match(/\.from\("residents"\)/g)).toHaveLength(1);
-    expect(index).toMatch(
-      /\.from\("residents"\)\s*\.select\("linked_profile_id", \{ count: "exact", head: true \}\)/,
-    );
+    expect(index).not.toMatch(/\.from\("residents"\)/);
     expect(index).not.toMatch(/const \{ data: resident/);
     expect(index).not.toMatch(
       /chief_complaint|diagnosis_text|treatment_notes|appointment_reason|pregnancy_number/i,
@@ -186,7 +211,7 @@ describe("ALAGA AI Edge Function security boundary", () => {
   it("answers approved workflows before live grounding or Gemini", () => {
     expect(domain).toMatch(/workflowResponseFor/);
     expect(index).toMatch(
-      /workflowResponseFor\(\s*finalUserMessage,\s*profile\.role,\s*profile\.hasActiveResidentLink,\s*\)/,
+      /workflowResponseFor\(\s*finalUserMessage,\s*profile\.role,\s*\)/,
     );
     expect(index.indexOf("const workflowResponse")).toBeGreaterThan(-1);
     expect(index.indexOf("const workflowResponse")).toBeLessThan(
@@ -198,6 +223,25 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(index.indexOf("const workflowResponse")).toBeLessThan(
       index.indexOf("const ai = new GoogleGenAI"),
     );
+  });
+
+  it("answers the static Bagongpook service schedule before live data or Gemini", () => {
+    const handler = index.slice(index.indexOf("Deno.serve"));
+    const scheduleResponse = handler.indexOf("serviceScheduleResponseFor(");
+    const sourceTypes = handler.indexOf("groundingSourceTypesFor(");
+    const gemini = handler.indexOf("new GoogleGenAI");
+    const scheduleCatalog = domain.slice(
+      domain.indexOf("BAGONGPOOK_HEALTH_SERVICE_SCHEDULE"),
+      domain.indexOf("const ALL_ROLES"),
+    );
+
+    expect(scheduleResponse).toBeGreaterThan(-1);
+    expect(scheduleResponse).toBeLessThan(sourceTypes);
+    expect(scheduleResponse).toBeLessThan(gemini);
+    expect(scheduleCatalog).toContain('id: "immunization"');
+    expect(scheduleCatalog).toContain("first Wednesday of every month");
+    expect(scheduleCatalog).not.toMatch(/\b\d{1,2}:\d{2}\b/);
+    expect(index).not.toMatch(/\.from\("appointments"\)/);
   });
 
   it("keeps appointment workflow guidance static, read-only, and PHI-free", () => {

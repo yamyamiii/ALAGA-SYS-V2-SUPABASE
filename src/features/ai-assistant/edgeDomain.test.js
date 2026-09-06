@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildSystemInstruction,
   buildProviderInput,
   detectResponseLanguage,
   groundedResponseFor,
@@ -11,6 +12,7 @@ import {
   sanitizeGroundingSources,
   sanitizeNavigationActions,
   safetyResponseFor,
+  serviceScheduleResponseFor,
   withWorkflowGrounding,
   workflowResponseFor,
   workflowGrounding,
@@ -46,7 +48,6 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     const response = workflowResponseFor(
       "Paano mag-request ng appointment?",
       "resident",
-      true,
     );
 
     expect(requiresLiveGrounding("Paano mag-request ng appointment?")).toBe(
@@ -61,13 +62,8 @@ describe("ALAGA AI server grounding and navigation domain", () => {
         },
       ],
     });
-    expect(response?.message).toContain("1. Buksan ang Appointments module.");
-    expect(response?.message).toContain(
-      "5. Hintayin ang review at approval ng Barangay Health Center.",
-    );
-    expect(response?.message).toContain(
-      "Maaari ko ring buksan ang request form para sa iyo.",
-    );
+    expect(response?.message).toContain("buksan ang My Appointments");
+    expect(response?.message).toContain("button sa ibaba");
     expect(response?.actions).toEqual([
       {
         type: "ui_action",
@@ -80,13 +76,16 @@ describe("ALAGA AI server grounding and navigation domain", () => {
 
   it.each([
     "Paano mag-request ng appointment?",
+    "Paano ako mag-request ng appointment?",
+    "Paano magpa-appointment?",
     "Paano ako magpapa-appointment?",
     "Gusto kong magpa-appointment.",
     "Mag-request ako ng appointment.",
+    "How can I request an appointment?",
     "Book an appointment.",
     "Request an appointment.",
   ])("offers the resident form action for supported phrase: %s", (phrase) => {
-    expect(workflowResponseFor(phrase, "resident", true)?.actions).toEqual([
+    expect(workflowResponseFor(phrase, "resident")?.actions).toEqual([
       expect.objectContaining({
         type: "ui_action",
         actionId: "open_appointment_request_form",
@@ -94,10 +93,15 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     ]);
   });
 
-  it("withholds the request-form action from unlinked residents and staff", () => {
+  it("keeps the request-form action role-based and withholds it from staff", () => {
     expect(
-      workflowResponseFor("Request an appointment", "resident", false)?.actions,
-    ).toEqual([]);
+      workflowResponseFor("Request an appointment", "resident")?.actions,
+    ).toEqual([
+      expect.objectContaining({
+        type: "ui_action",
+        actionId: "open_appointment_request_form",
+      }),
+    ]);
     for (const role of [
       "admin",
       "barangay_health_worker",
@@ -105,7 +109,7 @@ describe("ALAGA AI server grounding and navigation domain", () => {
       "midwife",
     ]) {
       expect(
-        workflowResponseFor("Request an appointment", role, true)?.actions,
+        workflowResponseFor("Request an appointment", role)?.actions,
       ).toEqual([]);
     }
   });
@@ -220,6 +224,21 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     expect(detectResponseLanguage("Ano ang operating hours?")).toBe("taglish");
   });
 
+  it("instructs Gemini to prefer concise plain text without decorative Markdown", () => {
+    const instruction = buildSystemInstruction("resident");
+
+    expect(instruction).toContain("Prefer clean, conversational plain text");
+    expect(instruction).toContain("Never use ***");
+    expect(instruction).toContain(
+      "Avoid Markdown emphasis such as **bold** and *italic*",
+    );
+    expect(instruction).toContain("simple numbered lists or hyphen bullets");
+    expect(instruction).toContain("Do not make every response a list");
+    expect(instruction).toContain(
+      "Match the language of the final user message",
+    );
+  });
+
   it("answers verified hours and services directly from stored values", () => {
     expect(
       groundedResponseFor("What are the operating hours?", [
@@ -241,6 +260,52 @@ describe("ALAGA AI server grounding and navigation domain", () => {
         "Ang mga nakatalang services ng health center ay: Consultations, prenatal care, and immunization.",
       sources: [{ title: "Services Offered" }],
     });
+  });
+
+  it.each([
+    ["Kailan ang immunization?", "unang Miyerkules ng buwan"],
+    ["When is immunization available?", "first Wednesday of every month"],
+    ["Kailan ang family planning?", "tuwing Huwebes"],
+    ["Kailan ang maternal care?", "unang Martes ng buwan"],
+    ["Kailan ang Buntis services?", "tuwing Martes"],
+    ["When is postpartum care available?", "home visit after childbirth"],
+    [
+      "Pwede ba magpa-general consultation bukas?",
+      "Hindi nito ginagarantiya ang availability sa isang partikular na petsa",
+    ],
+    ["Kailan available ang immunization?", "latest confirmation"],
+  ])("answers the verified Bagongpook service schedule: %s", (prompt, text) => {
+    expect(safetyResponseFor(prompt)).toBeNull();
+    expect(navigationResponseFor(prompt, "resident")).toBeNull();
+    expect(serviceScheduleResponseFor(prompt)).toMatchObject({
+      category: "grounding_service_schedule",
+      message: expect.stringContaining(text),
+      sources: [
+        {
+          type: "health_center",
+          label: "Verified Local Schedule",
+          title: "Barangay Bagongpook Health Service Schedule",
+        },
+      ],
+    });
+  });
+
+  it("does not treat service schedules as official opening hours", () => {
+    const response = groundedResponseFor("What are the opening hours?", []);
+
+    expect(response).toMatchObject({
+      category: "grounding_missing",
+      message: expect.stringContaining(
+        "official opening and closing hours are not currently available",
+      ),
+      sources: [],
+    });
+    expect(response?.message).toContain(
+      "confirm directly with the Barangay Health Center",
+    );
+    expect(
+      serviceScheduleResponseFor("What are the opening hours?"),
+    ).toBeNull();
   });
 
   it("lists only supplied active announcements and fails closed when absent", () => {

@@ -7,7 +7,6 @@ import {
 } from "@/components/ui/tooltip";
 import { primaryNavigationForRole } from "@/config/navigation";
 import { useAuth } from "@/features/auth/authContext";
-import { openAiAssistant } from "@/features/ai-assistant/launcher";
 import { cn } from "@/lib/utils";
 
 export function Navigation({ collapsed = false, onNavigate, className }) {
@@ -18,27 +17,13 @@ export function Navigation({ collapsed = false, onNavigate, className }) {
     <nav className={cn("space-y-1", className)} aria-label="Main navigation">
       {visibleItems.map((item) => {
         const Icon = item.icon;
-        const itemKey = item.path ?? item.action;
         const commonClasses = cn(
           "group flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
           collapsed && "justify-center px-2",
         );
-        const link = item.action ? (
-          <button
-            key={itemKey}
-            type="button"
-            onClick={() => {
-              onNavigate?.();
-              openAiAssistant();
-            }}
-            className={commonClasses}
-          >
-            <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-            {!collapsed ? <span className="truncate">{item.label}</span> : null}
-          </button>
-        ) : (
+        const link = (
           <NavLink
-            key={itemKey}
+            key={item.path}
             to={item.path}
             end={item.path === "/"}
             onClick={onNavigate}
@@ -59,7 +44,7 @@ export function Navigation({ collapsed = false, onNavigate, className }) {
         if (!collapsed) return link;
 
         return (
-          <Tooltip key={itemKey}>
+          <Tooltip key={item.path}>
             <TooltipTrigger asChild>{link}</TooltipTrigger>
             <TooltipContent side="right">{item.label}</TooltipContent>
           </Tooltip>

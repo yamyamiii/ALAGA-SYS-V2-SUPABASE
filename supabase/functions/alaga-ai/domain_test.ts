@@ -14,6 +14,7 @@ import {
   safetyResponseFor,
   sanitizeGroundingSources,
   sanitizeNavigationActions,
+  serviceScheduleResponseFor,
   validateConversationPayload,
   withWorkflowGrounding,
   workflowResponseFor,
@@ -104,15 +105,29 @@ Deno.test("enforces message, conversation, and turn limits", () => {
 
 Deno.test("allows only exact configured origins", () => {
   const origins = parseAllowedOrigins(
-    "https://alaga.example, http://localhost:5173",
+    [
+      "https://alaga-sys.vercel.app",
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      "http://localhost:5175",
+      "http://192.168.1.16:5173",
+    ].join(","),
   );
-  const headers = exactOriginCorsHeaders(
-    new Request("https://function.example", {
-      headers: { Origin: "https://alaga.example" },
-    }),
-    origins,
-  );
-  assertEquals(headers["Access-Control-Allow-Origin"], "https://alaga.example");
+  for (const origin of origins) {
+    const headers = exactOriginCorsHeaders(
+      new Request("https://function.example", {
+        method: "OPTIONS",
+        headers: { Origin: origin },
+      }),
+      origins,
+    );
+    assertEquals(headers["Access-Control-Allow-Origin"], origin);
+    assertEquals(
+      headers["Access-Control-Allow-Headers"],
+      "authorization, x-client-info, apikey, content-type",
+    );
+    assertEquals(headers["Access-Control-Allow-Methods"], "POST, OPTIONS");
+  }
   assertThrows("origin_not_allowed", () =>
     exactOriginCorsHeaders(
       new Request("https://function.example", {
@@ -120,6 +135,9 @@ Deno.test("allows only exact configured origins", () => {
       }),
       origins,
     ),
+  );
+  assertThrows("origin_not_allowed", () =>
+    exactOriginCorsHeaders(new Request("https://function.example"), origins),
   );
   assertThrows("server_configuration_error", () => parseAllowedOrigins("*"));
 });
@@ -144,6 +162,10 @@ Deno.test(
     assert(nurse.includes("assigned appointments"));
     assert(nurse.includes("not a doctor"));
     assert(nurse.includes("Never diagnose"));
+    assert(nurse.includes("Prefer clean, conversational plain text"));
+    assert(nurse.includes("Never use ***"));
+    assert(nurse.includes("simple numbered lists or hyphen bullets"));
+    assert(nurse.includes("Do not make every response a list"));
   },
 );
 
@@ -253,15 +275,10 @@ Deno.test("answers the approved appointment request workflow", () => {
   const response = workflowResponseFor(
     "Paano mag-request ng appointment?",
     "resident",
-    true,
   );
   assertEquals(response?.category, "workflow_appointment_request");
-  assert(response?.message.includes("1. Buksan ang Appointments module."));
-  assert(
-    response?.message.includes(
-      "5. Hintayin ang review at approval ng Barangay Health Center.",
-    ),
-  );
+  assert(response?.message.includes("buksan ang My Appointments"));
+  assert(response?.message.includes("button sa ibaba"));
   assertEquals(response?.sources[0]?.type, "workflow");
   assertEquals(response?.actions[0], {
     type: "ui_action",
@@ -274,39 +291,40 @@ Deno.test("answers the approved appointment request workflow", () => {
 Deno.test("matches resident appointment form request phrases", () => {
   for (const phrase of [
     "Paano mag-request ng appointment?",
+    "Paano ako mag-request ng appointment?",
+    "Paano magpa-appointment?",
     "Paano ako magpapa-appointment?",
     "Gusto kong magpa-appointment.",
     "Mag-request ako ng appointment.",
+    "How can I request an appointment?",
     "Book an appointment.",
     "Request an appointment.",
   ]) {
     assertEquals(
-      workflowResponseFor(phrase, "resident", true)?.actions[0]?.actionId,
+      workflowResponseFor(phrase, "resident")?.actions[0]?.actionId,
       "open_appointment_request_form",
     );
   }
 });
 
-Deno.test(
-  "withholds resident form actions without canonical eligibility",
-  () => {
+Deno.test("keeps resident form actions role-based", () => {
+  assertEquals(
+    workflowResponseFor("Request an appointment", "resident")?.actions[0]
+      ?.actionId,
+    "open_appointment_request_form",
+  );
+  for (const role of [
+    "admin",
+    "barangay_health_worker",
+    "nurse",
+    "midwife",
+  ] as const) {
     assertEquals(
-      workflowResponseFor("Request an appointment", "resident", false)?.actions,
+      workflowResponseFor("Request an appointment", role)?.actions,
       [],
     );
-    for (const role of [
-      "admin",
-      "barangay_health_worker",
-      "nurse",
-      "midwife",
-    ] as const) {
-      assertEquals(
-        workflowResponseFor("Request an appointment", role, true)?.actions,
-        [],
-      );
-    }
-  },
-);
+  }
+});
 
 Deno.test("answers assigned appointment workflow questions for Nurses", () => {
   for (const phrase of [
@@ -541,6 +559,41 @@ Deno.test(
     );
   },
 );
+
+Deno.test("answers the verified Bagongpook health-service schedule", () => {
+  for (const [prompt, expected] of [
+    ["Kailan ang immunization?", "unang Miyerkules ng buwan"],
+    ["When is immunization available?", "first Wednesday of every month"],
+    ["Kailan ang family planning?", "tuwing Huwebes"],
+    ["Kailan ang maternal care?", "unang Martes ng buwan"],
+    ["Kailan ang Buntis services?", "tuwing Martes"],
+    ["When is postpartum care available?", "home visit after childbirth"],
+    [
+      "Pwede ba magpa-general consultation bukas?",
+      "Hindi nito ginagarantiya ang availability sa isang partikular na petsa",
+    ],
+    ["Kailan available ang immunization?", "latest confirmation"],
+  ]) {
+    const response = serviceScheduleResponseFor(prompt);
+    assertEquals(response?.category, "grounding_service_schedule");
+    assert(response?.message.includes(expected));
+    assertEquals(
+      response?.sources[0]?.title,
+      "Barangay Bagongpook Health Service Schedule",
+    );
+  }
+});
+
+Deno.test("does not infer official hours from service schedules", () => {
+  const response = groundedResponseFor("What are the opening hours?", []);
+  assertEquals(response?.category, "grounding_missing");
+  assert(
+    response?.message.includes(
+      "official opening and closing hours are not currently available",
+    ),
+  );
+  assertEquals(serviceScheduleResponseFor("What are the opening hours?"), null);
+});
 
 Deno.test("fails closed when requested verified grounding is absent", () => {
   const response = groundedResponseFor("Kailan bukas ang health center?", []);
