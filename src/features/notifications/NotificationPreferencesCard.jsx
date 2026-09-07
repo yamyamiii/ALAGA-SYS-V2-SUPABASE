@@ -10,6 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/features/auth/authContext";
+import { USER_ROLES } from "@/features/auth/permissions";
 import {
   useNotificationPreferences,
   useNotificationSettingsMutation,
@@ -23,9 +25,19 @@ const CHANNELS = [
 ];
 
 const TOPICS = [
-  ["appointment_updates_enabled", "Appointment updates"],
-  ["appointment_reminders_enabled", "Appointment reminders"],
-  ["announcement_enabled", "Important announcements"],
+  [
+    "appointment_updates_enabled",
+    "Appointment updates",
+    "Appointment Updates",
+    1,
+  ],
+  [
+    "appointment_reminders_enabled",
+    "Appointment reminders",
+    "Appointment Reminders",
+    2,
+  ],
+  ["announcement_enabled", "Important announcements", "Announcements", 0],
   ["inquiry_updates_enabled", "Inquiry updates"],
   ["document_updates_enabled", "Signed document availability"],
 ];
@@ -81,7 +93,7 @@ function SwitchField({
   );
 }
 
-function PreferencesForm({ preference }) {
+function PreferencesForm({ preference, role }) {
   const [values, setValues] = useState(() => ({
     ...preferenceValues(preference),
     locale: preference.locale,
@@ -94,6 +106,15 @@ function PreferencesForm({ preference }) {
     preference.email_contact_available && preference.email_provider_configured;
   const smsUsable =
     preference.sms_contact_available && preference.sms_provider_configured;
+  const visibleTopics = useMemo(
+    () =>
+      role === USER_ROLES.RESIDENT
+        ? TOPICS.filter((topic) => topic[2]).toSorted(
+            (left, right) => left[3] - right[3],
+          )
+        : TOPICS,
+    [role],
+  );
   const changed = useMemo(
     () =>
       [...CHANNELS, ...TOPICS].some(
@@ -181,11 +202,11 @@ function PreferencesForm({ preference }) {
           Update types
         </h3>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {TOPICS.map(([key, label]) => (
+          {visibleTopics.map(([key, label, residentLabel]) => (
             <SwitchField
               key={key}
               id={`notification-${key}`}
-              label={label}
+              label={role === USER_ROLES.RESIDENT ? residentLabel : label}
               checked={values[key]}
               onChange={(checked) => update(key, checked)}
             />
@@ -224,6 +245,7 @@ function PreferencesForm({ preference }) {
 }
 
 export function NotificationPreferencesCard() {
+  const { profile } = useAuth();
   const query = useNotificationPreferences();
   return (
     <Card>
@@ -241,7 +263,11 @@ export function NotificationPreferencesCard() {
           onAction={() => query.refetch()}
         />
       ) : query.data ? (
-        <PreferencesForm key={query.data.version} preference={query.data} />
+        <PreferencesForm
+          key={query.data.version}
+          preference={query.data}
+          role={profile?.role}
+        />
       ) : (
         <EmptyState compact title="Preferences unavailable" />
       )}

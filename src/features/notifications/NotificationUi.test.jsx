@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -66,7 +72,10 @@ describe("notification settings UI", () => {
       mutateAsync,
       isPending: false,
     });
-    useAuth.mockReturnValue({ can: vi.fn().mockReturnValue(true) });
+    useAuth.mockReturnValue({
+      can: vi.fn().mockReturnValue(true),
+      profile: { role: "admin" },
+    });
     useNotificationPreferences.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -107,6 +116,67 @@ describe("notification settings UI", () => {
     expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty("profile_id");
     expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty(
       "email_destination",
+    );
+  });
+
+  it("shows Residents exactly the three approved update-type preferences", () => {
+    useAuth.mockReturnValue({
+      can: vi.fn().mockReturnValue(true),
+      profile: { role: "resident" },
+    });
+    render(<NotificationPreferencesCard />);
+
+    const topics = screen
+      .getByRole("heading", { name: "Update types" })
+      .closest("section");
+    expect(within(topics).getAllByRole("switch")).toHaveLength(3);
+    expect(
+      within(topics).getByRole("switch", { name: "Announcements" }),
+    ).toBeInTheDocument();
+    expect(
+      within(topics).getByRole("switch", { name: "Appointment Updates" }),
+    ).toBeInTheDocument();
+    expect(
+      within(topics).getByRole("switch", { name: "Appointment Reminders" }),
+    ).toBeInTheDocument();
+    expect(
+      within(topics).queryByText("Inquiry updates"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(topics).queryByText("Signed document availability"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("preserves a Resident's hidden stored preferences when saving visible changes", async () => {
+    useAuth.mockReturnValue({
+      can: vi.fn().mockReturnValue(true),
+      profile: { role: "resident" },
+    });
+    useNotificationPreferences.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        ...preference,
+        inquiry_updates_enabled: false,
+        maternal_child_reminders_enabled: false,
+        document_updates_enabled: true,
+      },
+      refetch: vi.fn(),
+    });
+    render(<NotificationPreferencesCard />);
+
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Appointment Updates" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /save preferences/i }));
+
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appointment_updates_enabled: false,
+        inquiry_updates_enabled: false,
+        maternal_child_reminders_enabled: false,
+        document_updates_enabled: true,
+      }),
     );
   });
 
