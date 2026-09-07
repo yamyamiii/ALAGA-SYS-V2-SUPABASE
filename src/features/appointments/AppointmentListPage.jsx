@@ -14,14 +14,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   APPOINTMENT_PRIORITIES,
+  APPOINTMENT_SERVICE_OPTIONS,
   APPOINTMENT_SORTS,
   APPOINTMENT_STATUSES,
   APPOINTMENT_STATUS_LABELS,
   APPOINTMENT_TYPE_LABELS,
   APPOINTMENT_TYPES,
   INITIAL_APPOINTMENT_FILTERS,
+  LEGACY_APPOINTMENT_SERVICE_TYPES,
   PRIORITY_LABELS,
-  SERVICE_TYPES,
 } from "@/features/appointments/constants";
 import { AppointmentDetailDialog } from "@/features/appointments/AppointmentDetailDialog";
 import { AppointmentFormDialog } from "@/features/appointments/AppointmentFormDialog";
@@ -266,11 +267,20 @@ function StaffAppointmentListPage({ profile }) {
               className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
             >
               <option value="">All services</option>
-              {SERVICE_TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
+              <optgroup label="Current services">
+                {APPOINTMENT_SERVICE_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Historical services">
+                {LEGACY_APPOINTMENT_SERVICE_TYPES.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </optgroup>
             </select>
             <select
               value={filters.priority}

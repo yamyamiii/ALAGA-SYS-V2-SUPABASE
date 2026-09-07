@@ -347,6 +347,46 @@ describe("appointment service", () => {
     expect(payload).not.toHaveProperty("p_end_time");
   });
 
+  it.each([
+    "General Consultation",
+    "Buntis / Prenatal Care",
+    "Maternal Care",
+    "Immunization",
+    "Family Planning",
+    "Postpartum Home Visit",
+  ])(
+    "passes the canonical service value %s to the trusted RPC",
+    async (serviceType) => {
+      const client = rpcClient({
+        data: [
+          {
+            id: appointmentId,
+            appointment_number: "APT-2026-000002",
+            status: "pending",
+            version: 1,
+          },
+        ],
+        error: null,
+      });
+      const service = createAppointmentService(() => client);
+
+      await service.requestResidentAppointment(
+        {
+          service_type: serviceType,
+          scheduled_date: "2026-08-01",
+          start_time: "08:00",
+          reason: "",
+        },
+        requestKey,
+      );
+
+      expect(client.rpc).toHaveBeenCalledWith(
+        "resident_appointment_request",
+        expect.objectContaining({ p_service_type: serviceType }),
+      );
+    },
+  );
+
   it.each(["07:30", "08:15", "16:30"])(
     "rejects a manipulated Resident start time of %s before the RPC",
     async (startTime) => {

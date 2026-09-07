@@ -10,8 +10,66 @@ const contractFix = fs.readFileSync(
   "supabase/migrations/20260720001900_fix_appointment_rpc_contracts.sql",
   "utf8",
 );
+const serviceMigration = fs.readFileSync(
+  "supabase/migrations/20260720005700_add_bagongpook_appointment_services.sql",
+  "utf8",
+);
 
 describe("appointment database safety", () => {
+  it("accepts only current services for new writes", () => {
+    const validator = serviceMigration.slice(
+      serviceMigration.indexOf(
+        "create or replace function public.appointment_service_type_valid",
+      ),
+      serviceMigration.indexOf(
+        "revoke all on function public.appointment_service_type_valid",
+      ),
+    );
+    for (const service of [
+      "General Consultation",
+      "Buntis / Prenatal Care",
+      "Maternal Care",
+      "Immunization",
+      "Family Planning",
+      "Postpartum Home Visit",
+    ]) {
+      expect(validator).toContain(`'${service}'`);
+    }
+    for (const legacy of [
+      "Child Health",
+      "Blood Pressure Monitoring",
+      "Medicine Refill",
+      "Health Certificate",
+      "Other",
+    ]) {
+      expect(validator).not.toContain(`'${legacy}'`);
+    }
+  });
+
+  it("preserves only the unchanged legacy service during an existing-row edit", () => {
+    expect(serviceMigration).toMatch(
+      /p_exclude_id is not null[\s\S]*a\.id = p_exclude_id[\s\S]*a\.resident_id = p_resident_id[\s\S]*a\.service_type = p_service_type/i,
+    );
+    expect(serviceMigration).toMatch(
+      /and not legacy_service_preserved then[\s\S]*invalid appointment service type/i,
+    );
+    expect(serviceMigration).not.toMatch(
+      /update public\.appointments[\s\S]*set service_type/i,
+    );
+  });
+
+  it("keeps service validation and mutation privileges inside trusted boundaries", () => {
+    expect(serviceMigration).toMatch(
+      /revoke all on function public\.appointment_service_type_valid\(text\)[\s\S]*from public, anon, authenticated/i,
+    );
+    expect(serviceMigration).not.toMatch(
+      /grant\s+(?:insert|update|delete|all)[^;]*public\.appointments[^;]*authenticated/i,
+    );
+    expect(serviceMigration).toMatch(
+      /p\.role <> 'midwife'::public\.app_role[\s\S]*p_service_type in \('Maternal Care', 'Child Health'\)/i,
+    );
+  });
+
   it("uses version checks and serialized staff-date overlap checks", () => {
     expect(migration).toMatch(/add column version bigint not null default 1/i);
     expect(migration).toMatch(/pg_advisory_xact_lock/i);

@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AppointmentStartTimeSelect } from "@/features/appointments/AppointmentStartTimeSelect";
-import { SERVICE_TYPES } from "@/features/appointments/constants";
+import { APPOINTMENT_SERVICE_OPTIONS } from "@/features/appointments/constants";
 import { useAppointmentMutation } from "@/features/appointments/hooks";
 import { residentAppointmentRequestSchema } from "@/features/appointments/schemas";
 import {
@@ -110,9 +110,9 @@ export function ResidentAppointmentRequestDialog({
               disabled={mutation.isPending}
               className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              {SERVICE_TYPES.map((service) => (
-                <option key={service} value={service}>
-                  {service}
+              {APPOINTMENT_SERVICE_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {label}
                 </option>
               ))}
             </select>

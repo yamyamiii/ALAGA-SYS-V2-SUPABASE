@@ -10,10 +10,7 @@ function canonicalMigrationHash(contents) {
     .toString("utf8")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n");
-  return crypto
-    .createHash("sha256")
-    .update(canonicalSql, "utf8")
-    .digest("hex");
+  return crypto.createHash("sha256").update(canonicalSql, "utf8").digest("hex");
 }
 
 const expectedMigrations = [
@@ -73,6 +70,7 @@ const expectedMigrations = [
   "20260720005400_resident_registration_notification_type.sql",
   "20260720005500_notify_pending_resident_registration.sql",
   "20260720005600_enforce_appointment_start_slots.sql",
+  "20260720005700_add_bagongpook_appointment_services.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -277,7 +275,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly fifty-six expected migrations exist in lexical order",
+  "Exactly fifty-seven expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -324,6 +322,10 @@ const residentRegistrationNotificationType =
 const residentRegistrationNotification =
   migrationEntries.find(({ file }) =>
     file.includes("notify_pending_resident_registration"),
+  )?.sql ?? "";
+const bagongpookAppointmentServices =
+  migrationEntries.find(({ file }) =>
+    file.includes("add_bagongpook_appointment_services"),
   )?.sql ?? "";
 
 check(
@@ -707,6 +709,33 @@ check(
       residentRegistrationNotification,
     ),
   "Registration notification creation remains unavailable to browser roles",
+);
+check(
+  /appointment_service_type_valid[\s\S]*'General Consultation'[\s\S]*'Buntis \/ Prenatal Care'[\s\S]*'Maternal Care'[\s\S]*'Immunization'[\s\S]*'Family Planning'[\s\S]*'Postpartum Home Visit'/i.test(
+    bagongpookAppointmentServices,
+  ),
+  "New appointment writes accept the six canonical Bagongpook services",
+);
+check(
+  /legacy_service_preserved[\s\S]*a\.id = p_exclude_id[\s\S]*a\.service_type = p_service_type[\s\S]*'Child Health'[\s\S]*'Blood Pressure Monitoring'[\s\S]*'Medicine Refill'[\s\S]*'Health Certificate'[\s\S]*'Other'/i.test(
+    bagongpookAppointmentServices,
+  ),
+  "Unchanged legacy appointment services remain editable without reclassification",
+);
+check(
+  /report_validate_scope[\s\S]*'Buntis \/ Prenatal Care'[\s\S]*'Postpartum Home Visit'[\s\S]*'Child Health'[\s\S]*'Other'[\s\S]*invalid report service filter/i.test(
+    bagongpookAppointmentServices,
+  ),
+  "Report filters support current and exact historical service values",
+);
+check(
+  /revoke all on function public\.appointment_service_type_valid\(text\)[\s\S]*from public, anon, authenticated/i.test(
+    bagongpookAppointmentServices,
+  ) &&
+    !/grant execute on function public\.appointment_service_type_valid\(text\)[^;]*authenticated/i.test(
+      bagongpookAppointmentServices,
+    ),
+  "The updated appointment service validator remains private",
 );
 
 for (const [file, expectedHash] of Object.entries(completedMigrationHashes)) {

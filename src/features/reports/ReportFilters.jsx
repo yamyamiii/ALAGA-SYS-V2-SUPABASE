@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import {
   APPOINTMENT_STATUSES,
   APPOINTMENT_STATUS_LABELS,
-  SERVICE_TYPES,
+  APPOINTMENT_SERVICE_OPTIONS,
+  LEGACY_APPOINTMENT_SERVICE_TYPES,
 } from "@/features/appointments/constants";
 import { QUICK_RANGES } from "@/features/reports/constants";
 import { quickRange } from "@/features/reports/schemas";
@@ -95,9 +96,20 @@ export function ReportFilters({
                 onChange={(event) => set("service_type", event.target.value)}
               >
                 <option value="">All services</option>
-                {SERVICE_TYPES.map((service) => (
-                  <option key={service}>{service}</option>
-                ))}
+                <optgroup label="Current services">
+                  {APPOINTMENT_SERVICE_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Historical services">
+                  {LEGACY_APPOINTMENT_SERVICE_TYPES.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </Field>
             <Field

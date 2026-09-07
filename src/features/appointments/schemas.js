@@ -5,6 +5,7 @@ import {
   APPOINTMENT_START_TIMES,
   APPOINTMENT_TYPES,
   SERVICE_TYPES,
+  STORED_APPOINTMENT_SERVICE_TYPES,
 } from "@/features/appointments/constants";
 
 const optionalUuid = z.union([
@@ -21,47 +22,58 @@ const appointmentStartTimeValue = z.enum(APPOINTMENT_START_TIMES, {
   error: "Select a start time from 8:00 AM through 4:00 PM.",
 });
 
-const appointmentFieldsSchema = z.object({
-  resident_id: z.string().uuid("Select an active resident."),
-  appointment_type: z.enum(APPOINTMENT_TYPES),
-  service_type: z.enum(SERVICE_TYPES, { error: "Select a service." }),
-  scheduled_date: dateValue,
-  start_time: appointmentStartTimeValue,
-  end_time: timeValue,
-  priority: z.enum(APPOINTMENT_PRIORITIES),
-  assigned_staff_id: optionalUuid,
-  reason: z
-    .string()
-    .trim()
-    .max(1000, "Reason must be 1,000 characters or fewer."),
-});
-
-function buildAppointmentSchema({ reasonOptional = false } = {}) {
-  return appointmentFieldsSchema.superRefine((values, context) => {
-    if (values.end_time <= values.start_time) {
-      context.addIssue({
-        code: "custom",
-        path: ["end_time"],
-        message: "End time must be after start time.",
-      });
-    }
-    if (
-      !reasonOptional &&
-      values.appointment_type !== "walk_in" &&
-      !values.reason
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["reason"],
-        message: "Reason is required for this appointment type.",
-      });
-    }
+function appointmentFieldsSchema(serviceTypes) {
+  return z.object({
+    resident_id: z.string().uuid("Select an active resident."),
+    appointment_type: z.enum(APPOINTMENT_TYPES),
+    service_type: z.enum(serviceTypes, { error: "Select a service." }),
+    scheduled_date: dateValue,
+    start_time: appointmentStartTimeValue,
+    end_time: timeValue,
+    priority: z.enum(APPOINTMENT_PRIORITIES),
+    assigned_staff_id: optionalUuid,
+    reason: z
+      .string()
+      .trim()
+      .max(1000, "Reason must be 1,000 characters or fewer."),
   });
 }
 
+function buildAppointmentSchema({
+  reasonOptional = false,
+  serviceTypes = SERVICE_TYPES,
+} = {}) {
+  return appointmentFieldsSchema(serviceTypes).superRefine(
+    (values, context) => {
+      if (values.end_time <= values.start_time) {
+        context.addIssue({
+          code: "custom",
+          path: ["end_time"],
+          message: "End time must be after start time.",
+        });
+      }
+      if (
+        !reasonOptional &&
+        values.appointment_type !== "walk_in" &&
+        !values.reason
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["reason"],
+          message: "Reason is required for this appointment type.",
+        });
+      }
+    },
+  );
+}
+
 export const appointmentSchema = buildAppointmentSchema();
+export const appointmentEditSchema = buildAppointmentSchema({
+  serviceTypes: STORED_APPOINTMENT_SERVICE_TYPES,
+});
 export const residentRequestStaffEditSchema = buildAppointmentSchema({
   reasonOptional: true,
+  serviceTypes: STORED_APPOINTMENT_SERVICE_TYPES,
 });
 
 export const cancellationSchema = z.object({

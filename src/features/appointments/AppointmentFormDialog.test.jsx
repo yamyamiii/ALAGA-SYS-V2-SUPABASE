@@ -86,6 +86,19 @@ describe("AppointmentFormDialog Resident-request editing", () => {
     );
 
     expect(screen.getByLabelText("Reason (optional)")).toHaveValue("");
+    expect(
+      Array.from(
+        screen.getByLabelText("Service").options,
+        (option) => option.textContent,
+      ),
+    ).toEqual([
+      "General Consultation",
+      "Buntis / Prenatal Care",
+      "Maternal Care",
+      "Immunization",
+      "Family Planning",
+      "Postpartum Home Visit",
+    ]);
     const startTime = screen.getByLabelText("Start time");
     expect(startTime).toBeInstanceOf(HTMLSelectElement);
     expect(Array.from(startTime.options, (option) => option.value)).toEqual(
@@ -130,6 +143,84 @@ describe("AppointmentFormDialog Resident-request editing", () => {
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({ reason: "Routine visit" }),
+      ),
+    );
+  });
+
+  it.each([
+    "Child Health",
+    "Blood Pressure Monitoring",
+    "Medicine Refill",
+    "Health Certificate",
+    "Other",
+  ])("renders the historical service %s without relabeling", (serviceType) => {
+    render(
+      <AppointmentFormDialog
+        open
+        appointment={appointment({ service_type: serviceType })}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    const service = screen.getByLabelText("Service");
+    expect(service).toHaveValue(serviceType);
+    expect(service.options[0]).toHaveTextContent(serviceType);
+  });
+
+  it("preserves an existing legacy service unless staff explicitly replaces it", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <AppointmentFormDialog
+        open
+        appointment={appointment({ service_type: "Child Health" })}
+        onOpenChange={vi.fn()}
+      />,
+    );
+
+    const legacyService = screen.getByLabelText("Service");
+    expect(legacyService).toHaveValue("Child Health");
+    expect(
+      Array.from(legacyService.options, (option) => option.textContent),
+    ).toEqual([
+      "Child Health",
+      "General Consultation",
+      "Buntis / Prenatal Care",
+      "Maternal Care",
+      "Immunization",
+      "Family Planning",
+      "Postpartum Home Visit",
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ service_type: "Child Health" }),
+      ),
+    );
+
+    unmount();
+    vi.clearAllMocks();
+    useAppointmentMutation.mockReturnValue({
+      mutateAsync,
+      reset: resetMutation,
+      isPending: false,
+      error: null,
+    });
+    render(
+      <AppointmentFormDialog
+        open
+        appointment={appointment({ service_type: "Child Health" })}
+        onOpenChange={vi.fn()}
+      />,
+    );
+    await user.selectOptions(
+      screen.getByLabelText("Service"),
+      "Postpartum Home Visit",
+    );
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ service_type: "Postpartum Home Visit" }),
       ),
     );
   });

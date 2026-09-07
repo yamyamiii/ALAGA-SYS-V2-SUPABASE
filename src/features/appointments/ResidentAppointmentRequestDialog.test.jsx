@@ -32,6 +32,32 @@ describe("ResidentAppointmentRequestDialog", () => {
     render(<ResidentAppointmentRequestDialog open onOpenChange={vi.fn()} />);
 
     expect(screen.getByLabelText("Service")).toBeInTheDocument();
+    expect(
+      Array.from(
+        screen.getByLabelText("Service").options,
+        (option) => option.textContent,
+      ),
+    ).toEqual([
+      "General Consultation",
+      "Buntis / Prenatal Care",
+      "Maternal Care",
+      "Immunization",
+      "Family Planning",
+      "Postpartum Home Visit",
+    ]);
+    expect(
+      Array.from(
+        screen.getByLabelText("Service").options,
+        (option) => option.value,
+      ),
+    ).toEqual([
+      "General Consultation",
+      "Buntis / Prenatal Care",
+      "Maternal Care",
+      "Immunization",
+      "Family Planning",
+      "Postpartum Home Visit",
+    ]);
     expect(screen.getByLabelText("Preferred date")).toBeInTheDocument();
     const startTime = screen.getByLabelText("Preferred start time");
     expect(startTime).toBeInstanceOf(HTMLSelectElement);
@@ -105,6 +131,25 @@ describe("ResidentAppointmentRequestDialog", () => {
           service_type: "General Consultation",
           start_time: "08:00",
           reason: "",
+        }),
+      ),
+    );
+  });
+
+  it("submits the selected canonical service value without a legacy alias", async () => {
+    const user = userEvent.setup();
+    render(<ResidentAppointmentRequestDialog open onOpenChange={vi.fn()} />);
+
+    await user.selectOptions(
+      screen.getByLabelText("Service"),
+      "Buntis / Prenatal Care",
+    );
+    await user.click(screen.getByRole("button", { name: "Submit request" }));
+
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          service_type: "Buntis / Prenatal Care",
         }),
       ),
     );

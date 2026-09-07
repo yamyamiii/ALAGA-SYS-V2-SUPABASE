@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  APPOINTMENT_SERVICE_OPTIONS,
   APPOINTMENT_START_TIME_OPTIONS,
   APPOINTMENT_START_TIMES,
   APPOINTMENT_STATUSES,
   INITIAL_APPOINTMENT_FILTERS,
+  LEGACY_APPOINTMENT_SERVICE_TYPES,
   nextAppointmentStartTime,
   SERVICE_TYPES,
+  STORED_APPOINTMENT_SERVICE_TYPES,
 } from "@/features/appointments/constants";
 import { buildAppointmentListParameters } from "@/services/appointmentService";
 import { getAppointmentActions } from "@/features/appointments/permissions";
 import {
+  appointmentEditSchema,
   appointmentSchema,
   cancellationSchema,
   rejectionSchema,
@@ -29,7 +33,7 @@ import { USER_ROLES } from "@/features/auth/permissions";
 const profileId = "11111111-1111-4111-8111-111111111111";
 
 describe("appointment foundations", () => {
-  it("keeps the exact appointment state vocabulary and service allowlist", () => {
+  it("keeps the exact appointment state vocabulary and Bagongpook services", () => {
     expect(APPOINTMENT_STATUSES).toEqual([
       "pending",
       "confirmed",
@@ -40,9 +44,33 @@ describe("appointment foundations", () => {
       "no_show",
       "rescheduled",
     ]);
-    expect(SERVICE_TYPES).toContain("Maternal Care");
-    expect(SERVICE_TYPES).toContain("Other");
-    expect(SERVICE_TYPES).toHaveLength(8);
+    expect(APPOINTMENT_SERVICE_OPTIONS.map(({ label }) => label)).toEqual([
+      "General Consultation",
+      "Buntis / Prenatal Care",
+      "Maternal Care",
+      "Immunization",
+      "Family Planning",
+      "Postpartum Home Visit",
+    ]);
+    expect(SERVICE_TYPES).toEqual([
+      "General Consultation",
+      "Buntis / Prenatal Care",
+      "Maternal Care",
+      "Immunization",
+      "Family Planning",
+      "Postpartum Home Visit",
+    ]);
+    expect(LEGACY_APPOINTMENT_SERVICE_TYPES).toEqual([
+      "Child Health",
+      "Blood Pressure Monitoring",
+      "Medicine Refill",
+      "Health Certificate",
+      "Other",
+    ]);
+    expect(STORED_APPOINTMENT_SERVICE_TYPES).toEqual([
+      ...SERVICE_TYPES,
+      ...LEGACY_APPOINTMENT_SERVICE_TYPES,
+    ]);
   });
 
   it("defines every 30-minute start slot from 8:00 AM through 4:00 PM", () => {
@@ -166,6 +194,64 @@ describe("appointment foundations", () => {
     expect(attemptedOverride.success).toBe(true);
     expect(attemptedOverride.data).not.toHaveProperty("end_time");
   });
+
+  it("rejects legacy and unknown services for new appointments but preserves an unchanged legacy edit", () => {
+    const appointment = {
+      resident_id: "22222222-2222-4222-8222-222222222222",
+      appointment_type: "scheduled",
+      service_type: "Child Health",
+      scheduled_date: "2026-08-01",
+      start_time: "08:00",
+      end_time: "08:30",
+      priority: "normal",
+      assigned_staff_id: "",
+      reason: "Routine visit",
+    };
+
+    expect(appointmentSchema.safeParse(appointment).success).toBe(false);
+    expect(
+      residentAppointmentRequestSchema.safeParse({
+        service_type: "Child Health",
+        scheduled_date: "2026-08-01",
+        start_time: "08:00",
+        reason: "",
+      }).success,
+    ).toBe(false);
+    expect(appointmentEditSchema.safeParse(appointment).success).toBe(true);
+    expect(
+      appointmentEditSchema.safeParse({
+        ...appointment,
+        service_type: "Unverified Service",
+      }).success,
+    ).toBe(false);
+  });
+
+  it.each(SERVICE_TYPES)(
+    "accepts the canonical service %s in staff-create and Resident-request schemas",
+    (serviceType) => {
+      const appointment = {
+        resident_id: "22222222-2222-4222-8222-222222222222",
+        appointment_type: "scheduled",
+        service_type: serviceType,
+        scheduled_date: "2026-08-01",
+        start_time: "08:00",
+        end_time: "08:30",
+        priority: "normal",
+        assigned_staff_id: "",
+        reason: "Routine visit",
+      };
+
+      expect(appointmentSchema.safeParse(appointment).success).toBe(true);
+      expect(
+        residentAppointmentRequestSchema.safeParse({
+          service_type: serviceType,
+          scheduled_date: "2026-08-01",
+          start_time: "08:00",
+          reason: "",
+        }).success,
+      ).toBe(true);
+    },
+  );
 
   it("allows only Resident-origin staff edits to retain an empty reason", () => {
     const edit = {

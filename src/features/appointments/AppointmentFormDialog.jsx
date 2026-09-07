@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { AppointmentStartTimeSelect } from "@/features/appointments/AppointmentStartTimeSelect";
 import {
   APPOINTMENT_PRIORITIES,
+  APPOINTMENT_SERVICE_OPTIONS,
   APPOINTMENT_TYPE_LABELS,
   APPOINTMENT_TYPES,
   nextAppointmentStartTime,
@@ -29,6 +30,7 @@ import { AppointmentResidentField } from "@/features/appointments/AppointmentRes
 import { AppointmentStaffField } from "@/features/appointments/AppointmentStaffField";
 import { useAppointmentMutation } from "@/features/appointments/hooks";
 import {
+  appointmentEditSchema,
   appointmentSchema,
   residentRequestStaffEditSchema,
 } from "@/features/appointments/schemas";
@@ -75,6 +77,10 @@ export function AppointmentFormDialog({
 }) {
   const editing = Boolean(appointment);
   const residentOrigin = appointment?.request_source === "resident";
+  const legacyServiceType =
+    editing && !SERVICE_TYPES.includes(appointment?.service_type)
+      ? appointment.service_type
+      : null;
   const [selectedResident, setSelectedResident] = useState(null);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const requestKey = useRef(crypto.randomUUID());
@@ -92,7 +98,11 @@ export function AppointmentFormDialog({
     formState: { errors },
   } = useForm({
     resolver: zodResolver(
-      residentOrigin ? residentRequestStaffEditSchema : appointmentSchema,
+      editing
+        ? residentOrigin
+          ? residentRequestStaffEditSchema
+          : appointmentEditSchema
+        : appointmentSchema,
     ),
     defaultValues: defaults(walkIn),
   });
@@ -211,9 +221,12 @@ export function AppointmentFormDialog({
                 {...register("service_type")}
                 className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                {SERVICE_TYPES.map((value) => (
+                {legacyServiceType ? (
+                  <option value={legacyServiceType}>{legacyServiceType}</option>
+                ) : null}
+                {APPOINTMENT_SERVICE_OPTIONS.map(({ value, label }) => (
                   <option key={value} value={value}>
-                    {value}
+                    {label}
                   </option>
                 ))}
               </select>

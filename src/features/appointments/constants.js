@@ -75,15 +75,39 @@ export const APPOINTMENT_TYPE_LABELS = Object.freeze({
   home_visit: "Home visit",
 });
 
-export const SERVICE_TYPES = Object.freeze([
-  "General Consultation",
-  "Maternal Care",
+export const APPOINTMENT_SERVICE_OPTIONS = Object.freeze([
+  Object.freeze({
+    value: "General Consultation",
+    label: "General Consultation",
+  }),
+  Object.freeze({
+    value: "Buntis / Prenatal Care",
+    label: "Buntis / Prenatal Care",
+  }),
+  Object.freeze({ value: "Maternal Care", label: "Maternal Care" }),
+  Object.freeze({ value: "Immunization", label: "Immunization" }),
+  Object.freeze({ value: "Family Planning", label: "Family Planning" }),
+  Object.freeze({
+    value: "Postpartum Home Visit",
+    label: "Postpartum Home Visit",
+  }),
+]);
+
+export const SERVICE_TYPES = Object.freeze(
+  APPOINTMENT_SERVICE_OPTIONS.map(({ value }) => value),
+);
+
+export const LEGACY_APPOINTMENT_SERVICE_TYPES = Object.freeze([
   "Child Health",
-  "Immunization",
   "Blood Pressure Monitoring",
   "Medicine Refill",
   "Health Certificate",
   "Other",
+]);
+
+export const STORED_APPOINTMENT_SERVICE_TYPES = Object.freeze([
+  ...SERVICE_TYPES,
+  ...LEGACY_APPOINTMENT_SERVICE_TYPES,
 ]);
 
 export const APPOINTMENT_PRIORITIES = Object.freeze([
