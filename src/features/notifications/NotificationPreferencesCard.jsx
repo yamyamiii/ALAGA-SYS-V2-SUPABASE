@@ -106,6 +106,10 @@ function PreferencesForm({ preference, role }) {
     preference.email_contact_available && preference.email_provider_configured;
   const smsUsable =
     preference.sms_contact_available && preference.sms_provider_configured;
+  const visibleChannels =
+    role === USER_ROLES.RESIDENT
+      ? CHANNELS.filter(([key]) => key === "in_app_enabled")
+      : CHANNELS;
   const visibleTopics = useMemo(
     () =>
       role === USER_ROLES.RESIDENT
@@ -162,7 +166,7 @@ function PreferencesForm({ preference, role }) {
           Delivery channels
         </h3>
         <div className="grid gap-3 lg:grid-cols-3">
-          {CHANNELS.map(([key, label, Icon]) => {
+          {visibleChannels.map(([key, label, Icon]) => {
             const disabled =
               key === "email_enabled"
                 ? !emailUsable && !values[key]

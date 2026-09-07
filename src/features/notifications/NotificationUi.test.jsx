@@ -97,6 +97,10 @@ describe("notification settings UI", () => {
 
   it("renders accessible masked own-preference controls", () => {
     render(<NotificationPreferencesCard />);
+    const channels = screen
+      .getByRole("heading", { name: "Delivery channels" })
+      .closest("section");
+    expect(within(channels).getAllByRole("switch")).toHaveLength(3);
     expect(
       screen.getByRole("switch", { name: /in-app notifications/i }),
     ).toBeChecked();
@@ -104,6 +108,30 @@ describe("notification settings UI", () => {
     expect(screen.getByRole("switch", { name: /sms/i })).toBeDisabled();
     expect(screen.getByText(/r\*+@example\.test/i)).toBeInTheDocument();
     expect(screen.getByText(/\+63\*+567/i)).toBeInTheDocument();
+  });
+
+  it("shows Residents only the in-app delivery channel", () => {
+    useAuth.mockReturnValue({
+      can: vi.fn().mockReturnValue(true),
+      profile: { role: "resident" },
+    });
+    render(<NotificationPreferencesCard />);
+
+    const channels = screen
+      .getByRole("heading", { name: "Delivery channels" })
+      .closest("section");
+    expect(within(channels).getAllByRole("switch")).toHaveLength(1);
+    expect(
+      within(channels).getByRole("switch", {
+        name: /^In-app notifications/,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(channels).queryByRole("switch", { name: /^Email/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(channels).queryByRole("switch", { name: /^SMS/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("saves changed values without a destination or profile field", async () => {
@@ -157,6 +185,8 @@ describe("notification settings UI", () => {
       isError: false,
       data: {
         ...preference,
+        email_enabled: true,
+        sms_enabled: true,
         inquiry_updates_enabled: false,
         maternal_child_reminders_enabled: false,
         document_updates_enabled: true,
@@ -172,6 +202,8 @@ describe("notification settings UI", () => {
 
     expect(mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({
+        email_enabled: true,
+        sms_enabled: true,
         appointment_updates_enabled: false,
         inquiry_updates_enabled: false,
         maternal_child_reminders_enabled: false,
