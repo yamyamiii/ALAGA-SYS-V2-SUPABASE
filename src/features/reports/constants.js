@@ -49,7 +49,6 @@ export const QUICK_RANGES = Object.freeze([
 ]);
 
 export const REPORT_FORMATS = Object.freeze([
-  ["csv", "CSV"],
   ["excel", "Excel"],
   ["pdf", "PDF"],
   ["print", "Print"],

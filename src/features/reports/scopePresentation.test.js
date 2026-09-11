@@ -36,7 +36,6 @@ describe("final-scope report presentation", () => {
       ["year", "This year"],
     ]);
     expect(REPORT_FORMATS).toEqual([
-      ["csv", "CSV"],
       ["excel", "Excel"],
       ["pdf", "PDF"],
       ["print", "Print"],
