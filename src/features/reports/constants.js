@@ -45,7 +45,6 @@ export const QUICK_RANGES = Object.freeze([
   ["today", "Today"],
   ["week", "This week"],
   ["month", "This month"],
-  ["quarter", "This quarter"],
   ["year", "This year"],
 ]);
 

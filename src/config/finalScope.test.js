@@ -26,7 +26,6 @@ describe("approved final thesis scope", () => {
       "overview",
       "residents",
       "appointments",
-      "staff_workload",
     ]);
     expect(FINAL_SCOPE_REPORT_ROLES).toEqual([
       USER_ROLES.ADMINISTRATOR,

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { USER_ROLES } from "@/features/auth/permissions";
 import {
   categoriesForRole,
+  QUICK_RANGES,
+  REPORT_FORMATS,
   reportSummaryEntries,
 } from "@/features/reports/constants";
 
@@ -10,7 +12,10 @@ describe("final-scope report presentation", () => {
   it("keeps full and operational categories role-scoped", () => {
     expect(
       categoriesForRole(USER_ROLES.ADMINISTRATOR).map(({ id }) => id),
-    ).toEqual(["overview", "residents", "appointments", "staff_workload"]);
+    ).toEqual(["overview", "residents", "appointments"]);
+    expect(
+      categoriesForRole(USER_ROLES.ADMINISTRATOR).map(({ label }) => label),
+    ).toEqual(["Overview", "Resident summary", "Appointment reports"]);
     expect(
       categoriesForRole(USER_ROLES.BARANGAY_HEALTH_WORKER).map(({ id }) => id),
     ).toEqual(["overview", "residents", "appointments"]);
@@ -21,6 +26,21 @@ describe("final-scope report presentation", () => {
       "appointments",
     ]);
     expect(categoriesForRole(USER_ROLES.RESIDENT)).toEqual([]);
+  });
+
+  it("keeps only the approved visible date shortcuts and export actions", () => {
+    expect(QUICK_RANGES).toEqual([
+      ["today", "Today"],
+      ["week", "This week"],
+      ["month", "This month"],
+      ["year", "This year"],
+    ]);
+    expect(REPORT_FORMATS).toEqual([
+      ["csv", "CSV"],
+      ["excel", "Excel"],
+      ["pdf", "PDF"],
+      ["print", "Print"],
+    ]);
   });
 
   it("shows only appointment and resident operations in the overview", () => {

@@ -17,7 +17,6 @@ export const FINAL_SCOPE_REPORT_CATEGORIES = Object.freeze([
   "overview",
   "residents",
   "appointments",
-  "staff_workload",
 ]);
 
 export const FINAL_SCOPE_REPORT_ROLES = Object.freeze([
