@@ -56,6 +56,21 @@ const STAFF_ROLES = [
   USER_ROLES.MIDWIFE,
 ];
 
+function DashboardStatCard({ stat, loading }) {
+  const { to, ...card } = stat;
+  if (!to) return <StatCard {...card} loading={loading} />;
+
+  return (
+    <Link
+      to={to}
+      aria-label={`Open ${stat.label}`}
+      className="group block h-full cursor-pointer rounded-xl transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&>*]:h-full"
+    >
+      <StatCard {...card} loading={loading} />
+    </Link>
+  );
+}
+
 export default function DashboardPage() {
   const { profile } = useAuth();
   const today = manilaDateKey();
@@ -89,6 +104,14 @@ export default function DashboardPage() {
     profile.role,
     PERMISSIONS.MANAGE_ANNOUNCEMENTS,
   );
+  const canViewResidents = hasPermission(
+    profile.role,
+    PERMISSIONS.VIEW_RESIDENTS,
+  );
+  const canViewAppointments = hasPermission(
+    profile.role,
+    PERMISSIONS.VIEW_APPOINTMENTS,
+  );
   const latestAnnouncement = useAnnouncements({
     search: "",
     category: "",
@@ -118,6 +141,7 @@ export default function DashboardPage() {
           icon: CalendarClock,
           value: summaryData?.pending_appointments,
           helper: "Awaiting health-center review",
+          to: canViewAppointments ? ROUTES.appointments : undefined,
         },
         {
           label: "Upcoming appointments",
@@ -140,6 +164,7 @@ export default function DashboardPage() {
                 icon: UsersRound,
                 value: summaryData?.active_residents,
                 helper: "Active resident registry",
+                to: canViewResidents ? ROUTES.residents : undefined,
               },
             ]
           : []),
@@ -153,6 +178,7 @@ export default function DashboardPage() {
           helper: reportRole
             ? "All authorized non-archived appointments"
             : "Authorized appointment workload",
+          to: canViewAppointments ? ROUTES.appointments : undefined,
         },
         {
           label: clinicalStaffView ? "Upcoming assigned" : "Pending requests",
@@ -164,12 +190,17 @@ export default function DashboardPage() {
           helper: clinicalStaffView
             ? "Future pending or confirmed assignments"
             : "Awaiting action",
+          to:
+            !clinicalStaffView && canViewAppointments
+              ? ROUTES.appointments
+              : undefined,
         },
         {
           label: "Today's schedule",
           icon: CircleCheckBig,
           value: summaryData?.appointments_today,
           helper: "Asia/Manila business date",
+          to: canViewAppointments ? ROUTES.appointments : undefined,
         },
       ];
 
@@ -187,7 +218,11 @@ export default function DashboardPage() {
         className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
       >
         {appointmentStats.map((stat) => (
-          <StatCard key={stat.label} {...stat} loading={summary.isLoading} />
+          <DashboardStatCard
+            key={stat.label}
+            stat={stat}
+            loading={summary.isLoading}
+          />
         ))}
       </section>
 

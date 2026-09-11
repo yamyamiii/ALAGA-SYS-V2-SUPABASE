@@ -1,7 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTES } from "@/config/routes";
 import { USER_ROLES } from "@/features/auth/permissions";
 import DashboardPage from "@/pages/DashboardPage";
 
@@ -10,6 +12,10 @@ const useAppointmentDashboard = vi.fn();
 const authState = vi.hoisted(() => ({
   role: "barangay_health_worker",
 }));
+
+function LocationProbe() {
+  return <output data-testid="location">{useLocation().pathname}</output>;
+}
 
 vi.mock("@/features/auth/authContext", () => ({
   useAuth: () => ({
@@ -100,6 +106,34 @@ describe("role-safe dashboard aggregates", () => {
       expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       true,
     );
+    expect(screen.getByRole("link", { name: "Open queue" })).toHaveAttribute(
+      "href",
+      ROUTES.appointmentQueue,
+    );
+  });
+
+  it.each([
+    ["Active residents", ROUTES.residents],
+    ["Total appointments", ROUTES.appointments],
+    ["Pending requests", ROUTES.appointments],
+    ["Today's schedule", ROUTES.appointments],
+  ])("navigates the %s summary card to %s", async (label, destination) => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    const statistics = screen.getByRole("region", {
+      name: "Appointment statistics",
+    });
+    await user.click(
+      within(statistics).getByRole("link", { name: `Open ${label}` }),
+    );
+
+    expect(screen.getByTestId("location")).toHaveTextContent(destination);
   });
 
   it("shows an error instead of converting authorization failure to zero", () => {
@@ -125,7 +159,7 @@ describe("role-safe dashboard aggregates", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows all assigned Nurse appointments separately from Manila-today work", () => {
+  it("shows Nurse-authorized appointment totals separately from Manila-today work", () => {
     authState.role = USER_ROLES.NURSE;
     useAppointmentDashboard.mockReturnValue({
       data: {
@@ -149,7 +183,7 @@ describe("role-safe dashboard aggregates", () => {
       name: "Appointment statistics",
     });
     expect(
-      within(statistics).getByText("Assigned appointments"),
+      within(statistics).getByText("Total appointments"),
     ).toBeInTheDocument();
     expect(
       within(statistics).getByText("Upcoming assigned"),
@@ -160,11 +194,16 @@ describe("role-safe dashboard aggregates", () => {
     expect(
       within(statistics).getByText("Today's schedule"),
     ).toBeInTheDocument();
-    expect(useAppointmentDashboard).toHaveBeenCalledWith(true);
+    expect(useAppointmentDashboard).toHaveBeenCalledWith(false);
     expect(useDashboardSummary).toHaveBeenCalledWith(
       expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-      false,
+      true,
     );
+    expect(
+      within(statistics).queryByRole("link", {
+        name: "Open Active residents",
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows the exact Resident appointment metric scopes without treating checked-in as completed", () => {
