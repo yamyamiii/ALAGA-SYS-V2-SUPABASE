@@ -95,6 +95,11 @@ describe("floating ALAGA AI assistant", () => {
     );
     await user.click(screen.getByRole("button", { name: /send/i }));
     expect(screen.getByText("ALAGA AI is typing…")).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "The AI assistant could not complete that request. Please try again.",
+      ),
+    ).not.toBeInTheDocument();
     resolveRequest({
       content: "Open the FAQ module from the navigation menu.",
     });
@@ -116,6 +121,7 @@ describe("floating ALAGA AI assistant", () => {
   });
 
   it("keeps an in-memory draft across close and offers safe retry", async () => {
+    let resolveRetry;
     vi.spyOn(aiAssistantService, "send")
       .mockRejectedValueOnce(
         new AiAssistantServiceError(
@@ -124,7 +130,12 @@ describe("floating ALAGA AI assistant", () => {
           { retryable: true },
         ),
       )
-      .mockResolvedValueOnce({ content: "Please open Notifications." });
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRetry = resolve;
+          }),
+      );
     const user = userEvent.setup();
     renderAssistant();
     const opener = screen.getByRole("button", {
@@ -148,9 +159,66 @@ describe("floating ALAGA AI assistant", () => {
       await screen.findByText("The assistant is temporarily unavailable."),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /retry/i }));
+    expect(screen.getByText(/ALAGA AI is typing/)).toBeInTheDocument();
+    expect(
+      screen.queryByText("The assistant is temporarily unavailable."),
+    ).not.toBeInTheDocument();
+    resolveRetry({ content: "Please open Notifications." });
     expect(
       await screen.findByText("Please open Notifications."),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText("The assistant is temporarily unavailable."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a retryable error only after the retry settles as failed", async () => {
+    let rejectRetry;
+    vi.spyOn(aiAssistantService, "send")
+      .mockRejectedValueOnce(
+        new AiAssistantServiceError(
+          "provider_unavailable",
+          "The assistant is temporarily unavailable.",
+          { retryable: true },
+        ),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectRetry = reject;
+          }),
+      );
+    const user = userEvent.setup();
+    renderAssistant();
+    await user.click(
+      screen.getByRole("button", { name: "Open ALAGA AI Assistant" }),
+    );
+    await user.type(
+      screen.getByLabelText("Message ALAGA AI Assistant"),
+      "Please explain the FAQ",
+    );
+    await user.click(screen.getByRole("button", { name: /send/i }));
+    expect(
+      await screen.findByText("The assistant is temporarily unavailable."),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /retry/i }));
+    expect(screen.getByText(/ALAGA AI is typing/)).toBeInTheDocument();
+    expect(
+      screen.queryByText("The assistant is temporarily unavailable."),
+    ).not.toBeInTheDocument();
+
+    rejectRetry(
+      new AiAssistantServiceError(
+        "provider_unavailable",
+        "The assistant is temporarily unavailable.",
+        { retryable: true },
+      ),
+    );
+    expect(
+      await screen.findByText("The assistant is temporarily unavailable."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/ALAGA AI is typing/)).not.toBeInTheDocument();
   });
 
   it("clears conversation memory on logout-style unmount and role changes", async () => {

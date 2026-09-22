@@ -15,6 +15,7 @@ import {
   sanitizeGroundingSources,
   sanitizeNavigationActions,
   serviceScheduleResponseFor,
+  simpleConversationResponseFor,
   validateConversationPayload,
   withWorkflowGrounding,
   workflowResponseFor,
@@ -199,6 +200,48 @@ Deno.test(
     );
   },
 );
+
+Deno.test(
+  "answers only whole-message simple conversation deterministically",
+  () => {
+    for (const message of [
+      "hi",
+      "Hello!",
+      "hey",
+      "yow",
+      "good morning",
+      "good afternoon",
+      "good evening",
+      "kumusta",
+    ]) {
+      assertEquals(
+        simpleConversationResponseFor(message)?.category,
+        "simple_greeting",
+      );
+    }
+    for (const message of ["thanks", "thank you", "salamat"]) {
+      assertEquals(
+        simpleConversationResponseFor(message)?.category,
+        "simple_thanks",
+      );
+    }
+    for (const message of ["What can you do?", "Ano ang kaya mong gawin?"]) {
+      const response = simpleConversationResponseFor(message);
+      assertEquals(response?.category, "simple_capability");
+      assert(response?.response.match(/read-only/i));
+    }
+  },
+);
+
+Deno.test("keeps safety authoritative over greeting-prefixed requests", () => {
+  for (const message of [
+    "Hi, I have severe bleeding",
+    "Hello, what medicine should I take?",
+  ]) {
+    assertEquals(simpleConversationResponseFor(message), null);
+    assert(safetyResponseFor(message));
+  }
+});
 
 Deno.test(
   "provider input contains only the untrusted supplied transcript",

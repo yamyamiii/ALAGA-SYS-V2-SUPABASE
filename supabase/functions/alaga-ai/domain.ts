@@ -620,6 +620,77 @@ export function detectResponseLanguage(message: string): ResponseLanguage {
   return filipino ? "filipino" : "english";
 }
 
+const SIMPLE_ENGLISH_GREETING =
+  /^(?:hi|hello|hey|yow|good morning|good afternoon|good evening)$/;
+const SIMPLE_FILIPINO_GREETING = /^kumusta$/;
+const SIMPLE_ENGLISH_THANKS = /^(?:thanks|thank you)$/;
+const SIMPLE_FILIPINO_THANKS = /^salamat$/;
+const SIMPLE_ENGLISH_CAPABILITY =
+  /^(?:what can you do|what are you able to do)$/;
+const SIMPLE_FILIPINO_CAPABILITY =
+  /^(?:ano ang kaya mong gawin|anong kaya mong gawin)$/;
+
+function normalizeSimpleConversationMessage(message: string) {
+  return message
+    .trim()
+    .toLocaleLowerCase("en-US")
+    .replace(/\s+/g, " ")
+    .replace(/[.!?]+$/u, "")
+    .trim();
+}
+
+export function simpleConversationResponseFor(message: string): {
+  category: "simple_greeting" | "simple_thanks" | "simple_capability";
+  response: string;
+} | null {
+  const normalized = normalizeSimpleConversationMessage(message);
+
+  if (SIMPLE_ENGLISH_GREETING.test(normalized)) {
+    return {
+      category: "simple_greeting",
+      response:
+        "Hello! I can help with verified ALAGA-SYS information, workflows, and navigation. How can I help?",
+    };
+  }
+  if (SIMPLE_FILIPINO_GREETING.test(normalized)) {
+    return {
+      category: "simple_greeting",
+      response:
+        "Kumusta! Maaari kitang tulungan sa beripikadong impormasyon, workflow, at navigation ng ALAGA-SYS. Ano ang maitutulong ko?",
+    };
+  }
+  if (SIMPLE_ENGLISH_THANKS.test(normalized)) {
+    return {
+      category: "simple_thanks",
+      response:
+        "You're welcome! If you need help with an ALAGA-SYS workflow or page, just ask.",
+    };
+  }
+  if (SIMPLE_FILIPINO_THANKS.test(normalized)) {
+    return {
+      category: "simple_thanks",
+      response:
+        "Walang anuman! Kung kailangan mo ng tulong sa ALAGA-SYS workflow o page, magtanong lang.",
+    };
+  }
+  if (SIMPLE_ENGLISH_CAPABILITY.test(normalized)) {
+    return {
+      category: "simple_capability",
+      response:
+        "I provide verified, informational, read-only guidance about ALAGA-SYS workflows and navigation. I cannot diagnose, prescribe, make clinical decisions, expose records, or perform unauthorized actions.",
+    };
+  }
+  if (SIMPLE_FILIPINO_CAPABILITY.test(normalized)) {
+    return {
+      category: "simple_capability",
+      response:
+        "Nagbibigay ako ng beripikado, impormasyonal, at read-only na gabay tungkol sa ALAGA-SYS workflows at navigation. Hindi ako maaaring mag-diagnose, magreseta, gumawa ng clinical decision, maglantad ng records, o magsagawa ng hindi awtorisadong aksyon.",
+    };
+  }
+
+  return null;
+}
+
 export function uncertaintyMessageFor(message: string) {
   const language = detectResponseLanguage(message);
   if (language === "english") {

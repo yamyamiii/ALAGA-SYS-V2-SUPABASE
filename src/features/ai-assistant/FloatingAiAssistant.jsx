@@ -48,6 +48,7 @@ export function FloatingAiAssistant({ profile }) {
   const completeRequest = (requestMessages) => {
     if (requestInFlightRef.current) return;
     requestInFlightRef.current = true;
+    mutation.reset();
     setRetryMessages(requestMessages);
     mutation.mutate(requestMessages, {
       onSuccess: ({ content, sources, actions }) => {
@@ -100,7 +101,6 @@ export function FloatingAiAssistant({ profile }) {
 
   const retry = () => {
     if (!retryMessages || mutation.isPending) return;
-    mutation.reset();
     completeRequest(retryMessages);
   };
 

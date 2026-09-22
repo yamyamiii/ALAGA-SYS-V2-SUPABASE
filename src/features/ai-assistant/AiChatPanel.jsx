@@ -172,7 +172,7 @@ export function AiChatPanel({
         <li ref={endRef} aria-hidden="true" />
       </ol>
 
-      {error ? (
+      {error && !pending ? (
         <Alert className="mx-4 mt-3" aria-live="polite">
           <ShieldAlert />
           <AlertDescription className="space-y-2">

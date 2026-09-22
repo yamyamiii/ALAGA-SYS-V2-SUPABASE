@@ -19,6 +19,7 @@ import {
   safetyResponseFor,
   sanitizeGroundingSources,
   serviceScheduleResponseFor,
+  simpleConversationResponseFor,
   validateConversationPayload,
   withWorkflowGrounding,
   uncertaintyMessageFor,
@@ -433,6 +434,25 @@ Deno.serve(async (request) => {
       );
     }
 
+    const simpleConversationResponse =
+      simpleConversationResponseFor(finalUserMessage);
+    if (simpleConversationResponse) {
+      logRequest(
+        requestId,
+        profile.role,
+        simpleConversationResponse.category,
+        startedAt,
+      );
+      return jsonResponse(
+        {
+          data: assistantData(simpleConversationResponse.response),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+
     const workflowResponse = workflowResponseFor(
       finalUserMessage,
       profile.role,
@@ -544,7 +564,7 @@ Deno.serve(async (request) => {
           input: buildProviderInput(messages, grounding),
           system_instruction: buildSystemInstruction(profile.role),
           generation_config: {
-            max_output_tokens: 800,
+            max_output_tokens: 500,
             thinking_level: "low",
           },
           store: false,

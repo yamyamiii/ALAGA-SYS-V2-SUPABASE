@@ -13,6 +13,7 @@ import {
   sanitizeNavigationActions,
   safetyResponseFor,
   serviceScheduleResponseFor,
+  simpleConversationResponseFor,
   withWorkflowGrounding,
   workflowResponseFor,
   workflowGrounding,
@@ -222,6 +223,60 @@ describe("ALAGA AI server grounding and navigation domain", () => {
       detectResponseLanguage("Kailan bukas ang sentrong pangkalusugan?"),
     ).toBe("filipino");
     expect(detectResponseLanguage("Ano ang operating hours?")).toBe("taglish");
+  });
+
+  it.each([
+    "hi",
+    "Hello!",
+    "hey",
+    "yow",
+    "good morning",
+    "good afternoon",
+    "good evening",
+    "kumusta",
+  ])("answers a whole-message greeting deterministically: %s", (message) => {
+    expect(simpleConversationResponseFor(message)).toMatchObject({
+      category: "simple_greeting",
+    });
+  });
+
+  it.each(["thanks", "thank you!", "salamat"])(
+    "answers a whole-message thanks deterministically: %s",
+    (message) => {
+      expect(simpleConversationResponseFor(message)).toMatchObject({
+        category: "simple_thanks",
+      });
+    },
+  );
+
+  it("describes only the assistant's safe read-only capabilities", () => {
+    for (const message of ["What can you do?", "Ano ang kaya mong gawin?"]) {
+      const response = simpleConversationResponseFor(message);
+      expect(response).toMatchObject({ category: "simple_capability" });
+      expect(response?.response).toMatch(/read-only/i);
+      expect(response?.response).toMatch(
+        /cannot diagnose|Hindi ako maaaring mag-diagnose/i,
+      );
+      expect(response?.response).toMatch(
+        /unauthorized actions|hindi awtorisadong aksyon/i,
+      );
+    }
+  });
+
+  it("does not fast-path substantive or unsafe greeting-prefixed messages", () => {
+    for (const message of [
+      "Hi, I have severe bleeding",
+      "Hello, what medicine should I take?",
+      "Thanks, now open appointments",
+    ]) {
+      expect(simpleConversationResponseFor(message)).toBeNull();
+    }
+    expect(safetyResponseFor("Hi, I have severe bleeding")?.category).toBe(
+      "emergency_guidance",
+    );
+    expect(
+      safetyResponseFor("Hello, what medicine should I take?")?.category,
+    ).toBe("medical_boundary");
   });
 
   it("instructs Gemini to prefer concise plain text without decorative Markdown", () => {

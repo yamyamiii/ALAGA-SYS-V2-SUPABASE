@@ -125,9 +125,28 @@ describe("ALAGA AI Edge Function security boundary", () => {
 
   it("limits provider time, output size, and safe error responses", () => {
     expect(index).toMatch(/withProviderTimeout/);
+    expect(index).toContain("max_output_tokens: 500");
+    expect(index).toContain('thinking_level: "low"');
     expect(index).not.toMatch(/safeError\.stack|error\.message\s*[,}]/);
     expect(domain).toMatch(/MAX_RESPONSE_CHARACTERS = 4_000/);
     expect(index).toMatch(/Cache-Control.*no-store/s);
+  });
+
+  it("answers simple conversation after safety and before Gemini", () => {
+    const handler = index.slice(index.indexOf("Deno.serve"));
+    const safety = handler.indexOf("safetyResponseFor(finalUserMessage)");
+    const simple = handler.indexOf(
+      "simpleConversationResponseFor(finalUserMessage)",
+    );
+    const grounding = handler.indexOf("groundingSourceTypesFor(");
+    const gemini = handler.indexOf("new GoogleGenAI");
+
+    expect(safety).toBeGreaterThan(-1);
+    expect(simple).toBeGreaterThan(safety);
+    expect(simple).toBeLessThan(grounding);
+    expect(simple).toBeLessThan(gemini);
+    expect(domain).toMatch(/SIMPLE_ENGLISH_GREETING/);
+    expect(domain).toMatch(/SIMPLE_FILIPINO_CAPABILITY/);
   });
 
   it("logs only minimized operational fields", () => {
