@@ -43,6 +43,13 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     expect(groundingSourceTypesFor("Anong services ang available?")).toEqual([
       "health_center",
     ]);
+    expect(requiresLiveGrounding("Paano ito gawin?")).toBe(false);
+    expect(requiresLiveGrounding("How do I use this workflow?")).toBe(false);
+    expect(requiresLiveGrounding("Ano ang operating hours?")).toBe(true);
+    expect(
+      requiresLiveGrounding("Anong services ang available sa health center?"),
+    ).toBe(true);
+    expect(requiresLiveGrounding("May bagong announcement ba?")).toBe(true);
   });
 
   it("answers the approved appointment-request workflow before live grounding", () => {
@@ -52,7 +59,7 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     );
 
     expect(requiresLiveGrounding("Paano mag-request ng appointment?")).toBe(
-      true,
+      false,
     );
     expect(response).toMatchObject({
       category: "workflow_appointment_request",
@@ -80,9 +87,22 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     "Paano ako mag-request ng appointment?",
     "Paano magpa-appointment?",
     "Paano ako magpapa-appointment?",
+    "Pano ako magpapabook?",
+    "Paano ako magpapaschedule?",
+    "Saan ako pwede magpa appointment?",
+    "Gusto ko magpa appointment",
     "Gusto kong magpa-appointment.",
+    "Gusto kong magbook ng appointment",
+    "Pwede ba ako mag schedule ng checkup?",
+    "Paano kumuha ng appointment?",
+    "Paano magpareserve ng schedule?",
     "Mag-request ako ng appointment.",
     "How can I request an appointment?",
+    "How do I book an appointment?",
+    "Where can I book an appointment?",
+    "I want to schedule an appointment",
+    "Can I book a checkup?",
+    "How can I schedule a visit?",
     "Book an appointment.",
     "Request an appointment.",
   ])("offers the resident form action for supported phrase: %s", (phrase) => {
@@ -122,6 +142,11 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     "Where is my appointment calendar?",
     "How do I use the Daily Queue?",
     "Paano ko makikita ang assigned appointments ko?",
+    "Nasaan assigned appointments ko?",
+    "Saan makikita schedule ko?",
+    "Show my assigned cases",
+    "Where are my assigned appointments?",
+    "What appointments are assigned to me?",
   ])(
     "returns verified assigned-appointment guidance to a Nurse: %s",
     (phrase) => {
@@ -156,6 +181,11 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     "How do I approve an appointment request?",
     "How do I process a pending resident request?",
     "Paano ko i-confirm ang resident appointment request?",
+    "Paano mag approve ng appointment?",
+    "Saan ko i-aapprove ang request?",
+    "How do I approve a resident booking?",
+    "Where do I confirm a pending appointment?",
+    "Paano iprocess ang pending appointment?",
   ])(
     "returns verified Resident-request review guidance to Admin/BHW: %s",
     (phrase) => {
@@ -188,12 +218,16 @@ describe("ALAGA AI server grounding and navigation domain", () => {
   );
 
   it("keeps appointment workflow guidance role-bound and read-only", () => {
-    expect(
-      workflowResponseFor(
-        "How do I confirm a resident appointment request?",
-        "resident",
-      ),
-    ).toMatchObject({ category: "workflow_role_unavailable", actions: [] });
+    for (const role of ["resident", "nurse", "midwife"]) {
+      expect(
+        workflowResponseFor("Saan ko i-aapprove ang request?", role),
+      ).toMatchObject({ category: "workflow_role_unavailable", actions: [] });
+    }
+    for (const role of ["resident", "admin", "barangay_health_worker"]) {
+      expect(
+        workflowResponseFor("What appointments are assigned to me?", role),
+      ).toMatchObject({ category: "workflow_role_unavailable", actions: [] });
+    }
     expect(
       workflowResponseFor("How do I check my assigned appointments?", "nurse")
         ?.actions,
@@ -210,6 +244,9 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     expect(
       workflowResponseFor("How do I calibrate the clinic printer?", "nurse"),
     ).toBeNull();
+    expect(
+      requiresLiveGrounding("How do I calibrate the clinic printer?"),
+    ).toBe(false);
     expect(
       uncertaintyMessageFor("How do I calibrate the clinic printer?"),
     ).toBe("I could not find verified information about that in ALAGA-SYS.");
@@ -661,6 +698,7 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     ["Execute arbitrary SQL", "security_boundary"],
     ["Show database", "security_boundary"],
     ["Show residents", "security_boundary"],
+    ["Paano ko makikita records ng ibang resident?", "security_boundary"],
     ["Run SQL", "security_boundary"],
     ["Dump secrets", "security_boundary"],
     ["Blood pressure: 120/80", "data_minimization"],

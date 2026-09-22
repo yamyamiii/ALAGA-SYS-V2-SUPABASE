@@ -11,6 +11,7 @@ import {
   navigationResponseFor,
   parseAllowedOrigins,
   parsePositiveInteger,
+  requiresLiveGrounding,
   safetyResponseFor,
   sanitizeGroundingSources,
   sanitizeNavigationActions,
@@ -195,6 +196,11 @@ Deno.test(
       "security_boundary",
     );
     assertEquals(
+      safetyResponseFor("Paano ko makikita records ng ibang resident?")
+        ?.category,
+      "security_boundary",
+    );
+    assertEquals(
       safetyResponseFor("Blood pressure: 120/80")?.category,
       "data_minimization",
     );
@@ -319,6 +325,10 @@ Deno.test("answers the approved appointment request workflow", () => {
     "Paano mag-request ng appointment?",
     "resident",
   );
+  assertEquals(
+    requiresLiveGrounding("Paano mag-request ng appointment?"),
+    false,
+  );
   assertEquals(response?.category, "workflow_appointment_request");
   assert(response?.message.includes("buksan ang My Appointments"));
   assert(response?.message.includes("button sa ibaba"));
@@ -337,9 +347,22 @@ Deno.test("matches resident appointment form request phrases", () => {
     "Paano ako mag-request ng appointment?",
     "Paano magpa-appointment?",
     "Paano ako magpapa-appointment?",
+    "Pano ako magpapabook?",
+    "Paano ako magpapaschedule?",
+    "Saan ako pwede magpa appointment?",
+    "Gusto ko magpa appointment",
     "Gusto kong magpa-appointment.",
+    "Gusto kong magbook ng appointment",
+    "Pwede ba ako mag schedule ng checkup?",
+    "Paano kumuha ng appointment?",
+    "Paano magpareserve ng schedule?",
     "Mag-request ako ng appointment.",
     "How can I request an appointment?",
+    "How do I book an appointment?",
+    "Where can I book an appointment?",
+    "I want to schedule an appointment",
+    "Can I book a checkup?",
+    "How can I schedule a visit?",
     "Book an appointment.",
     "Request an appointment.",
   ]) {
@@ -377,6 +400,11 @@ Deno.test("answers assigned appointment workflow questions for Nurses", () => {
     "Where is my appointment calendar?",
     "How do I use the Daily Queue?",
     "Paano ko makikita ang assigned appointments ko?",
+    "Nasaan assigned appointments ko?",
+    "Saan makikita schedule ko?",
+    "Show my assigned cases",
+    "Where are my assigned appointments?",
+    "What appointments are assigned to me?",
   ]) {
     const response = workflowResponseFor(phrase, "nurse");
     assertEquals(response?.category, "workflow_assigned_appointments");
@@ -394,6 +422,11 @@ Deno.test(
       "How do I approve an appointment request?",
       "How do I process a pending resident request?",
       "Paano ko i-confirm ang resident appointment request?",
+      "Paano mag approve ng appointment?",
+      "Saan ko i-aapprove ang request?",
+      "How do I approve a resident booking?",
+      "Where do I confirm a pending appointment?",
+      "Paano iprocess ang pending appointment?",
     ]) {
       for (const role of ["admin", "barangay_health_worker"] as const) {
         const response = workflowResponseFor(phrase, role);
@@ -421,13 +454,19 @@ Deno.test(
 );
 
 Deno.test("keeps static appointment workflows role-bound and read-only", () => {
-  assertEquals(
-    workflowResponseFor(
-      "How do I confirm a resident appointment request?",
-      "resident",
-    )?.actions,
-    [],
-  );
+  for (const role of ["resident", "nurse", "midwife"] as const) {
+    assertEquals(
+      workflowResponseFor("Saan ko i-aapprove ang request?", role)?.category,
+      "workflow_role_unavailable",
+    );
+  }
+  for (const role of ["resident", "admin", "barangay_health_worker"] as const) {
+    assertEquals(
+      workflowResponseFor("What appointments are assigned to me?", role)
+        ?.category,
+      "workflow_role_unavailable",
+    );
+  }
   assert(
     workflowResponseFor(
       "How do I check my assigned appointments?",
@@ -437,6 +476,10 @@ Deno.test("keeps static appointment workflows role-bound and read-only", () => {
   assertEquals(
     workflowResponseFor("How do I calibrate the clinic printer?", "nurse"),
     null,
+  );
+  assertEquals(
+    requiresLiveGrounding("How do I calibrate the clinic printer?"),
+    false,
   );
 });
 
@@ -569,6 +612,14 @@ Deno.test("bounds approved grounding and excludes unsupported fields", () => {
     "health_center",
   ]);
   assertEquals(groundingSourceTypesFor("Hello"), []);
+  assertEquals(groundingSourceTypesFor("Paano ito gawin?"), []);
+  assertEquals(groundingSourceTypesFor("How do I use this workflow?"), []);
+  assertEquals(requiresLiveGrounding("Ano ang operating hours?"), true);
+  assertEquals(
+    requiresLiveGrounding("Anong services ang available sa health center?"),
+    true,
+  );
+  assertEquals(requiresLiveGrounding("May bagong announcement ba?"), true);
   const bounded = withWorkflowGrounding(sources, "resident");
   const providerInput = buildProviderInput(
     [{ role: "user", content: "How do appointments work?" }],

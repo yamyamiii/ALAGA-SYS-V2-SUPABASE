@@ -609,7 +609,7 @@ const TERSE_NAVIGATION_REQUEST =
 export type ResponseLanguage = "english" | "filipino" | "taglish";
 
 const FILIPINO_LANGUAGE_MARKERS =
-  /\b(?:ano|anong|ang|ng|mga|may|ba|paano|buksan|punta|pumunta|tingnan|tignan|ipakita|ko|akin|iyong|nasaan|kailan|oras|serbisyo|anunsyo|pabatid|ulat|talaan|pangangalaga)\b/i;
+  /\b(?:ano|anong|ang|ng|mga|may|ba|paano|pano|saan|pwede|maaari|gusto|kumuha|kumusta|salamat|buksan|punta|pumunta|tingnan|tignan|ipakita|ko|akin|iyong|nasaan|kailan|oras|serbisyo|anunsyo|pabatid|ulat|talaan|pangangalaga)\b/i;
 const ENGLISH_LANGUAGE_MARKERS =
   /\b(?:what|how|open|show|view|my|appointments?|notifications?|announcements?|services?|operating|hours?|available|health|center|reports?|records?|queue|user|management|audit)\b/i;
 
@@ -869,9 +869,9 @@ const SERVICES_QUESTION =
 const ANNOUNCEMENT_QUESTION =
   /\b(?:announcements?|advisor(?:y|ies)|news|medical mission|vaccination schedule|clinic schedule|anunsyo|pabatid|bagong announcement)\b/i;
 const FAQ_QUESTION =
-  /\b(?:faq|questions?|how (?:do|can|to)|procedure|requirements?|request process|paano|madalas (?:na )?itanong|mga kinakailangan)\b/i;
+  /\b(?:faqs?|frequently asked questions?|help articles?|procedure|requirements?|request process|madalas (?:na )?itanong|mga kinakailangan)\b/i;
 const HEALTH_CENTER_QUESTION =
-  /\b(?:health[- ]?center|clinic|address|location|sentrong pangkalusugan|lokasyon)\b/i;
+  /\b(?:(?:health[- ]?center|clinic|sentrong pangkalusugan) (?:information|details|address|location|impormasyon|lokasyon)|(?:where is|where can i find|nasaan|saan matatagpuan) (?:the )?(?:barangay )?(?:health[- ]?center|clinic|sentrong pangkalusugan))\b/i;
 
 export function groundingSourceTypesFor(message: string) {
   const requested = new Set<"faq" | "health_center" | "announcement">();
@@ -1135,14 +1135,86 @@ export function groundedResponseFor(
   return null;
 }
 
-const APPOINTMENT_REQUEST_WORKFLOW_QUESTION =
-  /\b(?:how (?:do|can|to) (?:i |a resident )?(?:request|book|schedule) (?:an )?appointment|appointment request (?:process|steps|workflow)|(?:book|request|schedule) (?:an )?appointment|paano (?:ako )?(?:(?:mag-?)?(?:request|book|schedule) (?:ng |ang )?appointment|magpa(?:pa)?-?appointment)|gusto kong magpa-?appointment|mag-?request ako (?:ng |ang )?appointment)\b/i;
+const APPOINTMENT_REQUEST_WORKFLOW_QUESTION = Object.freeze([
+  /\b(?:how|where) (?:do|can) i (?:request|book|schedule|get|make)\b/,
+  /\bi (?:want|would like) to (?:request|book|schedule|get|make)\b/,
+  /\bcan i (?:request|book|schedule|get|make)\b/,
+  /^(?:please )?(?:book|request|schedule|make)\b/,
+  /\b(?:paano|pano)(?: ako)? (?:(?:mag|magpa(?:pa)?) ?(?:request|book|schedule|reserve)|kumuha|magpa(?:pa)? ?appointment)\b/,
+  /\bsaan(?: ako)? (?:pwede|maaari) (?:(?:mag|magpa(?:pa)?) ?(?:request|book|schedule|reserve)|kumuha|magpa(?:pa)? ?appointment)\b/,
+  /\bgusto (?:ko|kong) (?:(?:mag|magpa(?:pa)?) ?(?:request|book|schedule|reserve)|kumuha|magpa(?:pa)? ?appointment)\b/,
+  /\b(?:pwede|maaari) ba(?: ako)? (?:(?:mag|magpa(?:pa)?) ?(?:request|book|schedule|reserve)|kumuha|magpa(?:pa)? ?appointment)\b/,
+  /\bmag ?request ako\b/,
+  /\bappointment request (?:process|steps|workflow)\b/,
+]);
 
-const ASSIGNED_APPOINTMENTS_WORKFLOW_QUESTION =
-  /\b(?:how (?:do|can) i (?:check|find|see|view) my assigned appointments?|where (?:can|do) i (?:find|see|view) my assigned appointments?|how (?:do|can) i (?:check|see|view) my schedule|where is my appointment calendar|how (?:do|can) i use (?:the )?daily queue|paano ko makikita (?:ang )?(?:mga )?(?:assigned appointments?|schedule) ko|saan ko makikita (?:ang )?(?:mga )?(?:assigned appointments?|schedule) ko|paano (?:ko )?gamitin (?:ang )?daily queue)\b/i;
+const ASSIGNED_APPOINTMENTS_WORKFLOW_QUESTION = Object.freeze([
+  /\bhow (?:do|can) i (?:check|find|see|view) my (?:assigned appointments?|schedule)\b/,
+  /\bwhere (?:can|do) i (?:find|see|view) my (?:assigned appointments?|schedule)\b/,
+  /\bwhere are my assigned appointments?\b/,
+  /\bwhat appointments? (?:are )?assigned to me\b/,
+  /\b(?:show|view) my assigned (?:appointments?|cases|schedule)\b/,
+  /\bwhere is my appointment calendar\b/,
+  /\bhow (?:do|can) i use (?:the )?daily queue\b/,
+  /\b(?:paano|pano)(?: ko)? makikita (?:ang )?(?:mga )?(?:assigned appointments?|schedule ko)\b/,
+  /\b(?:nasaan|saan(?: ko)? makikita) (?:ang )?(?:mga )?(?:assigned appointments?(?: ko)?|schedule ko)\b/,
+  /\b(?:paano|pano)(?: ko)? gamitin (?:ang )?daily queue\b/,
+]);
 
-const APPOINTMENT_CONFIRMATION_WORKFLOW_QUESTION =
-  /\b(?:how (?:do|can) i (?:confirm|approve|process|review) (?:a |an )?(?:pending )?(?:resident )?appointment request|how (?:do|can) i process (?:a )?pending resident request|paano (?:ko )?(?:i-?)?(?:confirm|approve|process|review) (?:ang )?(?:pending )?(?:resident )?appointment request)\b/i;
+const APPOINTMENT_CONFIRMATION_WORKFLOW_QUESTION = Object.freeze([
+  /\b(?:how|where) (?:do|can) i (?:confirm|approve|process|review)\b/,
+  /\bwhere do i confirm\b/,
+  /\b(?:paano|pano)(?: ko)? (?:(?:i|mag) )?(?:a?approve|confirm|process|review)\b/,
+  /\bsaan ko (?:i )?(?:a?approve|confirm|process|review)\b/,
+]);
+
+function normalizedWorkflowMessage(message: string) {
+  return message
+    .trim()
+    .toLocaleLowerCase("en-US")
+    .replace(/[-–—_/]+/gu, " ")
+    .replace(/[.,!?;:()[\]{}'\"]+/g, " ")
+    .replace(/\b(mag(?:pa(?:pa)?)?)(request|book|schedule|reserve)\b/g, "$1 $2")
+    .replace(/\bi(a?approve|confirm|process|review)\b/g, "i $1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function matchesWorkflowIntent(
+  message: string,
+  patterns: readonly RegExp[],
+  target: RegExp,
+) {
+  const normalized = normalizedWorkflowMessage(message);
+  return (
+    target.test(normalized) &&
+    patterns.some((pattern) => pattern.test(normalized))
+  );
+}
+
+function isAppointmentRequestWorkflow(message: string) {
+  return matchesWorkflowIntent(
+    message,
+    APPOINTMENT_REQUEST_WORKFLOW_QUESTION,
+    /\b(?:appointments?|book(?:ing)?|schedule|checkup|visit)\b/,
+  );
+}
+
+function isAssignedAppointmentsWorkflow(message: string) {
+  return matchesWorkflowIntent(
+    message,
+    ASSIGNED_APPOINTMENTS_WORKFLOW_QUESTION,
+    /\b(?:appointments?|schedule|calendar|queue|cases)\b/,
+  );
+}
+
+function isAppointmentConfirmationWorkflow(message: string) {
+  return matchesWorkflowIntent(
+    message,
+    APPOINTMENT_CONFIRMATION_WORKFLOW_QUESTION,
+    /\b(?:appointments?|booking|requests?)\b/,
+  );
+}
 
 const ASSIGNED_APPOINTMENT_ROLES: readonly CanonicalRole[] = [
   "nurse",
@@ -1190,10 +1262,8 @@ export function workflowResponseFor(
   sources: GroundingSource[];
   actions: AssistantAction[];
 } | null {
-  const assignedAppointmentsQuestion =
-    ASSIGNED_APPOINTMENTS_WORKFLOW_QUESTION.test(message);
-  const confirmationQuestion =
-    APPOINTMENT_CONFIRMATION_WORKFLOW_QUESTION.test(message);
+  const assignedAppointmentsQuestion = isAssignedAppointmentsWorkflow(message);
+  const confirmationQuestion = isAppointmentConfirmationWorkflow(message);
 
   if (assignedAppointmentsQuestion) {
     if (!role || !ASSIGNED_APPOINTMENT_ROLES.includes(role)) {
@@ -1252,7 +1322,7 @@ export function workflowResponseFor(
     };
   }
 
-  if (!APPOINTMENT_REQUEST_WORKFLOW_QUESTION.test(message)) return null;
+  if (!isAppointmentRequestWorkflow(message)) return null;
 
   const language = detectResponseLanguage(message);
   const actionDefinition = UI_ACTION_DEFINITIONS.open_appointment_request_form;
@@ -1366,7 +1436,7 @@ const EMERGENCY_PATTERN =
 const MEDICAL_DECISION_PATTERN =
   /\b(?:diagnos(?:e|is)|prescrib(?:e|ing)|dosage|dose of|how many (?:mg|tablet)|am i pregnant|determine (?:if )?.*pregnant|interpret (?:my )?(?:lab|laboratory|test) results?|what disease do i have|what medicine should i take)\b/i;
 const SECURITY_BYPASS_PATTERN =
-  /\b(?:ignore (?:all |the )?(?:previous|system)|reveal (?:the )?(?:system prompt|instructions|secret|api key)|show (?:the )?database|show residents|dump secrets?|gemini_api_key|service[_ -]?role|(?:execute|run) (?:arbitrary )?sql|impersonate (?:a )?(?:doctor|nurse|midwife)|show (?:another|other) resident)\b/i;
+  /\b(?:ignore (?:all |the )?(?:previous|system)|reveal (?:the )?(?:system prompt|instructions|secret|api key)|show (?:the )?database|show residents|dump secrets?|gemini_api_key|service[_ -]?role|(?:execute|run) (?:arbitrary )?sql|impersonate (?:a )?(?:doctor|nurse|midwife)|show (?:another|other) resident|(?:records?|rekord(?:s)?) (?:ng|of) (?:ibang|another|other) resident|(?:ibang|another|other) resident(?:'s)? (?:records?|rekord(?:s)?))\b/i;
 const LIKELY_IDENTIFIER_PATTERN =
   /(?:\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b|\b09\d{9}\b|\b[0-9a-f]{8}-[0-9a-f-]{27,36}\b|\b(?:RES|ENC|APT|MAT|CHD|HH)-\d{4}-\d{6}\b)/i;
 const LIKELY_CLINICAL_DATA_PATTERN =
