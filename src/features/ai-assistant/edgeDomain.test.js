@@ -8,9 +8,12 @@ import {
   groundingSourceTypesFor,
   navigationActionIdsForRole,
   navigationResponseFor,
+  productContextResponseFor,
+  residentAppointmentStatusResponseFor,
   requiresLiveGrounding,
   sanitizeGroundingSources,
   sanitizeNavigationActions,
+  sanitizeResidentAppointmentStatusRows,
   safetyResponseFor,
   serviceScheduleResponseFor,
   simpleConversationResponseFor,
@@ -25,7 +28,7 @@ const healthCenterSource = {
   label: "Health Center Information",
   title: "Brgy. Bagongpook Health Center",
   content:
-    "Health center: Brgy. Bagongpook Health Center\nOperating hours: Monday to Friday, 8:00 AM to 5:00 PM.\nServices offered: Consultations, prenatal care, and immunization.",
+    "Health center: Brgy. Bagongpook Health Center\nAddress: 1 Bagongpook Road, Lipa City\nContact number: 0917 000 0000\nPublic email: health@bagongpook.example\nEmergency contacts: Barangay response desk 0918 000 0000\nOperating hours: Monday to Friday, 8:00 AM to 5:00 PM.\nServices offered: Consultations, prenatal care, and immunization.",
   updatedAt: "2026-08-02T00:00:00.000Z",
 };
 
@@ -50,6 +53,14 @@ describe("ALAGA AI server grounding and navigation domain", () => {
       requiresLiveGrounding("Anong services ang available sa health center?"),
     ).toBe(true);
     expect(requiresLiveGrounding("May bagong announcement ba?")).toBe(true);
+    for (const question of [
+      "Nasaan ang health center?",
+      "Ano contact number ng health center?",
+      "What is the health center email?",
+      "May emergency contact ba?",
+    ]) {
+      expect(groundingSourceTypesFor(question)).toEqual(["health_center"]);
+    }
   });
 
   it("answers the approved appointment-request workflow before live grounding", () => {
@@ -355,6 +366,69 @@ describe("ALAGA AI server grounding and navigation domain", () => {
   });
 
   it.each([
+    [
+      "Nasaan ang health center?",
+      "grounding_health_center_address",
+      "1 Bagongpook Road, Lipa City",
+    ],
+    [
+      "Ano contact number ng health center?",
+      "grounding_health_center_contact",
+      "0917 000 0000",
+    ],
+    [
+      "What is the health center email?",
+      "grounding_health_center_email",
+      "health@bagongpook.example",
+    ],
+    [
+      "May emergency contact ba?",
+      "grounding_health_center_emergency_contacts",
+      "Barangay response desk 0918 000 0000",
+    ],
+    [
+      "What is the health center name?",
+      "grounding_health_center_name",
+      "Brgy. Bagongpook Health Center",
+    ],
+  ])(
+    "answers configured public health-center fact: %s",
+    (prompt, category, text) => {
+      expect(groundedResponseFor(prompt, [healthCenterSource])).toMatchObject({
+        category,
+        message: expect.stringContaining(text),
+      });
+    },
+  );
+
+  it("names the specific missing health-center field without inventing it", () => {
+    const missing = {
+      ...healthCenterSource,
+      content:
+        "Health center: Brgy. Bagongpook Health Center\nAddress: Verified information is unavailable.\nContact number: Verified information is unavailable.\nPublic email: Verified information is unavailable.\nEmergency contacts: Verified information is unavailable.\nOperating hours: Verified information is unavailable.\nServices offered: Verified information is unavailable.",
+    };
+
+    expect(
+      groundedResponseFor("Ano ang operating hours?", [missing]),
+    ).toMatchObject({
+      category: "grounding_missing",
+      message: expect.stringContaining("official operating hours"),
+    });
+    expect(
+      groundedResponseFor("What is the health center email?", [missing]),
+    ).toMatchObject({
+      category: "grounding_missing",
+      message: expect.stringContaining("health center email"),
+    });
+    expect(
+      groundedResponseFor("Nasaan ang health center?", [missing]),
+    ).toMatchObject({
+      category: "grounding_missing",
+      message: expect.stringContaining("health center address"),
+    });
+  });
+
+  it.each([
     ["Kailan ang immunization?", "unang Miyerkules ng buwan"],
     ["When is immunization available?", "first Wednesday of every month"],
     ["Kailan ang family planning?", "tuwing Huwebes"],
@@ -387,14 +461,10 @@ describe("ALAGA AI server grounding and navigation domain", () => {
 
     expect(response).toMatchObject({
       category: "grounding_missing",
-      message: expect.stringContaining(
-        "official opening and closing hours are not currently available",
-      ),
+      message: expect.stringContaining("official operating hours"),
       sources: [],
     });
-    expect(response?.message).toContain(
-      "confirm directly with the Barangay Health Center",
-    );
+    expect(response?.message).toContain("contact the Barangay Health Center");
     expect(
       serviceScheduleResponseFor("What are the opening hours?"),
     ).toBeNull();
@@ -450,6 +520,249 @@ describe("ALAGA AI server grounding and navigation domain", () => {
       content: "Use the appointment request workflow.",
       updatedAt: "2026-08-02T00:00:00.000Z",
     });
+  });
+
+  it("returns matching FAQ content and fails transparently without a match", () => {
+    const faqSources = [
+      {
+        type: "faq",
+        label: "FAQ",
+        title: "Resident registration requirements",
+        content: "Prepare the required Resident registration information.",
+        updatedAt: "2026-08-02T00:00:00.000Z",
+      },
+      {
+        type: "faq",
+        label: "FAQ",
+        title: "Appointment requests",
+        content: "Residents may submit an appointment request.",
+        updatedAt: "2026-08-02T00:00:00.000Z",
+      },
+    ];
+
+    expect(
+      groundedResponseFor(
+        "What are the registration requirements?",
+        faqSources,
+      ),
+    ).toMatchObject({
+      category: "grounding_faq",
+      sources: [{ title: "Resident registration requirements" }],
+    });
+    expect(
+      groundedResponseFor(
+        "What are the requirements for medicine distribution?",
+        faqSources,
+      ),
+    ).toMatchObject({ category: "grounding_missing", sources: [] });
+  });
+
+  it.each([
+    ["What is ALAGA-SYS?", "product_overview"],
+    ["Para saan ang ALAGA-SYS?", "product_overview"],
+    ["Ano ang ginagawa ng system?", "product_overview"],
+    ["What is the role of a Nurse?", "product_role_overview"],
+    ["Ano ang role ng BHW?", "product_role_overview"],
+  ])(
+    "answers approved product context deterministically: %s",
+    (prompt, category) => {
+      expect(productContextResponseFor(prompt, "resident")).toMatchObject({
+        category,
+        sources: [{ type: "workflow" }],
+      });
+    },
+  );
+
+  const pendingAppointment = {
+    status: "pending",
+    serviceType: "Immunization",
+    scheduledDate: "2026-10-07",
+    startTime: "09:00:00",
+    scheduleChanged: false,
+  };
+
+  it.each([
+    "Ano na update sa appointment ko?",
+    "Ano status ng appointment ko?",
+    "Approved na ba appointment ko?",
+    "Naapprove na ba?",
+    "Na approve na ba booking ko?",
+    "Pending pa ba appointment ko?",
+    "Confirmed na ba schedule ko?",
+    "Na-confirm na ba request ko?",
+    "May update ba sa booking ko?",
+    "May pagbabago ba sa schedule ko?",
+    "Kailan na appointment ko?",
+    "Anong oras appointment ko?",
+    "What is my appointment status?",
+    "What's the update on my appointment?",
+    "Has my appointment been approved?",
+    "Is my appointment confirmed?",
+    "Is my booking still pending?",
+    "Did my appointment schedule change?",
+    "When is my appointment?",
+    "What time is my appointment?",
+  ])("recognizes Resident own-status intent: %s", (prompt) => {
+    expect(
+      residentAppointmentStatusResponseFor(prompt, "resident", [
+        pendingAppointment,
+      ]),
+    ).toMatchObject({
+      category: "appointment_status_single",
+      actions: [
+        {
+          type: "navigate",
+          actionId: "open_appointments",
+          label: "Open My Appointments",
+          requiresConfirmation: false,
+        },
+      ],
+    });
+  });
+
+  it.each([
+    ["pending", "awaiting Barangay Health Center review"],
+    ["confirmed", "Confirmed"],
+    ["checked_in", "Checked in"],
+    ["in_progress", "In consultation"],
+    ["completed", "Completed"],
+    ["cancelled", "no longer active"],
+    ["no_show", "not attended"],
+    ["rescheduled", "retained historical state"],
+  ])("explains authoritative appointment state %s", (status, phrase) => {
+    const response = residentAppointmentStatusResponseFor(
+      "What is my appointment status?",
+      "resident",
+      [{ ...pendingAppointment, status }],
+    );
+    expect(response?.message).toContain(phrase);
+  });
+
+  it("handles zero, changed, multiple, and unlinked Resident results", () => {
+    expect(
+      residentAppointmentStatusResponseFor(
+        "What is my appointment status?",
+        "resident",
+        [],
+      ),
+    ).toMatchObject({ category: "appointment_status_empty" });
+    expect(
+      residentAppointmentStatusResponseFor(
+        "Did my appointment schedule change?",
+        "resident",
+        [{ ...pendingAppointment, status: "confirmed", scheduleChanged: true }],
+      )?.message,
+    ).toContain("changed your original preferred schedule");
+    expect(
+      residentAppointmentStatusResponseFor(
+        "Ano status ng appointment ko?",
+        "resident",
+        [
+          pendingAppointment,
+          {
+            ...pendingAppointment,
+            status: "confirmed",
+            serviceType: "General Consultation",
+            scheduledDate: "2026-10-10",
+          },
+        ],
+      ),
+    ).toMatchObject({
+      category: "appointment_status_multiple",
+      message: expect.stringContaining("2 current o recent appointments"),
+    });
+    expect(
+      residentAppointmentStatusResponseFor(
+        "Ano status ng appointment ko?",
+        "resident",
+        [],
+        false,
+      ),
+    ).toMatchObject({
+      category: "appointment_status_link_missing",
+      actions: [],
+    });
+  });
+
+  it("reflects live pending-to-confirmed state without notification state", () => {
+    const prompt = "Approved na ba appointment ko?";
+    const pending = residentAppointmentStatusResponseFor(prompt, "resident", [
+      pendingAppointment,
+    ]);
+    const confirmed = residentAppointmentStatusResponseFor(prompt, "resident", [
+      { ...pendingAppointment, status: "confirmed" },
+    ]);
+
+    expect(pending).toMatchObject({ category: "appointment_status_single" });
+    expect(pending?.message).toContain("review");
+    expect(confirmed).toMatchObject({
+      category: "appointment_status_single",
+    });
+    expect(confirmed?.message).toContain("Confirmed");
+    expect(JSON.stringify([pending, confirmed])).not.toMatch(/notification/i);
+  });
+
+  it("sanitizes appointment rows to the five safe response fields", () => {
+    const result = sanitizeResidentAppointmentStatusRows([
+      {
+        status: "confirmed",
+        service_type: "Immunization",
+        scheduled_date: "2026-10-07",
+        start_time: "09:00:00",
+        schedule_changed: true,
+        resident_id: "excluded",
+        reason: "excluded",
+        operational_notes: "excluded",
+        assigned_staff_id: "excluded",
+        diagnosis: "excluded",
+      },
+    ]);
+    expect(result).toEqual([
+      {
+        status: "confirmed",
+        serviceType: "Immunization",
+        scheduledDate: "2026-10-07",
+        startTime: "09:00:00",
+        scheduleChanged: true,
+      },
+    ]);
+    expect(JSON.stringify(result)).not.toMatch(
+      /resident_id|reason|operational|assigned|diagnosis/,
+    );
+  });
+
+  it("denies staff personal-status lookup and blocks another Resident request", () => {
+    for (const role of [
+      "admin",
+      "barangay_health_worker",
+      "nurse",
+      "midwife",
+    ]) {
+      expect(
+        residentAppointmentStatusResponseFor(
+          "What is my appointment status?",
+          role,
+        ),
+      ).toMatchObject({
+        category: "appointment_status_role_unavailable",
+        actions: [],
+      });
+    }
+    expect(
+      safetyResponseFor("Ano status ng appointment ni Juan?"),
+    ).toMatchObject({ category: "security_boundary" });
+  });
+
+  it("keeps generic appointment workflow questions separate from live status", () => {
+    expect(
+      residentAppointmentStatusResponseFor(
+        "Paano mag-request ng appointment?",
+        "resident",
+      ),
+    ).toBeNull();
+    expect(
+      workflowResponseFor("Paano mag-request ng appointment?", "resident"),
+    ).toMatchObject({ category: "workflow_appointment_request" });
   });
 
   it("enforces role-specific navigation before returning an action", () => {

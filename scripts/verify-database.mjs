@@ -71,6 +71,7 @@ const expectedMigrations = [
   "20260720005500_notify_pending_resident_registration.sql",
   "20260720005600_enforce_appointment_start_slots.sql",
   "20260720005700_add_bagongpook_appointment_services.sql",
+  "20260720005800_ai_defense_readiness.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -147,6 +148,18 @@ const completedMigrationHashes = {
     "3147a7c263b20b0264fca2f55abc085dcb2a05c444b35d856f078f611c1f4ce9",
   "20260720005100_archive_sole_member_household.sql":
     "5e8fb7d62655fb1ffb563c318bfb27e82114f3a234c3f1987e9e91e573f73406",
+  "20260720005200_fix_account_cleanup_eligibility.sql":
+    "723e78d1ca94c440395ceb5c523cd9ee04a309cd464aac1b028855a626a08012",
+  "20260720005300_retire_protected_accounts.sql":
+    "1e4fd1a238b9ab84f6306b97fe3862a3d7a493bd3c51d7891992c89ae0e263fd",
+  "20260720005400_resident_registration_notification_type.sql":
+    "2bfef31bb0dac4ab1d7ea51c4426df38f11f3c6594a9dbf49a2bc72f980b7de8",
+  "20260720005500_notify_pending_resident_registration.sql":
+    "d3d51120c032c545c7196713ab5a1530829396f573793e47e0d958c6694b30e9",
+  "20260720005600_enforce_appointment_start_slots.sql":
+    "a5357390f4a8285f16bb776217d85574088fafa227aa3e053acb8e1adcedcd17",
+  "20260720005700_add_bagongpook_appointment_services.sql":
+    "a739736bc857145a2ad0b0a6dd7a708d1162e9604e190eb496ed8547f8cbe4cd",
 };
 const reviewedPendingMigrationHashes = {
   "20260720003000_ai_grounding_context.sql":
@@ -177,6 +190,8 @@ const reviewedPendingMigrationHashes = {
     "cbedfb8940d720b278bb548248fbdfe9740c8c6420c056ff074f2506e934a448",
   "20260720004300_cleanup_archived_announcement_notifications.sql":
     "503aaa16bdc1f13ce6a3c503c674741a2abf8beeda2b1db6786e28e874f22346",
+  "20260720005800_ai_defense_readiness.sql":
+    "285c7722f18eb5590926353b85fc390e677603b2dab4f7ae7b5a94aa8ec3b10e",
 };
 const expectedTables = [
   "account_retirements",
@@ -275,7 +290,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly fifty-seven expected migrations exist in lexical order",
+  "Exactly fifty-eight expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -1974,6 +1989,83 @@ check(
       aiGroundingFunction,
     ),
   "AI grounding is read-only and excludes author, contact, and staff fields",
+);
+
+const aiDefenseReadinessMigration =
+  migrationEntries.find(({ file }) => file.includes("ai_defense_readiness"))
+    ?.sql ?? "";
+const aiDefenseDeclarationAudit = auditPlpgsqlIntoTargets(
+  aiDefenseReadinessMigration,
+);
+check(
+  aiDefenseDeclarationAudit.functionCount === 2 &&
+    aiDefenseDeclarationAudit.undeclared.length === 0,
+  "Every defense-readiness AI PL/pgSQL SELECT INTO target is declared",
+);
+const currentAiGroundingFunction = aiDefenseReadinessMigration.slice(
+  aiDefenseReadinessMigration.indexOf(
+    "create or replace function public.ai_grounding_context",
+  ),
+  aiDefenseReadinessMigration.indexOf(
+    "revoke all on function public.ai_grounding_context",
+  ),
+);
+const residentAppointmentStatusFunction = aiDefenseReadinessMigration.slice(
+  aiDefenseReadinessMigration.indexOf(
+    "create or replace function public.ai_resident_appointment_status",
+  ),
+  aiDefenseReadinessMigration.indexOf(
+    "revoke all on function public.ai_resident_appointment_status",
+  ),
+);
+check(
+  /contact_number/i.test(currentAiGroundingFunction) &&
+    /info\.email/i.test(currentAiGroundingFunction) &&
+    /emergency_contacts/i.test(currentAiGroundingFunction) &&
+    !/info\.(?:doctors|nurses|midwives|bhws)/i.test(currentAiGroundingFunction),
+  "Current AI grounding includes approved public contacts but excludes staff names",
+);
+check(
+  /returns table \(\s*status text,\s*service_type text,\s*scheduled_date date,\s*start_time time,\s*schedule_changed boolean\s*\)/i.test(
+    residentAppointmentStatusFunction,
+  ) &&
+    !/\b(?:resident_id|resident_number|appointment_number|reason|operational_notes|cancellation_reason|assigned_staff_id|diagnosis|vital_signs)\b/i.test(
+      residentAppointmentStatusFunction.slice(
+        residentAppointmentStatusFunction.indexOf("returns table"),
+        residentAppointmentStatusFunction.indexOf("language plpgsql"),
+      ),
+    ),
+  "Resident AI appointment status returns only the minimal approved field allowlist",
+);
+check(
+  /profile\.id = p_profile_id/i.test(residentAppointmentStatusFunction) &&
+    /profile\.account_status = 'active'/i.test(
+      residentAppointmentStatusFunction,
+    ) &&
+    /profile\.role = 'resident'/i.test(residentAppointmentStatusFunction) &&
+    /resident\.linked_profile_id = profile\.id/i.test(
+      residentAppointmentStatusFunction,
+    ) &&
+    /resident\.status = 'active'/i.test(residentAppointmentStatusFunction) &&
+    /resident\.archived_at is null/i.test(residentAppointmentStatusFunction) &&
+    /appointment\.resident_id = linked_resident_id/i.test(
+      residentAppointmentStatusFunction,
+    ),
+  "Resident AI appointment status independently enforces active linked ownership",
+);
+check(
+  /appointment\.archived_at is null/i.test(residentAppointmentStatusFunction) &&
+    /limit 5/i.test(residentAppointmentStatusFunction) &&
+    /revoke all on function public\.ai_resident_appointment_status\(uuid\)[\s\S]*from public, anon, authenticated/i.test(
+      aiDefenseReadinessMigration,
+    ) &&
+    /grant execute on function public\.ai_resident_appointment_status\(uuid\)[\s\S]*to service_role/i.test(
+      aiDefenseReadinessMigration,
+    ) &&
+    !/grant execute on function public\.ai_resident_appointment_status\(uuid\)[\s\S]*to authenticated/i.test(
+      aiDefenseReadinessMigration,
+    ),
+  "Resident AI appointment status is bounded, archive-safe, and service-role-only",
 );
 
 const printableDocumentsMigration =

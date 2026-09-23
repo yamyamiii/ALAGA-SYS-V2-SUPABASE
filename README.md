@@ -179,13 +179,15 @@ server-authorized RPCs. Protected data is revalidated for every preview and is
 never stored in browser storage, uploaded, or sent to AI or an external PDF
 service. Only Appointment Slip and Consultation Summary actions are visible.
 
-Phase 9C completes the floating authenticated assistant experience with live, read-only
-grounding from active FAQs, health-center name/address/hours/services, and
-current announcements. Deterministic navigation runs before Gemini and returns
+The floating authenticated assistant uses live, read-only grounding from active
+FAQs, approved public health-center information, and current announcements. A
+separate deterministic path can return only the signed-in Resident's own
+minimal appointment-status summary; this summary is never sent to Gemini.
+Deterministic navigation runs before Gemini and returns
 only role-checked symbolic action IDs; the frontend revalidates each ID and
 maps it to a fixed local route. Conversation drafts stay in React memory. No
-resident, appointment, clinical, maternal/child, report, contact, inquiry,
-notification, or audit data is supplied to Gemini, and no AI action mutates
+resident, appointment, clinical, maternal/child, report, inquiry, notification,
+or audit data is supplied to Gemini, and no AI action mutates
 application data.
 
 Maternal and Child Care, Referral Management, advanced clinical reports,

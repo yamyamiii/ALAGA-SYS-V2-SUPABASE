@@ -98,6 +98,11 @@ describe("AI assistant service", () => {
       "No verified ALAGA-SYS information is available for that request.",
       false,
     ],
+    [
+      "appointment_status_unavailable",
+      "Your appointment status is temporarily unavailable.",
+      true,
+    ],
   ])("maps %s to fixed safe UX copy", async (code, message, retryable) => {
     const context = {
       json: vi.fn().mockResolvedValue({

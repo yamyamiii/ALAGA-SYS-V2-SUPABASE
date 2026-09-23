@@ -1,8 +1,8 @@
-# Database schema through Migration 56
+# Database schema through Migration 58
 
 ## Scope
 
-The repository contains exactly 56 ordered, forward-only migrations. Migrations
+The repository contains exactly 58 ordered, forward-only migrations. Migrations
 1-17 establish authentication-linked profiles, Bagongpook locality, the
 household/Resident registry, appointments, auditing, RLS, trusted account
 management, and registry hardening. Later migrations add the reviewed
@@ -123,6 +123,10 @@ Apply every file in lexical order:
     notifications for confirmed pending registrations to active Administrators
 56. `20260720005600_enforce_appointment_start_slots.sql` — 30-minute appointment
     start slots from 08:00 through 16:00 in the Asia/Manila business schedule
+57. `20260720005700_add_bagongpook_appointment_services.sql` — verified
+    Bagongpook appointment-service vocabulary with legacy compatibility
+58. `20260720005800_ai_defense_readiness.sql` — approved public-contact AI
+    grounding and bounded Resident-own appointment-status lookup
 
 Migrations are forward-only and intended to be applied once by Supabase
 migration tooling. Some later files perform narrowly scoped reconciliation,
@@ -328,7 +332,7 @@ healthcare information, and never expose the service-role key to a browser.
 
 ## Repository and hosted-state boundary
 
-- The repository contains Migrations 1-56 and verifies their canonical LF
+- The repository contains Migrations 1-58 and verifies their canonical LF
   content, order, structural contracts, grants, and selected security invariants.
 - Repository verification does not prove that a hosted database, Auth setting,
   Edge Function, scheduler, provider, storage policy, or secret matches source.

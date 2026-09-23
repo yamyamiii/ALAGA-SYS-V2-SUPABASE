@@ -15,11 +15,15 @@ import {
   parseAllowedOrigins,
   parsePositiveInteger,
   PROVIDER_TIMEOUT_MS,
+  productContextResponseFor,
+  residentAppointmentStatusResponseFor,
   requiresLiveGrounding,
   safetyResponseFor,
   sanitizeGroundingSources,
   serviceScheduleResponseFor,
   simpleConversationResponseFor,
+  isResidentAppointmentStatusIntent,
+  sanitizeResidentAppointmentStatusRows,
   validateConversationPayload,
   withWorkflowGrounding,
   uncertaintyMessageFor,
@@ -244,6 +248,29 @@ async function loadApprovedGrounding(
   return sanitizeGroundingSources(data);
 }
 
+async function loadResidentAppointmentStatus(
+  admin: SupabaseClient,
+  profileId: string,
+) {
+  const { data, error } = await admin.rpc("ai_resident_appointment_status", {
+    p_profile_id: profileId,
+  });
+  if (error?.code === "42501") {
+    return { hasActiveResidentLink: false, appointments: [] };
+  }
+  if (error || !Array.isArray(data)) {
+    throw new AiAssistantError(
+      "appointment_status_unavailable",
+      "Your appointment status is temporarily unavailable. Please try again later.",
+      503,
+    );
+  }
+  return {
+    hasActiveResidentLink: true,
+    appointments: sanitizeResidentAppointmentStatusRows(data),
+  };
+}
+
 function assistantData(
   message: string,
   sources: GroundingSource[] = [],
@@ -446,6 +473,58 @@ Deno.serve(async (request) => {
       return jsonResponse(
         {
           data: assistantData(simpleConversationResponse.response),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+
+    if (isResidentAppointmentStatusIntent(finalUserMessage)) {
+      const statusLookup =
+        profile.role === "resident"
+          ? await loadResidentAppointmentStatus(admin, profile.id)
+          : { hasActiveResidentLink: true, appointments: [] };
+      const statusResponse = residentAppointmentStatusResponseFor(
+        finalUserMessage,
+        profile.role,
+        statusLookup.appointments,
+        statusLookup.hasActiveResidentLink,
+      );
+      if (statusResponse) {
+        logRequest(requestId, profile.role, statusResponse.category, startedAt);
+        return jsonResponse(
+          {
+            data: assistantData(
+              statusResponse.message,
+              statusResponse.sources,
+              statusResponse.actions,
+            ),
+            request_id: requestId,
+          },
+          200,
+          headers,
+        );
+      }
+    }
+
+    const productContextResponse = productContextResponseFor(
+      finalUserMessage,
+      profile.role,
+    );
+    if (productContextResponse) {
+      logRequest(
+        requestId,
+        profile.role,
+        productContextResponse.category,
+        startedAt,
+      );
+      return jsonResponse(
+        {
+          data: assistantData(
+            productContextResponse.message,
+            productContextResponse.sources,
+          ),
           request_id: requestId,
         },
         200,

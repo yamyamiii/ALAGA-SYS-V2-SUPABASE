@@ -11,6 +11,18 @@ const functionBody = migration.slice(
   migration.indexOf("create or replace function"),
   migration.indexOf("revoke all on function"),
 );
+const defenseReadinessMigration = fs.readFileSync(
+  "supabase/migrations/20260720005800_ai_defense_readiness.sql",
+  "utf8",
+);
+const currentFunctionBody = defenseReadinessMigration.slice(
+  defenseReadinessMigration.indexOf(
+    "create or replace function public.ai_grounding_context",
+  ),
+  defenseReadinessMigration.indexOf(
+    "revoke all on function public.ai_grounding_context",
+  ),
+);
 
 describe("ALAGA AI approved grounding database boundary", () => {
   it("returns only explicitly approved source fields", () => {
@@ -80,5 +92,20 @@ describe("ALAGA AI approved grounding database boundary", () => {
       /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
     );
     expect(migration).not.toMatch(/to authenticated/i);
+  });
+
+  it("adds only approved public contact fields in the current replacement", () => {
+    expect(currentFunctionBody).toMatch(/info\.contact_number/i);
+    expect(currentFunctionBody).toMatch(/info\.email/i);
+    expect(currentFunctionBody).toMatch(/info\.emergency_contacts/i);
+    expect(currentFunctionBody).not.toMatch(
+      /info\.(?:doctors|nurses|midwives|bhws)/i,
+    );
+    expect(defenseReadinessMigration).toMatch(
+      /revoke all on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*from public, anon, authenticated/i,
+    );
+    expect(defenseReadinessMigration).toMatch(
+      /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
+    );
   });
 });

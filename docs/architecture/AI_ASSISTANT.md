@@ -14,6 +14,9 @@ Authenticated AppShell
   -> authenticated alaga-ai Edge Function
   -> exact-origin CORS, getUser, active profile, canonical role
   -> strict payload and deterministic medical/security checks
+  -> Resident-own appointment-status intent
+     -> service-role ai_resident_appointment_status RPC
+     -> bounded deterministic answer; never sent to Gemini
   -> deterministic navigation parser (before Gemini)
      -> symbolic action IDs only
   -> service-role ai_grounding_context RPC
@@ -32,16 +35,18 @@ rate-limit table, or provider response object.
 
 ## Approved grounding
 
-Migration 30 adds `ai_grounding_context`, a service-role-only, read-only RPC.
+Migration 30 adds `ai_grounding_context`, a service-role-only, read-only RPC;
+Migration 58 safely replaces it to include approved public contact fields.
 It may return only bounded fields from:
 
 - non-archived FAQ entries;
-- health-center name, address, hours, and services; and
+- health-center name, address, public contact number/email, public emergency
+  contacts, hours, and services; and
 - non-archived announcements inside their publish and expiry window.
 
 The Edge Function adds role-specific workflow descriptions from static server
-code. It never supplies profile IDs, resident or household data, names,
-contacts, appointments, appointment reasons, encounters, vital signs,
+code. It never supplies profile IDs, resident or household data, staff names,
+appointments, appointment reasons, encounters, vital signs,
 diagnoses, allergies, pregnancy/child records, reports, inquiries, audit logs,
 authors, or clinical narratives. Grounding is loaded live for each eligible
 request, sanitized again at the Edge boundary, capped by source count and total
@@ -61,6 +66,21 @@ cards identify the approved record used for the answer and may show its Manila
 updated date. They are source-level provenance, not sentence-level or quoted
 citations. Source content and database identifiers are not returned to the
 browser.
+
+## Resident own-appointment status
+
+Migration 58 adds `ai_resident_appointment_status`, a service-role-only,
+read-only RPC. It independently requires one active Resident record linked to
+the active Resident profile supplied by the authenticated Edge Function. The
+query is limited to five non-archived current appointments, or the most recent
+non-archived history when none is current. It returns only status, service,
+current date, current start time, and a boolean indicating whether staff changed
+the original preferred schedule.
+
+The Edge Function sanitizes those fields and generates the answer before
+Gemini. It returns no IDs, names, reasons, notes, assigned staff, clinical data,
+or audit data. Staff roles cannot use this path as a record-search interface,
+and another person's appointment request is refused before lookup.
 
 ## Safe navigation
 
@@ -123,10 +143,12 @@ trusted.
 
 ## Deliberately absent
 
-There is no resident/clinical/report grounding, semantic search over protected
-data, SQL execution, report generation, appointment mutation, record mutation,
-external knowledge retrieval, clinical decision support, diagnosis,
-prescription/dosage guidance, or autonomous action.
+There is no unrestricted resident/appointment/clinical/report grounding,
+semantic search over protected data, SQL execution, report generation,
+appointment mutation, record mutation, external knowledge retrieval, clinical
+decision support, diagnosis, prescription/dosage guidance, or autonomous
+action. The sole private-data exception is the deterministic minimal
+Resident-own appointment-status summary described above.
 
 Maternal and Child Care navigation, Referral Management, advanced reports, and
 hidden administrator infrastructure are preserved as inactive future

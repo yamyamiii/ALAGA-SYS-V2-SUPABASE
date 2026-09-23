@@ -1,7 +1,7 @@
 # Gemini AI deployment
 
-The repository contains the Phase 9A-9C ALAGA AI source and its Migration 29-30
-database dependencies. Source presence does not prove that either migration,
+The repository contains the ALAGA AI source and its Migration 29-30 and 58
+database dependencies. Source presence does not prove that these migrations,
 the current `alaga-ai` Edge Function revision, or its hosted secrets have been
 deployed. Confirm the linked project state before a manual rollout.
 
@@ -56,9 +56,10 @@ npx supabase functions deploy alaga-ai
 npx supabase functions list
 ```
 
-Confirm Migration 30 is already present before deploying the updated function.
-The function expects the service-role-only `ai_grounding_context` RPC. Do not
-use `--no-verify-jwt`.
+Apply reviewed pending Migration 58 after confirming Migrations 1-57 are already
+present and unchanged, then deploy the updated function. The function expects
+the service-role-only `ai_grounding_context` and
+`ai_resident_appointment_status` RPCs. Do not use `--no-verify-jwt`.
 
 Use the Dashboard or an approved secret manager instead of command arguments
 when shell-history policy requires it. Do not use `--no-verify-jwt`;
@@ -66,8 +67,8 @@ when shell-history policy requires it. Do not use `--no-verify-jwt`;
 
 ## Live verification
 
-1. Confirm Migrations 1-30 are already applied and unchanged. Phase 9C should
-   not add a pending migration.
+1. Confirm Migrations 1-57 are already applied and unchanged, then review and
+   apply Migration 58.
 2. Confirm anonymous and invalid-token requests are denied.
 3. Confirm a missing, invited, inactive, suspended, or unsupported profile is
    denied before Gemini is called.
@@ -88,8 +89,8 @@ when shell-history policy requires it. Do not use `--no-verify-jwt`;
 11. Confirm Clear, logout, account invalidation, role change, and full reload
     remove the conversation; closing and reopening during the same session keeps
     it.
-12. Ask for current FAQ, health-center services/hours, and current
-    announcements. Verify source badges appear and no IDs, contacts, authors,
+12. Ask for current FAQ, health-center services/hours/public contacts, and
+    current announcements. Verify source badges appear and no IDs, staff names,
     resident data, or clinical data is returned.
 13. Ask to open one allowed destination for each role. Verify the response has
     only a symbolic action ID and the client opens its fixed route after a
@@ -102,6 +103,9 @@ when shell-history policy requires it. Do not use `--no-verify-jwt`;
     deterministic matches do not require Gemini.
 16. Verify role-aware starters, Copy, Retry, confirmed Clear/New conversation,
     keyboard focus return, 390px layout, and privacy-safe error copy.
+17. As a Resident, verify pending then confirmed own-appointment status without
+    relying on a notification refresh. Verify staff roles and another-person
+    questions cannot use the private lookup.
 
 ## Rollback
 

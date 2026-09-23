@@ -17,6 +17,7 @@ Useful examples include:
 - `Anong services ang available?`
 - `May bagong announcement ba?`
 - `Paano mag-request ng appointment?`
+- `Ano na ang status ng appointment ko?`
 - `Buksan ang appointments ko.`
 
 The assistant answers matched hours, services, and current announcements from
@@ -52,6 +53,10 @@ verified `operating_hours` value is unavailable, the assistant says so and
 recommends confirming directly with the Barangay Health Center; it does not infer
 hours from the service-day schedule.
 
+Configured address, public contact number, public email, and public emergency
+contacts can also be answered directly. If one field is blank, the response
+names that missing field instead of guessing.
+
 `Paano mag-request ng appointment?` is answered from the approved, read-only
 ALAGA-SYS workflow guide: open Appointments, select Request Appointment,
 complete the required information, submit the request, and wait for Barangay
@@ -64,6 +69,15 @@ opens the existing blank request form on the Resident Appointments page. It does
 not choose a service, date, time, reason, or resident record and never submits a
 request automatically. The form and trusted request RPC still enforce the
 linked-resident and appointment eligibility rules.
+
+An authenticated Resident may ask for the current status of their own linked
+appointments. ALAGA AI reads a bounded minimal status summary directly from the
+authoritative appointment state and does not depend on notification delivery or
+read state. The answer can show service, current date/time, lifecycle status,
+and whether the preferred schedule changed. It never includes a reason, note,
+assigned staff, Resident identifier, or clinical data, and the summary is never
+sent to Gemini. Staff must use their authorized Appointments module instead of
+the AI for record lookup.
 
 ## Sources and navigation
 
@@ -107,8 +121,10 @@ application tables, or analytics.
 Do not enter names, record numbers, contact details, appointment reasons,
 diagnoses, symptoms, laboratory results, pregnancy details, or other personal
 or clinical information. ALAGA AI does not diagnose, prescribe, interpret
-tests, access resident records, run SQL, generate reports, search the public
-internet, or modify ALAGA-SYS data.
+tests, provide unrestricted record access, run SQL, generate reports, search
+the public internet, or modify ALAGA-SYS data. Its only private lookup is the
+minimal current appointment-status summary for the signed-in Resident's own
+linked record.
 
 For an emergency, contact local emergency services or the Barangay Health
 Center immediately. For an account or record-linking issue, contact the health

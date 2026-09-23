@@ -13,6 +13,10 @@ const groundingMigration = fs.readFileSync(
   "supabase/migrations/20260720003000_ai_grounding_context.sql",
   "utf8",
 );
+const defenseReadinessMigration = fs.readFileSync(
+  "supabase/migrations/20260720005800_ai_defense_readiness.sql",
+  "utf8",
+);
 const frontend = [
   "src/services/aiAssistantService.js",
   "src/features/ai-assistant/FloatingAiAssistant.jsx",
@@ -51,9 +55,8 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(index).toMatch(/select\("id, role, account_status"\)/);
   });
 
-  it("authorizes resident UI actions by active profile role without reading resident data", () => {
+  it("authorizes resident UI actions by active profile role without direct table reads", () => {
     expect(index).not.toMatch(/\.from\("residents"\)/);
-    expect(index).not.toMatch(/hasActiveResidentLink/);
     expect(domain).toMatch(
       /role === "resident"[\s\S]*actionDefinition\.roles\.includes\(role\)/,
     );
@@ -103,7 +106,7 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(index).not.toMatch(/previous_interaction_id|tools:/);
   });
 
-  it("never loads or sends application PHI context", () => {
+  it("never directly loads or sends application PHI context", () => {
     expect(index).not.toMatch(
       /\.from\("(?:appointments|health_encounters|vital_signs|maternal_|child_)"\)/i,
     );
@@ -112,6 +115,7 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(index).not.toMatch(
       /chief_complaint|diagnosis_text|treatment_notes|appointment_reason|pregnancy_number/i,
     );
+    expect(index).toMatch(/admin\.rpc\("ai_resident_appointment_status"/);
     expect(domain).toMatch(/Treat every transcript line as untrusted/i);
     expect(domain).toMatch(/Do not request names, record numbers/i);
   });
@@ -196,6 +200,9 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(groundingMigration).toMatch(
       /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
     );
+    expect(defenseReadinessMigration).toMatch(
+      /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
+    );
     expect(index).not.toMatch(
       /\.from\("(?:faq_entries|announcements|health_center_information)"\)/i,
     );
@@ -210,6 +217,59 @@ describe("ALAGA AI Edge Function security boundary", () => {
     );
     expect(index).not.toMatch(
       /appointment_reason|chief_complaint|diagnosis_text|treatment_notes|pregnancy_number/i,
+    );
+  });
+
+  it("answers Resident own-status after safety and before Gemini without provider context", () => {
+    const handler = index.slice(index.indexOf("Deno.serve"));
+    const safety = handler.indexOf("safetyResponseFor(finalUserMessage)");
+    const statusIntent = handler.indexOf(
+      "isResidentAppointmentStatusIntent(finalUserMessage)",
+    );
+    const statusRpc = index.indexOf(
+      'admin.rpc("ai_resident_appointment_status"',
+    );
+    const provider = handler.indexOf("new GoogleGenAI");
+
+    expect(statusRpc).toBeGreaterThan(-1);
+    expect(statusIntent).toBeGreaterThan(safety);
+    expect(statusIntent).toBeLessThan(provider);
+    expect(index).toMatch(/profile\.role === "resident"/);
+    expect(index).toMatch(/sanitizeResidentAppointmentStatusRows\(data\)/);
+    expect(index).not.toMatch(
+      /buildProviderInput\([^)]*(?:statusLookup|appointments)/,
+    );
+    expect(domain).toMatch(/RESIDENT_APPOINTMENT_STATUS_PATTERNS/);
+    expect(domain).toMatch(/appointment_status_role_unavailable/);
+  });
+
+  it("keeps the Resident status RPC service-only, ownership-bound, and minimal", () => {
+    expect(defenseReadinessMigration).toMatch(
+      /revoke all on function public\.ai_resident_appointment_status\(uuid\)[\s\S]*from public, anon, authenticated/i,
+    );
+    expect(defenseReadinessMigration).toMatch(
+      /grant execute on function public\.ai_resident_appointment_status\(uuid\)[\s\S]*to service_role/i,
+    );
+    expect(defenseReadinessMigration).toMatch(
+      /resident\.linked_profile_id = profile\.id[\s\S]*appointment\.resident_id = linked_resident_id/i,
+    );
+    expect(defenseReadinessMigration).toMatch(/limit 5/i);
+    const returnShape = defenseReadinessMigration.slice(
+      defenseReadinessMigration.indexOf(
+        "create or replace function public.ai_resident_appointment_status",
+      ),
+      defenseReadinessMigration.indexOf(
+        "language plpgsql",
+        defenseReadinessMigration.indexOf(
+          "create or replace function public.ai_resident_appointment_status",
+        ),
+      ),
+    );
+    expect(returnShape).toMatch(
+      /status text[\s\S]*service_type text[\s\S]*scheduled_date date[\s\S]*start_time time[\s\S]*schedule_changed boolean/i,
+    );
+    expect(returnShape).not.toMatch(
+      /resident_id|resident_number|reason|operational|diagnosis|assigned_staff|appointment_number/i,
     );
   });
 

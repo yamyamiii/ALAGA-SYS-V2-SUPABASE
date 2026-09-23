@@ -59,6 +59,10 @@ const SAFE_FUNCTION_ERRORS = Object.freeze({
     message: "Verified ALAGA-SYS information is temporarily unavailable.",
     retryable: true,
   },
+  appointment_status_unavailable: {
+    message: "Your appointment status is temporarily unavailable.",
+    retryable: true,
+  },
   grounding_empty: {
     message: "No verified ALAGA-SYS information is available for that request.",
     retryable: false,

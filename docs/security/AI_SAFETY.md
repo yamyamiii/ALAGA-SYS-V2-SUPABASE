@@ -15,12 +15,20 @@ receive deterministic responses without calling Gemini.
 
 ## Grounding boundary
 
-The only database grounding is active FAQ text, public health-center name,
-address, hours and services, and currently published announcements. A
-service-role-only RPC selects explicit safe fields. It cannot return IDs,
-authors, contact details, team profiles, or any resident, household,
-appointment, clinical, maternal/child, reporting, inquiry, notification, or
-audit data.
+The general database grounding is active FAQ text, public health-center name,
+address, contact number, email, emergency contacts, hours and services, and
+currently published announcements. A service-role-only RPC selects explicit
+safe fields. It cannot return IDs, authors, team profiles, or any resident,
+household, appointment, clinical, maternal/child, reporting, inquiry,
+notification, or audit data.
+
+A separate service-role-only RPC is the sole private-data exception. It accepts
+the authenticated canonical profile ID from the Edge Function, independently
+requires one active linked Resident, and returns at most five own-appointment
+summaries containing only status, service, current date/time, and a schedule-
+changed boolean. The deterministic response is returned before Gemini and is
+never added to provider input or logs. It exposes no IDs, reasons, notes,
+assigned staff, contacts, clinical content, or another Resident's data.
 
 The Edge Function applies a second source-type, shape, count, and character
 allowlist. Grounding content is treated as untrusted data: embedded instructions

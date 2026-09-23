@@ -11,10 +11,13 @@ import {
   navigationResponseFor,
   parseAllowedOrigins,
   parsePositiveInteger,
+  productContextResponseFor,
+  residentAppointmentStatusResponseFor,
   requiresLiveGrounding,
   safetyResponseFor,
   sanitizeGroundingSources,
   sanitizeNavigationActions,
+  sanitizeResidentAppointmentStatusRows,
   serviceScheduleResponseFor,
   simpleConversationResponseFor,
   validateConversationPayload,
@@ -681,11 +684,7 @@ Deno.test("answers the verified Bagongpook health-service schedule", () => {
 Deno.test("does not infer official hours from service schedules", () => {
   const response = groundedResponseFor("What are the opening hours?", []);
   assertEquals(response?.category, "grounding_missing");
-  assert(
-    response?.message.includes(
-      "official opening and closing hours are not currently available",
-    ),
-  );
+  assert(response?.message.includes("official operating hours"));
   assertEquals(serviceScheduleResponseFor("What are the opening hours?"), null);
 });
 
@@ -701,4 +700,77 @@ Deno.test("workflow grounding is role specific and read only", () => {
   assert(resident.content.includes("preferred appointment start time"));
   assert(!resident.content.includes("trusted user access"));
   assert(admin.content.includes("trusted user access"));
+});
+
+Deno.test("answers approved ALAGA-SYS product context", () => {
+  assertEquals(
+    productContextResponseFor("What is ALAGA-SYS?", "resident")?.category,
+    "product_overview",
+  );
+  assertEquals(
+    productContextResponseFor("Ano ang role ng BHW?", "resident")?.category,
+    "product_role_overview",
+  );
+});
+
+Deno.test("answers Resident own appointment status deterministically", () => {
+  const rows = sanitizeResidentAppointmentStatusRows([
+    {
+      status: "confirmed",
+      service_type: "Immunization",
+      scheduled_date: "2026-10-07",
+      start_time: "09:00:00",
+      schedule_changed: true,
+      reason: "excluded",
+      resident_id: "excluded",
+    },
+  ]);
+  assertEquals(Object.keys(rows[0]).sort(), [
+    "scheduleChanged",
+    "scheduledDate",
+    "serviceType",
+    "startTime",
+    "status",
+  ]);
+  const response = residentAppointmentStatusResponseFor(
+    "Approved na ba appointment ko?",
+    "resident",
+    rows,
+  );
+  assertEquals(response?.category, "appointment_status_single");
+  assert(response?.message.includes("original preferred schedule"));
+  assertEquals(response?.actions[0], {
+    type: "navigate",
+    actionId: "open_appointments",
+    label: "Open My Appointments",
+    requiresConfirmation: false,
+  });
+});
+
+Deno.test("appointment status lookup stays Resident-own-data only", () => {
+  for (const role of [
+    "admin",
+    "barangay_health_worker",
+    "nurse",
+    "midwife",
+  ] as CanonicalRole[]) {
+    assertEquals(
+      residentAppointmentStatusResponseFor(
+        "What is my appointment status?",
+        role,
+      )?.category,
+      "appointment_status_role_unavailable",
+    );
+  }
+  assertEquals(
+    safetyResponseFor("Ano status ng appointment ni Juan?")?.category,
+    "security_boundary",
+  );
+  assertEquals(
+    residentAppointmentStatusResponseFor(
+      "Paano mag-request ng appointment?",
+      "resident",
+    ),
+    null,
+  );
 });
