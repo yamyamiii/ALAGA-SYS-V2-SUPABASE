@@ -12,17 +12,53 @@ export const announcementSchema = z
     title: requiredText("Title", 200),
     category: z.string().min(1),
     content: requiredText("Content", 10000),
-    publish_at: z.string().min(1, "Publish date is required."),
+    publish_now: z.boolean(),
+    publish_at: z.string(),
+    event_start_at: z.string(),
+    event_end_at: z.string(),
     expires_at: z.string(),
     is_pinned: z.boolean(),
   })
-  .refine(
-    (value) =>
-      !value.expires_at ||
-      new Date(value.expires_at).getTime() >
-        new Date(value.publish_at).getTime(),
-    { path: ["expires_at"], message: "Expiration must follow publication." },
-  );
+  .superRefine((value, context) => {
+    if (!value.publish_now && !value.publish_at) {
+      context.addIssue({
+        code: "custom",
+        path: ["publish_at"],
+        message: "Scheduled publication date and time is required.",
+      });
+    }
+    if (value.event_end_at && !value.event_start_at) {
+      context.addIssue({
+        code: "custom",
+        path: ["event_end_at"],
+        message: "Enter the event date and time before its end time.",
+      });
+    }
+    if (
+      value.event_start_at &&
+      value.event_end_at &&
+      new Date(value.event_end_at).getTime() <=
+        new Date(value.event_start_at).getTime()
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["event_end_at"],
+        message: "Event end must follow the event start.",
+      });
+    }
+    if (
+      value.expires_at &&
+      value.publish_at &&
+      new Date(value.expires_at).getTime() <=
+        new Date(value.publish_at).getTime()
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["expires_at"],
+        message: "Expiration must follow publication.",
+      });
+    }
+  });
 
 export const faqSchema = z.object({
   category: z.string().min(1),

@@ -19,7 +19,18 @@ const clockTimeFormatter = new Intl.DateTimeFormat("en-US", {
   second: "2-digit",
 });
 
+const manilaDateTimeInputFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: MANILA_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
 function validDate(value) {
+  if (value === null || value === undefined || value === "") return null;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -61,4 +72,22 @@ export function formatManilaDate(value) {
     timeZone: MANILA_TIME_ZONE,
     dateStyle: "medium",
   }).format(date);
+}
+
+export function formatManilaDateTimeInput(value) {
+  const date = validDate(value);
+  if (!date) return "";
+  const parts = Object.fromEntries(
+    manilaDateTimeInputFormatter
+      .formatToParts(date)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+export function manilaDateTimeInputToIso(value) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value ?? "")) return null;
+  const date = new Date(`${value}:00+08:00`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }

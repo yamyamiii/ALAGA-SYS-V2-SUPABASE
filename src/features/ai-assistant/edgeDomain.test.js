@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  announcementEventResponseFor,
   buildSystemInstruction,
   buildProviderInput,
   detectResponseLanguage,
   groundedResponseFor,
   groundingSourceTypesFor,
+  isAnnouncementEventQuestion,
   navigationActionIdsForRole,
   navigationResponseFor,
   productContextResponseFor,
@@ -454,6 +456,91 @@ describe("ALAGA AI server grounding and navigation domain", () => {
         },
       ],
     });
+  });
+
+  it("separates temporary announcement events from the canonical service schedule", () => {
+    const sources = sanitizeGroundingSources([
+      {
+        source_type: "announcement",
+        source_label: "Announcement",
+        title: "Bakuna sa Barangay",
+        content: "May vaccination activity sa covered court.",
+        category: "health_event",
+        event_start_at: "2026-09-26T05:45:00.000Z",
+        event_end_at: "2026-09-26T09:00:00.000Z",
+        updated_at: "2026-09-25T00:00:00.000Z",
+        id: "must-not-be-copied",
+        created_by: "must-not-be-copied",
+      },
+    ]);
+    const now = new Date("2026-09-25T04:00:00.000Z");
+
+    for (const prompt of [
+      "May bakuna ba bukas?",
+      "May vaccination event ba bukas?",
+      "Anong oras yung vaccination bukas?",
+      "Kailan yung announcement na Bakuna?",
+      "May medical mission ba this week?",
+      "What time is the vaccination event?",
+      "Is there a vaccination announcement tomorrow?",
+    ]) {
+      expect(isAnnouncementEventQuestion(prompt)).toBe(true);
+      expect(groundingSourceTypesFor(prompt)).toContain("announcement");
+    }
+    expect(isAnnouncementEventQuestion("Kailan ang immunization?")).toBe(false);
+    expect(
+      announcementEventResponseFor("May bakuna ba bukas?", sources, now),
+    ).toMatchObject({
+      category: "grounding_announcement_event",
+      message: expect.stringMatching(
+        /Bakuna sa Barangay.*Sep 26, 2026.*1:45 PM/s,
+      ),
+    });
+    expect(
+      serviceScheduleResponseFor("Kailan ang immunization?")?.message,
+    ).toContain("unang Miyerkules ng buwan");
+    expect(sources[0]).toEqual(
+      expect.objectContaining({
+        category: "health_event",
+        eventStartAt: "2026-09-26T05:45:00.000Z",
+        eventEndAt: "2026-09-26T09:00:00.000Z",
+      }),
+    );
+    expect(JSON.stringify(sources)).not.toMatch(/must-not-be-copied/);
+    const providerInput = buildProviderInput(
+      [{ role: "user", content: "May bakuna ba bukas?" }],
+      sources,
+    );
+    expect(providerInput).toContain("Event start: 2026-09-26T05:45:00.000Z");
+    expect(providerInput).not.toMatch(/must-not-be-copied|created_by/);
+  });
+
+  it("never infers an event date from other announcement timestamps", () => {
+    const unstructured = sanitizeGroundingSources([
+      {
+        source_type: "announcement",
+        source_label: "Announcement",
+        title: "Vaccination advisory",
+        content: "Please read the current vaccination advisory.",
+        category: "advisory",
+        event_start_at: null,
+        event_end_at: null,
+        updated_at: "2026-09-25T00:00:00.000Z",
+        publish_at: "2026-09-25T00:00:00.000Z",
+        expires_at: "2026-09-27T00:00:00.000Z",
+      },
+    ]);
+    const response = announcementEventResponseFor(
+      "What time is the vaccination event?",
+      unstructured,
+      new Date("2026-09-25T04:00:00.000Z"),
+    );
+
+    expect(response).toMatchObject({
+      category: "grounding_announcement_event_missing",
+    });
+    expect(response?.message).not.toMatch(/Sep 25|Sep 27|2026-09-2/);
+    expect(JSON.stringify(unstructured)).not.toMatch(/publish_at|expires_at/);
   });
 
   it("does not treat service schedules as official opening hours", () => {

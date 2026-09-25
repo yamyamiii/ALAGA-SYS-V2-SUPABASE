@@ -3,12 +3,14 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 import {
   AiAssistantError,
+  announcementEventResponseFor,
   boundedResponse,
   buildProviderInput,
   buildSystemInstruction,
   exactOriginCorsHeaders,
   groundedResponseFor,
   groundingSourceTypesFor,
+  isAnnouncementEventQuestion,
   isSupportedRole,
   MAX_BODY_BYTES,
   navigationResponseFor,
@@ -575,6 +577,29 @@ Deno.serve(async (request) => {
         200,
         headers,
       );
+    }
+
+    if (isAnnouncementEventQuestion(finalUserMessage)) {
+      const announcementGrounding = await loadApprovedGrounding(
+        admin,
+        profile.id,
+        ["announcement"],
+      );
+      const eventResponse = announcementEventResponseFor(
+        finalUserMessage,
+        announcementGrounding,
+      );
+      if (eventResponse) {
+        logRequest(requestId, profile.role, eventResponse.category, startedAt);
+        return jsonResponse(
+          {
+            data: assistantData(eventResponse.message, eventResponse.sources),
+            request_id: requestId,
+          },
+          200,
+          headers,
+        );
+      }
     }
 
     const serviceScheduleResponse =

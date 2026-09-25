@@ -10,6 +10,10 @@ const announcementNotificationCleanup = fs.readFileSync(
   "supabase/migrations/20260720004300_cleanup_archived_announcement_notifications.sql",
   "utf8",
 );
+const scheduledAnnouncementManagement = fs.readFileSync(
+  "supabase/migrations/20260720005900_show_scheduled_announcements_to_managers.sql",
+  "utf8",
+);
 
 describe("general assistance database boundary", () => {
   it("uses RPC-only tables with RLS and no authenticated table writes", () => {
@@ -45,6 +49,88 @@ describe("general assistance database boundary", () => {
     );
     expect(migration).toMatch(
       /archived announcements require announcement management access/i,
+    );
+  });
+
+  it("gives only Admin/BHW the complete management read model", () => {
+    expect(scheduledAnnouncementManagement).toMatch(
+      /actor_role in \('admin', 'barangay_health_worker'\)[\s\S]*announcement\.archived_at is null[\s\S]*or p_include_archived/i,
+    );
+    expect(scheduledAnnouncementManagement).toMatch(
+      /actor_role not in \('admin', 'barangay_health_worker'\)[\s\S]*announcement\.archived_at is null[\s\S]*announcement\.publish_at <= pg_catalog\.statement_timestamp\(\)[\s\S]*announcement\.expires_at is null[\s\S]*announcement\.expires_at > pg_catalog\.statement_timestamp\(\)/i,
+    );
+    expect(scheduledAnnouncementManagement).toMatch(
+      /if p_include_archived[\s\S]*actor_role not in \('admin', 'barangay_health_worker'\)[\s\S]*errcode = '42501'/i,
+    );
+  });
+
+  it("separates optional event timing from publication and expiration", () => {
+    expect(scheduledAnnouncementManagement).toMatch(
+      /add column event_start_at timestamptz[\s\S]*add column event_end_at timestamptz/i,
+    );
+    expect(scheduledAnnouncementManagement).toMatch(
+      /constraint announcements_event_window_valid check[\s\S]*event_end_at is null[\s\S]*event_start_at is not null[\s\S]*event_end_at > event_start_at/i,
+    );
+    expect(scheduledAnnouncementManagement).toMatch(
+      /p_expires_at is not null[\s\S]*p_expires_at <= effective_publish_at/i,
+    );
+    expect(scheduledAnnouncementManagement).not.toMatch(
+      /event_start_at\s*(?:>=|>)\s*(?:publish_at|effective_publish_at)/i,
+    );
+  });
+
+  it("uses a trusted Publish now boundary without resetting published rows", () => {
+    expect(scheduledAnnouncementManagement).toMatch(
+      /when p_publish_now then operation_time[\s\S]*else p_publish_at/i,
+    );
+    expect(scheduledAnnouncementManagement).toMatch(
+      /when p_publish_now and current_record\.publish_at <= operation_time[\s\S]*then current_record\.publish_at[\s\S]*when p_publish_now then operation_time/i,
+    );
+    expect(scheduledAnnouncementManagement).toMatch(
+      /array\[[\s\S]*'publish_at'[\s\S]*'event_start_at'[\s\S]*'event_end_at'[\s\S]*'expires_at'/i,
+    );
+  });
+
+  it("keeps in-app notification availability synchronized to publish_at", () => {
+    expect(migration).toMatch(
+      /source_id,action_path,dedup_key,available_at[\s\S]*saved_record\.publish_at/i,
+    );
+    expect(scheduledAnnouncementManagement).toMatch(
+      /update public\.assistance_notifications as notification[\s\S]*available_at = new\.publish_at[\s\S]*notification\.source_type = 'announcements'[\s\S]*notification\.source_id = new\.id/i,
+    );
+    expect(scheduledAnnouncementManagement).toMatch(
+      /after update of title, publish_at[\s\S]*execute function public\.sync_announcement_notification_schedule\(\)/i,
+    );
+    expect(scheduledAnnouncementManagement).not.toMatch(
+      /after update of[^\n;]*event_start_at/i,
+    );
+  });
+
+  it("grounds AI with safe event fields and no announcement identifiers", () => {
+    const groundingFunction = scheduledAnnouncementManagement.slice(
+      scheduledAnnouncementManagement.indexOf(
+        "create or replace function public.ai_grounding_context",
+      ),
+      scheduledAnnouncementManagement.indexOf(
+        "revoke all on function public.ai_grounding_context",
+      ),
+    );
+    expect(groundingFunction).toMatch(
+      /category text[\s\S]*event_start_at timestamptz[\s\S]*event_end_at timestamptz/i,
+    );
+    expect(groundingFunction).toMatch(
+      /announcement\.category::text[\s\S]*announcement\.event_start_at[\s\S]*announcement\.event_end_at/i,
+    );
+    expect(groundingFunction).toMatch(
+      /announcement\.publish_at <= pg_catalog\.statement_timestamp\(\)[\s\S]*announcement\.expires_at > pg_catalog\.statement_timestamp\(\)/i,
+    );
+    const returnShape = groundingFunction.slice(
+      groundingFunction.indexOf("returns table"),
+      groundingFunction.indexOf("language plpgsql"),
+    );
+    expect(returnShape).not.toMatch(/\b(?:id|created_by|updated_by)\b/i);
+    expect(groundingFunction).not.toMatch(
+      /grounding\.(?:id|created_by|updated_by)/i,
     );
   });
 

@@ -40,7 +40,7 @@ describe("assistance service", () => {
     });
   });
 
-  it("preserves the existing create and edit announcement RPC contract", async () => {
+  it("submits distinct publication and event fields to the trusted RPC", async () => {
     const { rpc, service } = serviceWith([{ id: "announcement-one" }]);
     const values = {
       id: "11111111-1111-4111-8111-111111111111",
@@ -48,8 +48,11 @@ describe("assistance service", () => {
       category: "clinic_schedule",
       content: "Updated PHI-free health center schedule.",
       publish_at: "2026-08-15T00:00:00.000Z",
+      event_start_at: "2026-08-16T05:45:00.000Z",
+      event_end_at: "",
       expires_at: "",
       is_pinned: true,
+      publish_now: false,
       version: 4,
       request_key: null,
     };
@@ -62,8 +65,11 @@ describe("assistance service", () => {
       p_category: values.category,
       p_content: values.content,
       p_publish_at: values.publish_at,
+      p_event_start_at: values.event_start_at,
+      p_event_end_at: null,
       p_expires_at: null,
       p_is_pinned: true,
+      p_publish_now: false,
       p_expected_version: 4,
       p_request_key: null,
     });

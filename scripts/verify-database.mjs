@@ -72,6 +72,7 @@ const expectedMigrations = [
   "20260720005600_enforce_appointment_start_slots.sql",
   "20260720005700_add_bagongpook_appointment_services.sql",
   "20260720005800_ai_defense_readiness.sql",
+  "20260720005900_show_scheduled_announcements_to_managers.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -192,6 +193,8 @@ const reviewedPendingMigrationHashes = {
     "503aaa16bdc1f13ce6a3c503c674741a2abf8beeda2b1db6786e28e874f22346",
   "20260720005800_ai_defense_readiness.sql":
     "285c7722f18eb5590926353b85fc390e677603b2dab4f7ae7b5a94aa8ec3b10e",
+  "20260720005900_show_scheduled_announcements_to_managers.sql":
+    "ea3ab7fafba1f3e1301b132be5de51400a6488de53d8c69b6954aa6031e58147",
 };
 const expectedTables = [
   "account_retirements",
@@ -290,7 +293,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly fifty-eight expected migrations exist in lexical order",
+  "Exactly fifty-nine expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -1798,6 +1801,79 @@ check(
       archivedAnnouncementNotificationMigration,
     ),
   "Announcement cleanup restores only the existing trusted RPC grant",
+);
+
+const scheduledAnnouncementManagementMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("show_scheduled_announcements_to_managers"),
+  )?.sql ?? "";
+const scheduledAnnouncementDeclarationAudit = auditPlpgsqlIntoTargets(
+  scheduledAnnouncementManagementMigration,
+);
+check(
+  scheduledAnnouncementDeclarationAudit.functionCount === 4 &&
+    scheduledAnnouncementDeclarationAudit.undeclared.length === 0,
+  "Scheduled-announcement management functions have declared PL/pgSQL targets",
+);
+check(
+  /actor_role in \('admin', 'barangay_health_worker'\)[\s\S]*announcement\.archived_at is null[\s\S]*or p_include_archived/i.test(
+    scheduledAnnouncementManagementMigration,
+  ) &&
+    /actor_role not in \('admin', 'barangay_health_worker'\)[\s\S]*announcement\.publish_at <= pg_catalog\.statement_timestamp\(\)[\s\S]*announcement\.expires_at > pg_catalog\.statement_timestamp\(\)/i.test(
+      scheduledAnnouncementManagementMigration,
+    ),
+  "Announcement managers see scheduled and expired rows while public roles remain publication-bound",
+);
+check(
+  /add column event_start_at timestamptz[\s\S]*add column event_end_at timestamptz[\s\S]*announcements_event_window_valid[\s\S]*event_end_at is null[\s\S]*event_start_at is not null[\s\S]*event_end_at > event_start_at/i.test(
+    scheduledAnnouncementManagementMigration,
+  ) &&
+    /p_expires_at is not null[\s\S]*p_expires_at <= effective_publish_at/i.test(
+      scheduledAnnouncementManagementMigration,
+    ) &&
+    !/event_start_at\s*(?:>=|>)\s*(?:publish_at|effective_publish_at)/i.test(
+      scheduledAnnouncementManagementMigration,
+    ),
+  "Announcement event timing is optional, ordered, and independent of publication",
+);
+check(
+  /when p_publish_now then operation_time[\s\S]*else p_publish_at/i.test(
+    scheduledAnnouncementManagementMigration,
+  ) &&
+    /when p_publish_now and current_record\.publish_at <= operation_time[\s\S]*then current_record\.publish_at[\s\S]*when p_publish_now then operation_time/i.test(
+      scheduledAnnouncementManagementMigration,
+    ),
+  "Trusted Publish now preserves existing published timestamps",
+);
+check(
+  /update public\.assistance_notifications as notification[\s\S]*available_at = new\.publish_at[\s\S]*notification\.source_type = 'announcements'[\s\S]*notification\.source_id = new\.id/i.test(
+    scheduledAnnouncementManagementMigration,
+  ) &&
+    /after update of title, publish_at[\s\S]*execute function public\.sync_announcement_notification_schedule\(\)/i.test(
+      scheduledAnnouncementManagementMigration,
+    ),
+  "Announcement notification availability remains synchronized to publish_at",
+);
+check(
+  /returns table \([\s\S]*category text[\s\S]*event_start_at timestamptz[\s\S]*event_end_at timestamptz[\s\S]*updated_at timestamptz/i.test(
+    scheduledAnnouncementManagementMigration,
+  ) &&
+    /announcement\.category::text[\s\S]*announcement\.event_start_at[\s\S]*announcement\.event_end_at/i.test(
+      scheduledAnnouncementManagementMigration,
+    ) &&
+    /announcement\.publish_at <= pg_catalog\.statement_timestamp\(\)[\s\S]*announcement\.expires_at > pg_catalog\.statement_timestamp\(\)/i.test(
+      scheduledAnnouncementManagementMigration,
+    ),
+  "AI grounding receives only active announcement content and structured event timing",
+);
+check(
+  /revoke all on function public\.announcement_list\([\s\S]*from public, anon, authenticated;[\s\S]*grant execute on function public\.announcement_list\([\s\S]*to authenticated, service_role/i.test(
+    scheduledAnnouncementManagementMigration,
+  ) &&
+    !/grant\s+(?:select|insert|update|delete|all)\s+on\s+(?:table\s+)?public\.(?:announcements|assistance_notifications)[^;]*authenticated/i.test(
+      scheduledAnnouncementManagementMigration,
+    ),
+  "Scheduled-announcement visibility preserves RPC-only table access",
 );
 
 const finalQaMigration =

@@ -1,10 +1,12 @@
 import {
   AiAssistantError,
+  announcementEventResponseFor,
   buildProviderInput,
   buildSystemInstruction,
   exactOriginCorsHeaders,
   groundedResponseFor,
   groundingSourceTypesFor,
+  isAnnouncementEventQuestion,
   MAX_CONVERSATION_TURNS,
   MAX_MESSAGE_CHARACTERS,
   navigationActionIdsForRole,
@@ -680,6 +682,88 @@ Deno.test("answers the verified Bagongpook health-service schedule", () => {
     );
   }
 });
+
+Deno.test(
+  "separates structured temporary events from canonical service schedules",
+  () => {
+    const sources = sanitizeGroundingSources([
+      {
+        source_type: "announcement",
+        source_label: "Announcement",
+        title: "Bakuna sa Barangay",
+        content: "May vaccination activity sa covered court.",
+        category: "health_event",
+        event_start_at: "2026-09-26T05:45:00.000Z",
+        event_end_at: "2026-09-26T09:00:00.000Z",
+        updated_at: "2026-09-25T00:00:00.000Z",
+        id: "excluded",
+        created_by: "excluded",
+      },
+    ]);
+    const response = announcementEventResponseFor(
+      "May bakuna ba bukas?",
+      sources,
+      new Date("2026-09-25T04:00:00.000Z"),
+    );
+
+    for (const prompt of [
+      "May bakuna ba bukas?",
+      "May vaccination event ba bukas?",
+      "Anong oras yung vaccination bukas?",
+      "Kailan yung announcement na Bakuna?",
+      "May medical mission ba this week?",
+      "What time is the vaccination event?",
+      "Is there a vaccination announcement tomorrow?",
+    ]) {
+      assertEquals(isAnnouncementEventQuestion(prompt), true);
+      assert(groundingSourceTypesFor(prompt).includes("announcement"));
+    }
+    assertEquals(
+      isAnnouncementEventQuestion("Kailan ang immunization?"),
+      false,
+    );
+    assertEquals(response?.category, "grounding_announcement_event");
+    assert(response?.message.includes("Sep 26, 2026"));
+    assert(response?.message.includes("1:45 PM"));
+    assert(
+      serviceScheduleResponseFor("Kailan ang immunization?")?.message.includes(
+        "unang Miyerkules ng buwan",
+      ),
+    );
+    assert(!JSON.stringify(sources).includes("excluded"));
+  },
+);
+
+Deno.test(
+  "does not infer event timing from publication or expiry metadata",
+  () => {
+    const sources = sanitizeGroundingSources([
+      {
+        source_type: "announcement",
+        source_label: "Announcement",
+        title: "Vaccination advisory",
+        content: "Please read the current vaccination advisory.",
+        category: "advisory",
+        event_start_at: null,
+        event_end_at: null,
+        updated_at: "2026-09-25T00:00:00.000Z",
+        publish_at: "2026-09-25T00:00:00.000Z",
+        expires_at: "2026-09-27T00:00:00.000Z",
+      },
+    ]);
+    const response = announcementEventResponseFor(
+      "What time is the vaccination event?",
+      sources,
+      new Date("2026-09-25T04:00:00.000Z"),
+    );
+
+    assertEquals(response?.category, "grounding_announcement_event_missing");
+    assert(!response?.message.includes("Sep 25"));
+    assert(!response?.message.includes("Sep 27"));
+    assert(!JSON.stringify(sources).includes("publish_at"));
+    assert(!JSON.stringify(sources).includes("expires_at"));
+  },
+);
 
 Deno.test("does not infer official hours from service schedules", () => {
   const response = groundedResponseFor("What are the opening hours?", []);

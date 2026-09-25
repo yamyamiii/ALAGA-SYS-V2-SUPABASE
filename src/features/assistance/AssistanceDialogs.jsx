@@ -25,6 +25,10 @@ import {
   inquirySchema,
   inquiryUpdateSchema,
 } from "@/features/assistance/schemas";
+import {
+  formatManilaDateTimeInput,
+  manilaDateTimeInputToIso,
+} from "@/lib/dateTime";
 
 function Field({ id, label, children }) {
   return (
@@ -71,14 +75,13 @@ function Footer({ pending, onCancel }) {
   );
 }
 
-function localDateTime(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-}
-
-export function AnnouncementDialog({ open, onOpenChange, record, mutation }) {
+export function AnnouncementDialog({
+  open,
+  onOpenChange,
+  record,
+  mutation,
+  onSaved,
+}) {
   const [values, setValues] = useState(null);
   const [error, setError] = useState("");
   const recordRef = useRef(record);
@@ -86,14 +89,24 @@ export function AnnouncementDialog({ open, onOpenChange, record, mutation }) {
   useEffect(() => {
     if (!open) return;
     const record = recordRef.current;
+    const openedAt = new Date();
+    const existingPublishAt = record?.publish_at
+      ? new Date(record.publish_at)
+      : null;
     setError("");
     setValues({
       id: record?.id ?? "",
       title: record?.title ?? "",
       category: record?.category ?? "general",
       content: record?.content ?? "",
-      publish_at: localDateTime(record?.publish_at ?? new Date()),
-      expires_at: localDateTime(record?.expires_at),
+      publish_now:
+        !record ||
+        (existingPublishAt &&
+          existingPublishAt.getTime() <= openedAt.getTime()),
+      publish_at: formatManilaDateTimeInput(record?.publish_at ?? openedAt),
+      event_start_at: formatManilaDateTimeInput(record?.event_start_at),
+      event_end_at: formatManilaDateTimeInput(record?.event_end_at),
+      expires_at: formatManilaDateTimeInput(record?.expires_at),
       is_pinned: record?.is_pinned ?? false,
       version: record?.version ?? null,
       request_key: record ? null : crypto.randomUUID(),
@@ -110,12 +123,36 @@ export function AnnouncementDialog({ open, onOpenChange, record, mutation }) {
       return;
     }
     try {
+      const publishAt = manilaDateTimeInputToIso(values.publish_at);
+      const expiresAt = values.expires_at
+        ? manilaDateTimeInputToIso(values.expires_at)
+        : null;
+      const eventStartAt = values.event_start_at
+        ? manilaDateTimeInputToIso(values.event_start_at)
+        : null;
+      const eventEndAt = values.event_end_at
+        ? manilaDateTimeInputToIso(values.event_end_at)
+        : null;
+      if (
+        !publishAt ||
+        (values.expires_at && !expiresAt) ||
+        (values.event_start_at && !eventStartAt) ||
+        (values.event_end_at && !eventEndAt)
+      ) {
+        setError("Enter valid Asia/Manila dates and times.");
+        return;
+      }
       await mutation.mutateAsync({
         ...values,
-        publish_at: new Date(values.publish_at).toISOString(),
-        expires_at: values.expires_at
-          ? new Date(values.expires_at).toISOString()
-          : "",
+        publish_at: publishAt,
+        event_start_at: eventStartAt ?? "",
+        event_end_at: eventEndAt ?? "",
+        expires_at: expiresAt ?? "",
+      });
+      onSaved?.({
+        isNew: !values.id,
+        publishAt,
+        publishNow: values.publish_now,
       });
       onOpenChange(false);
     } catch (nextError) {
@@ -160,15 +197,72 @@ export function AnnouncementDialog({ open, onOpenChange, record, mutation }) {
               onChange={(e) => set("content", e.target.value)}
             />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field id="announcement-publish" label="Publish date and time">
-              <Input
-                id="announcement-publish"
-                type="datetime-local"
-                value={values.publish_at}
-                onChange={(e) => set("publish_at", e.target.value)}
+          <div className="space-y-3 rounded-xl border p-4">
+            <div>
+              <p className="text-sm font-semibold">Publication</p>
+              <p className="text-xs text-muted-foreground">
+                Controls when Residents can see this announcement.
+              </p>
+            </div>
+            <label className="flex min-h-10 items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={values.publish_now}
+                onChange={(event) => set("publish_now", event.target.checked)}
               />
-            </Field>
+              Publish now
+            </label>
+            {!values.publish_now ? (
+              <Field
+                id="announcement-publish"
+                label="Scheduled publication date and time"
+              >
+                <Input
+                  id="announcement-publish"
+                  type="datetime-local"
+                  value={values.publish_at}
+                  onChange={(e) => set("publish_at", e.target.value)}
+                />
+              </Field>
+            ) : null}
+          </div>
+          <div className="space-y-3 rounded-xl border p-4">
+            <div>
+              <p className="text-sm font-semibold">Event / activity schedule</p>
+              <p className="text-xs text-muted-foreground">
+                Optional. This describes when the announced activity happens; it
+                does not control publication.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="announcement-event-start" label="Event date and time">
+                <Input
+                  id="announcement-event-start"
+                  type="datetime-local"
+                  value={values.event_start_at}
+                  onChange={(e) => set("event_start_at", e.target.value)}
+                />
+              </Field>
+              <Field
+                id="announcement-event-end"
+                label="Event end date and time (optional)"
+              >
+                <Input
+                  id="announcement-event-end"
+                  type="datetime-local"
+                  value={values.event_end_at}
+                  onChange={(e) => set("event_end_at", e.target.value)}
+                />
+              </Field>
+            </div>
+          </div>
+          <div className="space-y-3 rounded-xl border p-4">
+            <div>
+              <p className="text-sm font-semibold">Expiration</p>
+              <p className="text-xs text-muted-foreground">
+                Optional. Controls when this announcement stops being current.
+              </p>
+            </div>
             <Field id="announcement-expiry" label="Expiration date and time">
               <Input
                 id="announcement-expiry"

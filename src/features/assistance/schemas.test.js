@@ -14,7 +14,10 @@ describe("assistance schemas", () => {
       title: "Clinic schedule",
       category: "clinic_schedule",
       content: "The clinic opens at eight.",
+      publish_now: false,
       publish_at: "2026-07-27T08:00",
+      event_start_at: "",
+      event_end_at: "",
       expires_at: "2026-07-27T07:59",
       is_pinned: false,
     };
@@ -23,6 +26,48 @@ describe("assistance schemas", () => {
       announcementSchema.safeParse({
         ...values,
         expires_at: "2026-07-28T08:00",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("keeps event timing optional and validates an optional event end", () => {
+    const values = {
+      title: "Vaccination activity",
+      category: "health_event",
+      content: "Vaccination activity information.",
+      publish_now: true,
+      publish_at: "2026-09-25T08:00",
+      event_start_at: "",
+      event_end_at: "",
+      expires_at: "",
+      is_pinned: false,
+    };
+
+    expect(announcementSchema.safeParse(values).success).toBe(true);
+    expect(
+      announcementSchema.safeParse({
+        ...values,
+        event_start_at: "2026-09-26T13:45",
+      }).success,
+    ).toBe(true);
+    expect(
+      announcementSchema.safeParse({
+        ...values,
+        event_end_at: "2026-09-26T15:00",
+      }).success,
+    ).toBe(false);
+    expect(
+      announcementSchema.safeParse({
+        ...values,
+        event_start_at: "2026-09-26T13:45",
+        event_end_at: "2026-09-26T13:30",
+      }).success,
+    ).toBe(false);
+    expect(
+      announcementSchema.safeParse({
+        ...values,
+        event_start_at: "2026-09-26T13:45",
+        event_end_at: "2026-09-26T15:00",
       }).success,
     ).toBe(true);
   });

@@ -22,6 +22,12 @@ import {
 } from "@/components/ui/dialog";
 import { AnnouncementDialog } from "@/features/assistance/AssistanceDialogs";
 import {
+  ANNOUNCEMENT_STATUSES,
+  announcementCreationMessage,
+  formatAnnouncementEventSchedule,
+  getAnnouncementStatus,
+} from "@/features/assistance/announcementStatus";
+import {
   ANNOUNCEMENT_CATEGORIES,
   optionLabel,
 } from "@/features/assistance/constants";
@@ -78,7 +84,11 @@ export default function AnnouncementsPage() {
       <PageHeading
         eyebrow="Community information"
         title="Announcements"
-        description="Current barangay health center advisories. Expired announcements are removed automatically."
+        description={
+          canManage
+            ? "Manage published, scheduled, expired, and archived barangay health center advisories."
+            : "Current barangay health center advisories."
+        }
         actions={
           canManage ? (
             <Button onClick={() => open()}>
@@ -152,60 +162,102 @@ export default function AnnouncementsPage() {
         ) : query.data.items.length === 0 ? (
           <EmptyState
             title="No announcements"
-            description="No current announcements match these filters."
+            description={
+              canManage
+                ? "No managed announcements match these filters."
+                : "No current announcements match these filters."
+            }
           />
         ) : (
           <div className="grid gap-4 p-5 pt-0 lg:grid-cols-2">
-            {query.data.items.map((item) => (
-              <article key={item.id} className="rounded-xl border p-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  {item.is_pinned ? (
-                    <Badge>
-                      <Pin className="mr-1 h-3 w-3" />
-                      Pinned
+            {query.data.items.map((item) => {
+              const status = getAnnouncementStatus(item);
+              const eventSchedule = formatAnnouncementEventSchedule(
+                item.event_start_at,
+                item.event_end_at,
+              );
+              return (
+                <article key={item.id} className="rounded-xl border p-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {item.is_pinned ? (
+                      <Badge>
+                        <Pin className="mr-1 h-3 w-3" />
+                        Pinned
+                      </Badge>
+                    ) : null}
+                    <Badge variant="secondary">
+                      {optionLabel(ANNOUNCEMENT_CATEGORIES, item.category)}
                     </Badge>
-                  ) : null}
-                  <Badge variant="secondary">
-                    {optionLabel(ANNOUNCEMENT_CATEGORIES, item.category)}
-                  </Badge>
-                  {item.archived_at ? (
-                    <Badge variant="outline">Archived</Badge>
-                  ) : null}
-                </div>
-                <h2 className="mt-3 text-lg font-semibold">{item.title}</h2>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                  {item.content}
-                </p>
-                <p className="mt-4 text-xs text-muted-foreground">
-                  Published {formatManilaDateTime(item.publish_at)}
-                  {item.creator_name ? ` by ${item.creator_name}` : ""}
-                  {item.expires_at
-                    ? ` · Expires ${formatManilaDateTime(item.expires_at)}`
-                    : ""}
-                </p>
-                {canManage && !item.archived_at ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => open(item)}
+                    <Badge
+                      variant={
+                        status === ANNOUNCEMENT_STATUSES.PUBLISHED
+                          ? "default"
+                          : "outline"
+                      }
                     >
-                      <Pencil />
-                      Edit or pin
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => setArchiving(item)}
-                      disabled={archive.isPending}
-                    >
-                      <Archive />
-                      Archive
-                    </Button>
+                      {status}
+                    </Badge>
                   </div>
-                ) : null}
-              </article>
-            ))}
+                  <h2 className="mt-3 text-lg font-semibold">{item.title}</h2>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                    {item.content}
+                  </p>
+                  <dl className="mt-4 space-y-1 text-xs text-muted-foreground">
+                    {eventSchedule ? (
+                      <div className="flex flex-wrap gap-1">
+                        <dt className="font-medium text-foreground">Event:</dt>
+                        <dd>{eventSchedule}</dd>
+                      </div>
+                    ) : null}
+                    <div className="flex flex-wrap gap-1">
+                      <dt className="font-medium text-foreground">
+                        {status === ANNOUNCEMENT_STATUSES.SCHEDULED
+                          ? "Publishes:"
+                          : "Published:"}
+                      </dt>
+                      <dd>{formatManilaDateTime(item.publish_at)}</dd>
+                    </div>
+                    {item.expires_at ? (
+                      <div className="flex flex-wrap gap-1">
+                        <dt className="font-medium text-foreground">
+                          Expires:
+                        </dt>
+                        <dd>{formatManilaDateTime(item.expires_at)}</dd>
+                      </div>
+                    ) : null}
+                    {item.creator_name ? (
+                      <div className="flex flex-wrap gap-1">
+                        <dt className="font-medium text-foreground">
+                          Created by:
+                        </dt>
+                        <dd>{item.creator_name}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                  {canManage && !item.archived_at ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => open(item)}
+                      >
+                        <Pencil />
+                        Edit or pin
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => setArchiving(item)}
+                        disabled={archive.isPending}
+                      >
+                        <Archive />
+                        Archive
+                      </Button>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         )}
         <RegistryPagination
@@ -222,6 +274,13 @@ export default function AnnouncementsPage() {
         onOpenChange={setDialogOpen}
         record={editing}
         mutation={save}
+        onSaved={({ isNew, publishAt, publishNow }) => {
+          if (isNew) {
+            toast.success(
+              announcementCreationMessage(publishAt, { publishNow }),
+            );
+          }
+        }}
       />
       <Dialog
         open={Boolean(archiving)}

@@ -17,6 +17,10 @@ const defenseReadinessMigration = fs.readFileSync(
   "supabase/migrations/20260720005800_ai_defense_readiness.sql",
   "utf8",
 );
+const announcementSchedulingMigration = fs.readFileSync(
+  "supabase/migrations/20260720005900_show_scheduled_announcements_to_managers.sql",
+  "utf8",
+);
 const frontend = [
   "src/services/aiAssistantService.js",
   "src/features/ai-assistant/FloatingAiAssistant.jsx",
@@ -203,6 +207,9 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(defenseReadinessMigration).toMatch(
       /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
     );
+    expect(announcementSchedulingMigration).toMatch(
+      /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
+    );
     expect(index).not.toMatch(
       /\.from\("(?:faq_entries|announcements|health_center_information)"\)/i,
     );
@@ -321,6 +328,25 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(scheduleCatalog).toContain("first Wednesday of every month");
     expect(scheduleCatalog).not.toMatch(/\b\d{1,2}:\d{2}\b/);
     expect(index).not.toMatch(/\.from\("appointments"\)/);
+  });
+
+  it("answers temporary event questions from approved announcement grounding before the canonical schedule or Gemini", () => {
+    const handler = index.slice(index.indexOf("Deno.serve"));
+    const eventIntent = handler.indexOf(
+      "isAnnouncementEventQuestion(finalUserMessage)",
+    );
+    const eventResponse = handler.indexOf("announcementEventResponseFor(");
+    const scheduleResponse = handler.indexOf("serviceScheduleResponseFor(");
+    const gemini = handler.indexOf("new GoogleGenAI");
+
+    expect(eventIntent).toBeGreaterThan(-1);
+    expect(eventResponse).toBeGreaterThan(eventIntent);
+    expect(eventResponse).toBeLessThan(scheduleResponse);
+    expect(eventResponse).toBeLessThan(gemini);
+    expect(index).toMatch(
+      /loadApprovedGrounding\([\s\S]*\["announcement"\][\s\S]*announcementEventResponseFor/i,
+    );
+    expect(index).not.toMatch(/\.from\("announcements"\)/);
   });
 
   it("keeps appointment workflow guidance static, read-only, and PHI-free", () => {

@@ -23,6 +23,18 @@ const currentFunctionBody = defenseReadinessMigration.slice(
     "revoke all on function public.ai_grounding_context",
   ),
 );
+const announcementSchedulingMigration = fs.readFileSync(
+  "supabase/migrations/20260720005900_show_scheduled_announcements_to_managers.sql",
+  "utf8",
+);
+const latestFunctionBody = announcementSchedulingMigration.slice(
+  announcementSchedulingMigration.indexOf(
+    "create or replace function public.ai_grounding_context",
+  ),
+  announcementSchedulingMigration.indexOf(
+    "revoke all on function public.ai_grounding_context",
+  ),
+);
 
 describe("ALAGA AI approved grounding database boundary", () => {
   it("returns only explicitly approved source fields", () => {
@@ -105,6 +117,29 @@ describe("ALAGA AI approved grounding database boundary", () => {
       /revoke all on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*from public, anon, authenticated/i,
     );
     expect(defenseReadinessMigration).toMatch(
+      /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
+    );
+  });
+
+  it("adds only safe structured event fields to active announcement grounding", () => {
+    expect(latestFunctionBody).toMatch(
+      /category text[\s\S]*event_start_at timestamptz[\s\S]*event_end_at timestamptz/i,
+    );
+    expect(latestFunctionBody).toMatch(
+      /announcement\.archived_at is null[\s\S]*announcement\.publish_at <= pg_catalog\.statement_timestamp\(\)[\s\S]*announcement\.expires_at > pg_catalog\.statement_timestamp\(\)/i,
+    );
+    expect(latestFunctionBody).toMatch(
+      /announcement\.category::text[\s\S]*announcement\.event_start_at[\s\S]*announcement\.event_end_at/i,
+    );
+    const returnShape = latestFunctionBody.slice(
+      latestFunctionBody.indexOf("returns table"),
+      latestFunctionBody.indexOf("language plpgsql"),
+    );
+    expect(returnShape).not.toMatch(/\b(?:id|created_by|updated_by)\b/i);
+    expect(announcementSchedulingMigration).toMatch(
+      /revoke all on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*from public, anon, authenticated/i,
+    );
+    expect(announcementSchedulingMigration).toMatch(
       /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
     );
   });
