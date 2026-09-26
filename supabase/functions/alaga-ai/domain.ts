@@ -1,6 +1,7 @@
 import {
   BAGONGPOOK_HEALTH_SERVICE_SCHEDULE,
   SYSTEM_KNOWLEDGE_ENTRIES,
+  type AppointmentWorkflowFacet,
   type SystemKnowledgeEntry,
   type SystemKnowledgeTopic,
 } from "./knowledge.ts";
@@ -649,6 +650,73 @@ export function normalizeConversationalText(value: string) {
   return normalized.replace(/\s+/g, " ").trim();
 }
 
+const APPOINTMENT_WORKFLOW_GENERAL_FACET =
+  /\b(?:appointment (?:workflow|process)|buong (?:appointment )?(?:workflow|process)|paano gumagana (?:ang )?(?:appointment )?(?:workflow|process)|explain (?:the )?appointment (?:workflow|process))\b/;
+const APPOINTMENT_WORKFLOW_APPROVAL_FACET =
+  /\b(?:approved? agad|automatic(?:ally)? approved?|approved? automatic(?:ally)?|pending muna|kailangan(?: pa)? (?:ba )?(?:itong |ito )?(?:i )?review|need(?:s|ed)? (?:to be )?reviewed|does it get approved|review pa)\b/;
+const APPOINTMENT_WORKFLOW_NEXT_FACET =
+  /\b(?:ano (?:ang )?(?:mangyayari|next)|ano na|tapos ano|pagkatapos (?:kong |ko )?(?:request|submit)|pag (?:nag )?submit(?: ako)? ano|what happens (?:next|after)|after i submit|after submitting|what comes next)\b/;
+const APPOINTMENT_WORKFLOW_WHERE_FACET = /\b(?:saan|where|nasaan)\b/;
+const APPOINTMENT_WORKFLOW_HOW_FACET =
+  /\b(?:paano|how|ano (?:ang )?gagawin|steps?)\b/;
+const APPOINTMENT_WORKFLOW_RESCHEDULE_FACET =
+  /\b(?:reschedul(?:e|ed|ing)|change (?:my |the )?(?:appointment )?schedule|palitan|ilipat|baguhin (?:ang )?schedule)\b/;
+const APPOINTMENT_WORKFLOW_CANCEL_FACET =
+  /\b(?:cancel(?:led|lation|ing)?|kansela|kanselahin)\b/;
+const APPOINTMENT_WORKFLOW_STATUS_FACET =
+  /\b(?:what does .+ mean|ano(?:ng)? ibig sabihin|status meaning|appointment statuses?|pending confirmed checked)\b/;
+const APPOINTMENT_WORKFLOW_STAFF_REVIEW_FACET =
+  /\b(?:who reviews?|sino(?: ang)? (?:nag|mag) ?review|staff review|how (?:does|do) (?:staff|the health center) review)\b/;
+const APPOINTMENT_WORKFLOW_SUBJECT =
+  /\b(?:appointments?|request|book(?:ing)?|schedule|checkup|visit|submit)\b/;
+
+export function resolveAppointmentWorkflowFacet(
+  message: string,
+): AppointmentWorkflowFacet | null {
+  const normalized = normalizeConversationalText(message);
+  if (!normalized) return null;
+  if (APPOINTMENT_WORKFLOW_GENERAL_FACET.test(normalized)) {
+    return "general_workflow";
+  }
+  if (APPOINTMENT_WORKFLOW_APPROVAL_FACET.test(normalized)) {
+    return "approval_behavior";
+  }
+  if (APPOINTMENT_WORKFLOW_NEXT_FACET.test(normalized)) {
+    return "what_happens_next";
+  }
+  if (APPOINTMENT_WORKFLOW_RESCHEDULE_FACET.test(normalized)) {
+    return "reschedule";
+  }
+  if (APPOINTMENT_WORKFLOW_CANCEL_FACET.test(normalized)) return "cancel";
+  if (APPOINTMENT_WORKFLOW_STATUS_FACET.test(normalized)) {
+    return "status_meaning";
+  }
+  if (APPOINTMENT_WORKFLOW_STAFF_REVIEW_FACET.test(normalized)) {
+    return "staff_review";
+  }
+  if (APPOINTMENT_WORKFLOW_WHERE_FACET.test(normalized)) {
+    return "where_to_request";
+  }
+  if (
+    APPOINTMENT_WORKFLOW_HOW_FACET.test(normalized) &&
+    APPOINTMENT_WORKFLOW_SUBJECT.test(normalized)
+  ) {
+    return "how_to_request";
+  }
+  return null;
+}
+
+function isStandaloneAppointmentWorkflowFacet(
+  message: string,
+  facet: AppointmentWorkflowFacet | null,
+) {
+  if (!facet) return false;
+  if (facet === "approval_behavior") return true;
+  return APPOINTMENT_WORKFLOW_SUBJECT.test(
+    normalizeConversationalText(message),
+  );
+}
+
 function knowledgeTokens(value: string) {
   return new Set(
     normalizeConversationalText(value)
@@ -746,6 +814,15 @@ function directConversationTopic(
   ) {
     return null;
   }
+  const appointmentFacet = resolveAppointmentWorkflowFacet(message);
+  if (isStandaloneAppointmentWorkflowFacet(message, appointmentFacet)) {
+    return {
+      topic: "appointment_workflow",
+      contextual: false,
+      sourceMessage: message,
+      confidence: "strong",
+    };
+  }
   if (isStrongAnnouncementTopic(message)) {
     return {
       topic: "announcement",
@@ -833,7 +910,11 @@ function finalUserMessageWithAliases(message: string) {
   return normalizeConversationalText(message);
 }
 
-function knowledgeSource(entry: SystemKnowledgeEntry, role: CanonicalRole) {
+function knowledgeSource(
+  entry: SystemKnowledgeEntry,
+  role: CanonicalRole,
+  content = entry.facts.english,
+) {
   const roleAccess = entry.access
     ? `\nRole access: ${entry.access.english}`
     : "";
@@ -841,9 +922,26 @@ function knowledgeSource(entry: SystemKnowledgeEntry, role: CanonicalRole) {
     type: "workflow" as const,
     label: "Verified System Knowledge",
     title: entry.title,
-    content: `${entry.facts.english}${roleAccess}\nSigned-in role: ${role}. Authorization remains independently enforced.`,
+    content: `${content}${roleAccess}\nSigned-in role: ${role}. Authorization remains independently enforced.`,
     updatedAt: null,
   };
+}
+
+function knowledgeEntryForAppointmentFacet(facet: AppointmentWorkflowFacet) {
+  const entryId =
+    facet === "reschedule" || facet === "cancel"
+      ? "appointment-change"
+      : facet === "status_meaning"
+        ? "appointment-lifecycle"
+        : "appointment-request";
+  return SYSTEM_KNOWLEDGE_ENTRIES.find((entry) => entry.id === entryId) ?? null;
+}
+
+function localizedAppointmentFacet(
+  entry: SystemKnowledgeEntry,
+  facet: AppointmentWorkflowFacet,
+) {
+  return entry.answerFacets?.[facet] ?? entry.facts;
 }
 
 function knowledgeEntryForResolution(
@@ -901,13 +999,20 @@ export function systemKnowledgeResponseFor(
   const finalMessage = messages.at(-1)?.content ?? "";
   const resolution = resolveConversationTopic(messages);
   if (!resolution || resolution.topic === "own_appointment_status") return null;
-  const entry = knowledgeEntryForResolution(resolution, finalMessage);
+  const appointmentFacet =
+    resolution.topic === "appointment_workflow"
+      ? resolveAppointmentWorkflowFacet(finalMessage)
+      : null;
+  const entry = appointmentFacet
+    ? knowledgeEntryForAppointmentFacet(appointmentFacet)
+    : knowledgeEntryForResolution(resolution, finalMessage);
   if (!entry) return null;
 
   const directScore = knowledgeMatchScore(finalMessage, entry);
   const isStaticExplanation =
     directScore >= 4 ||
     resolution.contextual ||
+    appointmentFacet !== null ||
     VERIFICATION_QUESTION.test(finalMessage);
   if (!isStaticExplanation) return null;
 
@@ -944,8 +1049,13 @@ export function systemKnowledgeResponseFor(
   }
 
   const language = detectResponseLanguage(finalMessage);
+  const appointmentFacetFacts = appointmentFacet
+    ? localizedAppointmentFacet(entry, appointmentFacet)
+    : null;
   let response =
-    language === "english" ? entry.facts.english : entry.facts.filipino;
+    language === "english"
+      ? (appointmentFacetFacts?.english ?? entry.facts.english)
+      : (appointmentFacetFacts?.filipino ?? entry.facts.filipino);
   if (VERIFICATION_QUESTION.test(finalMessage)) {
     response = staticAuthorityMessage(finalMessage, entry);
   } else if (ACCESS_QUESTION.test(finalMessage) && entry.access) {
@@ -974,7 +1084,13 @@ export function systemKnowledgeResponseFor(
       ? `knowledge_${entry.id}_follow_up`
       : `knowledge_${entry.id}`,
     message: response,
-    sources: [knowledgeSource(entry, role)],
+    sources: [
+      knowledgeSource(
+        entry,
+        role,
+        appointmentFacetFacts?.english ?? entry.facts.english,
+      ),
+    ],
     actions:
       asksForLocation ||
       (entry.id === "service-schedule-authority" &&
@@ -1833,8 +1949,6 @@ const ANNOUNCEMENT_CONTEXTUAL_DETAIL =
   /\b(?:ano pa details?|tell me more|more details?|hanggang anong oras|kailan matatapos|hanggang kailan|kailan pinost|published kailan|when was (?:it|that) published|ano(?:ng)? category|what category|ano(?:ng)? laman|active pa ba|is (?:it|that) still active|may event ba|does (?:it|that) have an event|saan|where|requirements?|dalhin|bring|eligible|eligibility|instructions?|contact|sure|sigurado|tama ba|verify|confirm|saan galing|san galing)\b/i;
 const HEALTH_CENTER_FOLLOW_UP =
   /^(?:(?:ano(?:ng)?\s+)?(?:contact number|phone number|number|email|address|location|operating hours?|opening hours?|services?)(?:\s+naman)?|(?:sure|sigurado|tama ba|verify|confirm|saan galing|san galing)(?:\s+(?:ba|ka|yan|yun|iyon|that))*)[?.!]*$/i;
-const WORKFLOW_LOCATION_FOLLOW_UP =
-  /^(?:(?:saan|nasaan)(?: ko)? (?:yun|iyon|yan|ito) (?:makikita|gagawin)|where (?:can|do) i (?:find|see|open) (?:that|it)|how do i open (?:that|it))[?.!]*$/i;
 
 function normalizedLookupText(value: string) {
   return value
@@ -2043,42 +2157,6 @@ function isStrongHealthCenterTopic(message: string) {
     OPERATING_HOURS_QUESTION.test(message) ||
     SERVICES_QUESTION.test(message)
   );
-}
-
-function previousConversationTopic(messages: ConversationMessage[]): {
-  type: "announcement" | "health_center" | "workflow";
-  message: string;
-} | null {
-  const previousUserMessages = messages
-    .slice(0, -1)
-    .filter((message) => message.role === "user")
-    .slice(-4)
-    .reverse();
-
-  for (const previous of previousUserMessages) {
-    if (
-      isAnnouncementFollowUp(previous.content) ||
-      HEALTH_CENTER_FOLLOW_UP.test(previous.content) ||
-      WORKFLOW_LOCATION_FOLLOW_UP.test(previous.content)
-    ) {
-      continue;
-    }
-    if (isStrongAnnouncementTopic(previous.content)) {
-      return { type: "announcement", message: previous.content };
-    }
-    if (isStrongHealthCenterTopic(previous.content)) {
-      return { type: "health_center", message: previous.content };
-    }
-    if (
-      isAppointmentRequestWorkflow(previous.content) ||
-      isAssignedAppointmentsWorkflow(previous.content) ||
-      isAppointmentConfirmationWorkflow(previous.content)
-    ) {
-      return { type: "workflow", message: previous.content };
-    }
-    return null;
-  }
-  return null;
 }
 
 export function conversationGroundingSourceTypesFor(
@@ -2428,10 +2506,12 @@ export function workflowConversationResponseFor(
   role: CanonicalRole,
 ) {
   const finalMessage = messages.at(-1)?.content ?? "";
-  if (!WORKFLOW_LOCATION_FOLLOW_UP.test(finalMessage)) return null;
-  const topic = previousConversationTopic(messages);
-  if (topic?.type !== "workflow") return null;
-  return workflowResponseFor(topic.message, role);
+  const facet = resolveAppointmentWorkflowFacet(finalMessage);
+  if (!facet) return null;
+  if (resolveConversationTopic(messages)?.topic !== "appointment_workflow") {
+    return null;
+  }
+  return appointmentWorkflowFacetResponseFor(finalMessage, role, facet);
 }
 
 export function groundedResponseFor(
@@ -2841,6 +2921,45 @@ function unavailableWorkflowResponse(message: string) {
   };
 }
 
+function appointmentWorkflowFacetResponseFor(
+  message: string,
+  role: CanonicalRole | undefined,
+  facet: AppointmentWorkflowFacet,
+) {
+  const entry = knowledgeEntryForAppointmentFacet(facet);
+  if (!entry) return null;
+  const facts = localizedAppointmentFacet(entry, facet);
+  const language = detectResponseLanguage(message);
+  const actionDefinition = UI_ACTION_DEFINITIONS.open_appointment_request_form;
+  const requestFormFacet = [
+    "how_to_request",
+    "where_to_request",
+    "general_workflow",
+  ].includes(facet);
+  const canOpenRequestForm =
+    requestFormFacet &&
+    role === "resident" &&
+    actionDefinition.roles.includes(role);
+
+  return {
+    category: requestFormFacet
+      ? "workflow_appointment_request"
+      : `workflow_appointment_${facet}`,
+    message: language === "english" ? facts.english : facts.filipino,
+    sources: [knowledgeSource(entry, role ?? "resident", facts.english)],
+    actions: canOpenRequestForm
+      ? [
+          {
+            type: "ui_action" as const,
+            actionId: "open_appointment_request_form",
+            label: actionDefinition.label,
+            requiresConfirmation: false,
+          },
+        ]
+      : [],
+  };
+}
+
 export function workflowResponseFor(
   message: string,
   role?: CanonicalRole,
@@ -2911,49 +3030,11 @@ export function workflowResponseFor(
   }
 
   if (!isAppointmentRequestWorkflow(message)) return null;
-
-  const language = detectResponseLanguage(message);
-  const actionDefinition = UI_ACTION_DEFINITIONS.open_appointment_request_form;
-  const canOpenRequestForm =
-    role === "resident" && actionDefinition.roles.includes(role);
-  const instructions =
-    language === "english"
-      ? "To request an appointment:\n1. Open the Appointments module.\n2. Select Request Appointment.\n3. Complete the required information.\n4. Submit the request.\n5. Wait for review and approval from the Barangay Health Center."
-      : language === "taglish"
-        ? "Para mag-request ng appointment:\n1. Buksan ang Appointments module.\n2. Piliin ang Request Appointment.\n3. Kumpletuhin ang required information.\n4. I-submit ang request.\n5. Hintayin ang review at approval ng Barangay Health Center."
-        : "Para humiling ng appointment:\n1. Buksan ang Appointments module.\n2. Piliin ang Request Appointment.\n3. Kumpletuhin ang kinakailangang impormasyon.\n4. Isumite ang kahilingan.\n5. Hintayin ang pagsusuri at pag-apruba ng Barangay Health Center.";
-  const response = canOpenRequestForm
-    ? language === "english"
-      ? "To request an appointment, open My Appointments and select Request Appointment. You can open the request form using the button below."
-      : language === "taglish"
-        ? "Para mag-request ng appointment, buksan ang My Appointments at piliin ang Request Appointment. Maaari mong buksan ang form gamit ang button sa ibaba."
-        : "Para humiling ng appointment, buksan ang My Appointments at piliin ang Request Appointment. Maaari mong buksan ang form gamit ang button sa ibaba."
-    : instructions;
-
-  return {
-    category: "workflow_appointment_request",
-    message: response,
-    sources: [
-      {
-        type: "workflow",
-        label: "Workflow Guide",
-        title: "Appointment request workflow",
-        content:
-          "Open Appointments, select Request Appointment, complete the required information, submit, and wait for Barangay Health Center review.",
-        updatedAt: null,
-      },
-    ],
-    actions: canOpenRequestForm
-      ? [
-          {
-            type: "ui_action",
-            actionId: "open_appointment_request_form",
-            label: actionDefinition.label,
-            requiresConfirmation: false,
-          },
-        ]
-      : [],
-  };
+  return appointmentWorkflowFacetResponseFor(
+    message,
+    role,
+    resolveAppointmentWorkflowFacet(message) ?? "how_to_request",
+  );
 }
 
 const RESIDENT_APPOINTMENT_STATUS_PATTERNS = Object.freeze([

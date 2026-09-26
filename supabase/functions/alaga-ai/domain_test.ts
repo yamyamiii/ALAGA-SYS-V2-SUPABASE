@@ -21,6 +21,7 @@ import {
   productContextResponseFor,
   residentAppointmentStatusResponseFor,
   requiresLiveGrounding,
+  resolveAppointmentWorkflowFacet,
   resolveConversationTopic,
   resolveAnnouncementConversationContext,
   safetyResponseFor,
@@ -346,8 +347,8 @@ Deno.test("answers the approved appointment request workflow", () => {
     false,
   );
   assertEquals(response?.category, "workflow_appointment_request");
-  assert(response?.message.includes("buksan ang My Appointments"));
-  assert(response?.message.includes("button sa ibaba"));
+  assert(response?.message.includes("Pumunta sa My Appointments"));
+  assert(response?.message.includes("service at preferred schedule"));
   assertEquals(response?.sources[0]?.type, "workflow");
   assertEquals(response?.actions[0], {
     type: "ui_action",
@@ -355,6 +356,83 @@ Deno.test("answers the approved appointment request workflow", () => {
     label: "Request an Appointment",
     requiresConfirmation: false,
   });
+});
+
+Deno.test("resolves structured appointment workflow answer facets", () => {
+  const cases = [
+    ["Paano ako magpapa-appointment?", "how_to_request"],
+    ["Pano mag appointment?", "how_to_request"],
+    ["How do I request an appointment?", "how_to_request"],
+    ["Saan ako gagawa ng request?", "where_to_request"],
+    ["San ako magrerequest?", "where_to_request"],
+    ["Where do I request one?", "where_to_request"],
+    ["Approved agad ba pag nag-request ako?", "approval_behavior"],
+    ["Automatic approved ba?", "approval_behavior"],
+    ["Is it automatically approved?", "approval_behavior"],
+    ["Ano mangyayari pagkatapos kong mag-request?", "what_happens_next"],
+    ["What happens after I submit?", "what_happens_next"],
+    ["Explain the appointment workflow.", "general_workflow"],
+  ] as const;
+
+  for (const [message, expected] of cases) {
+    assertEquals(resolveAppointmentWorkflowFacet(message), expected);
+  }
+});
+
+Deno.test("returns distinct minimal appointment workflow answers", () => {
+  const how = workflowConversationResponseFor(
+    [{ role: "user", content: "Paano ako magpapa-appointment?" }],
+    "resident",
+  );
+  const where = workflowConversationResponseFor(
+    [{ role: "user", content: "Saan ako gagawa ng request?" }],
+    "resident",
+  );
+  const approval = workflowConversationResponseFor(
+    [{ role: "user", content: "Approved agad ba pag nag-request ako?" }],
+    "resident",
+  );
+  const next = workflowConversationResponseFor(
+    [{ role: "user", content: "What happens after I submit?" }],
+    "resident",
+  );
+
+  assert(how?.message.includes("service at preferred schedule"));
+  assert(!how?.message.match(/Administrator|BHW/));
+  assert(where?.message.startsWith("Sa My Appointments page"));
+  assert(!where?.message.match(/Pending|Administrator|BHW/));
+  assert(approval?.message.match(/Pending.*review.*confirm/i));
+  assert(next?.message.match(/Pending.*review.*schedule.*confirm/i));
+  assertEquals(
+    new Set([how?.message, where?.message, approval?.message, next?.message])
+      .size,
+    4,
+  );
+});
+
+Deno.test("switches appointment facets during bounded follow-ups", () => {
+  const approval = workflowConversationResponseFor(
+    [
+      { role: "user", content: "Paano ako magpapa-appointment?" },
+      { role: "assistant", content: "Pumunta sa My Appointments." },
+      { role: "user", content: "Approved agad?" },
+    ],
+    "resident",
+  );
+  const location = workflowConversationResponseFor(
+    [
+      { role: "user", content: "Paano ako magpapa-appointment?" },
+      { role: "assistant", content: "Pumunta sa My Appointments." },
+      { role: "user", content: "Approved agad?" },
+      { role: "assistant", content: "Pending muna ito." },
+      { role: "user", content: "Saan nga ulit?" },
+    ],
+    "resident",
+  );
+
+  assert(approval?.message.match(/Pending.*review.*confirm/i));
+  assert(location?.message.startsWith("Sa My Appointments page"));
+  assertEquals(location?.actions[0]?.actionId, "open_appointment_request_form");
 });
 
 Deno.test("matches resident appointment form request phrases", () => {

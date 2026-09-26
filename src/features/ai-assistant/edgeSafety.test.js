@@ -385,7 +385,8 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(contextSources).toBeGreaterThan(navigation);
     expect(announcementContext).toBeGreaterThan(contextSources);
     expect(announcementContext).toBeLessThan(provider);
-    expect(domain).toMatch(/previousConversationTopic/);
+    expect(domain).toMatch(/resolveAppointmentWorkflowFacet/);
+    expect(domain).toMatch(/resolveConversationTopic\(messages\)/);
     expect(domain).toMatch(
       /\.filter\(\(message\) => message\.role === "user"\)/,
     );

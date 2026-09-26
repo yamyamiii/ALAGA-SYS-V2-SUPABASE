@@ -88,8 +88,8 @@ describe("ALAGA AI server grounding and navigation domain", () => {
         },
       ],
     });
-    expect(response?.message).toContain("buksan ang My Appointments");
-    expect(response?.message).toContain("button sa ibaba");
+    expect(response?.message).toContain("Pumunta sa My Appointments");
+    expect(response?.message).toContain("service at preferred schedule");
     expect(response?.actions).toEqual([
       {
         type: "ui_action",

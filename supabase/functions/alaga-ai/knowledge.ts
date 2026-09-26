@@ -20,20 +20,33 @@ export type SystemKnowledgeTopic =
 export type KnowledgeRole =
   "admin" | "barangay_health_worker" | "nurse" | "midwife" | "resident";
 
+export type AppointmentWorkflowFacet =
+  | "how_to_request"
+  | "where_to_request"
+  | "approval_behavior"
+  | "what_happens_next"
+  | "reschedule"
+  | "cancel"
+  | "status_meaning"
+  | "staff_review"
+  | "general_workflow";
+
+type LocalizedKnowledge = {
+  english: string;
+  filipino: string;
+};
+
 export type SystemKnowledgeEntry = {
   id: string;
   topic: SystemKnowledgeTopic;
   title: string;
   aliases: readonly string[];
   keywords: readonly string[];
-  facts: {
-    english: string;
-    filipino: string;
-  };
-  access?: {
-    english: string;
-    filipino: string;
-  };
+  facts: LocalizedKnowledge;
+  answerFacets?: Partial<
+    Readonly<Record<AppointmentWorkflowFacet, LocalizedKnowledge>>
+  >;
+  access?: LocalizedKnowledge;
   actionId?: string;
   actionRoles?: readonly KnowledgeRole[];
 };
@@ -261,6 +274,44 @@ export const SYSTEM_KNOWLEDGE_ENTRIES: readonly SystemKnowledgeEntry[] = [
       filipino:
         "Binubuksan ng Resident ang My Appointments, pinipili ang Request Appointment, service, at preferred schedule, at sini-submit ang request. Pending muna ito at hindi automatic na approved. Nire-review ng Administrator o BHW ang request, inaayos ang operational schedule, nag-a-assign ng eligible staff kung kailangan, at kino-confirm ito.",
     },
+    answerFacets: {
+      how_to_request: {
+        english:
+          "Open My Appointments, choose Request Appointment, select a service and preferred schedule, then submit the request.",
+        filipino:
+          "Pumunta sa My Appointments, piliin ang Request Appointment, pumili ng service at preferred schedule, then submit the request.",
+      },
+      where_to_request: {
+        english:
+          "Go to the My Appointments page and choose Request Appointment to get started.",
+        filipino:
+          "Sa My Appointments page. Piliin ang Request Appointment para makapagsimula.",
+      },
+      approval_behavior: {
+        english:
+          "No. The request starts as Pending and must be reviewed and confirmed by authorized staff before it becomes a confirmed appointment.",
+        filipino:
+          "Hindi. Pending muna ang request at kailangan itong i-review at i-confirm ng authorized staff bago maging confirmed appointment.",
+      },
+      what_happens_next: {
+        english:
+          "The request first becomes Pending. Authorized staff reviews it, adjusts the schedule if needed, and confirms it when accepted.",
+        filipino:
+          "Magiging Pending muna ang request. Ire-review ito ng authorized staff, iaayos ang schedule kung kailangan, at iko-confirm kapag accepted.",
+      },
+      staff_review: {
+        english:
+          "Administrator or BHW reviews the pending request, finalizes the operational schedule, assigns eligible staff when required, and confirms it when accepted.",
+        filipino:
+          "Administrator o BHW ang nagre-review ng pending request, nag-aayos ng operational schedule, nag-a-assign ng eligible staff kung kailangan, at nagko-confirm kapag accepted.",
+      },
+      general_workflow: {
+        english:
+          "A Resident opens My Appointments, chooses Request Appointment, selects a service and preferred schedule, and submits. The request starts as Pending and is not automatically approved. Administrator or BHW reviews the request, finalizes the operational schedule, assigns eligible staff when required, and confirms it.",
+        filipino:
+          "Binubuksan ng Resident ang My Appointments, pinipili ang Request Appointment, service, at preferred schedule, at sini-submit ang request. Pending muna ito at hindi automatic na approved. Nire-review ng Administrator o BHW ang request, inaayos ang operational schedule, nag-a-assign ng eligible staff kung kailangan, at kino-confirm ito.",
+      },
+    },
     access: {
       english:
         "Residents manage only their own requests. Administrator and BHW handle incoming-request review; Nurse and Midwife use only their authorized assigned workflow.",
@@ -297,6 +348,14 @@ export const SYSTEM_KNOWLEDGE_ENTRIES: readonly SystemKnowledgeEntry[] = [
       filipino:
         "Ang visible appointment flow ay Pending, Confirmed, Checked in, at Completed. Ang Pending ay naghihintay ng health-center review. Ang Confirmed ay may tinanggap nang operational schedule. Ang Checked in ay tala ng pagdating. Ang Completed ay tapos na ang appointment workflow. Terminal outcomes ang Cancelled at No-show. Maaaring lumitaw ang internal na In consultation kapag may clinical documentation, pero walang kailangang manual Start action.",
     },
+    answerFacets: {
+      status_meaning: {
+        english:
+          "Pending means the request is awaiting health-center review. Confirmed means an operational schedule was accepted, Checked in records arrival, and Completed means the appointment workflow is finished. Cancelled and No-show are terminal outcomes.",
+        filipino:
+          "Ang Pending ay naghihintay ng health-center review. Ang Confirmed ay may accepted nang operational schedule, ang Checked in ay tala ng pagdating, at ang Completed ay tapos na ang appointment workflow. Terminal outcomes ang Cancelled at No-show.",
+      },
+    },
     actionId: "open_appointments",
     actionRoles: ALL_ROLES,
   },
@@ -325,6 +384,20 @@ export const SYSTEM_KNOWLEDGE_ENTRIES: readonly SystemKnowledgeEntry[] = [
         "An authorized cancellation follows the existing role, ownership, status, and version rules; its narrative reason is optional, while request rejection still requires justification. Rescheduling updates the same appointment row and APT number. The original Resident preferred schedule remains historical request information while the current operational schedule is authoritative.",
       filipino:
         "Ang awtorisadong cancellation ay sumusunod pa rin sa role, ownership, status, at version rules; optional ang cancellation narrative, pero required pa rin ang justification sa request rejection. Ina-update ng reschedule ang parehong appointment row at APT number. Nananatiling historical request information ang original preferred schedule ng Resident, habang authoritative ang current operational schedule.",
+    },
+    answerFacets: {
+      reschedule: {
+        english:
+          "Rescheduling updates the same appointment row and APT number. The original preferred schedule remains historical request information, while the current operational schedule is authoritative.",
+        filipino:
+          "Ina-update ng reschedule ang parehong appointment row at APT number. Nananatiling historical request information ang original preferred schedule, habang authoritative ang current operational schedule.",
+      },
+      cancel: {
+        english:
+          "An authorized cancellation follows the existing role, ownership, status, and version rules. Its cancellation narrative is optional, while request rejection still requires justification.",
+        filipino:
+          "Ang awtorisadong cancellation ay sumusunod sa existing role, ownership, status, at version rules. Optional ang cancellation narrative, pero required pa rin ang justification sa request rejection.",
+      },
     },
     actionId: "open_appointments",
     actionRoles: ALL_ROLES,

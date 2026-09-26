@@ -8,6 +8,7 @@ import {
   healthCenterConversationResponseFor,
   humanEscalationResponseFor,
   normalizeConversationalText,
+  resolveAppointmentWorkflowFacet,
   resolveConversationTopic,
   residentAppointmentStatusResponseFor,
   safetyResponseFor,
@@ -371,6 +372,88 @@ describe("ALAGA AI centralized system knowledge", () => {
       expect.objectContaining({ actionId: "open_appointment_request_form" }),
     ]);
     expect(approval?.message).toMatch(/Pending muna|hindi automatic/i);
+  });
+
+  it.each([
+    ["how_to_request", "Paano ako magpapa-appointment?"],
+    ["how_to_request", "Pano mag appointment?"],
+    ["how_to_request", "How do I request an appointment?"],
+    ["where_to_request", "Saan ako gagawa ng request?"],
+    ["where_to_request", "San ako magrerequest?"],
+    ["where_to_request", "Where do I request one?"],
+    ["approval_behavior", "Approved agad ba pag nag-request ako?"],
+    ["approval_behavior", "Automatic approved ba?"],
+    ["approval_behavior", "Is it automatically approved?"],
+    ["what_happens_next", "Ano mangyayari pagkatapos kong mag-request?"],
+    ["what_happens_next", "What happens after I submit?"],
+    ["general_workflow", "Paano gumagana ang appointment process?"],
+  ])("resolves the %s appointment answer facet", (facet, message) => {
+    expect(resolveAppointmentWorkflowFacet(message)).toBe(facet);
+  });
+
+  it("answers appointment facets with distinct, minimal verified facts", () => {
+    const how = workflowConversationResponseFor(
+      conversation("Paano ako magpapa-appointment?"),
+      "resident",
+    );
+    const where = workflowConversationResponseFor(
+      conversation("Saan ako gagawa ng request?"),
+      "resident",
+    );
+    const approval = workflowConversationResponseFor(
+      conversation("Approved agad ba pag nag-request ako?"),
+      "resident",
+    );
+    const next = workflowConversationResponseFor(
+      conversation("What happens after I submit?"),
+      "resident",
+    );
+    const general = workflowConversationResponseFor(
+      conversation("Explain the appointment workflow."),
+      "resident",
+    );
+
+    expect(how?.message).toMatch(
+      /My Appointments.*service.*preferred schedule/i,
+    );
+    expect(how?.message).not.toMatch(/Administrator|BHW/);
+    expect(where?.message).toMatch(/^Sa My Appointments page/i);
+    expect(where?.message).not.toMatch(/Pending|Administrator|BHW/i);
+    expect(approval?.message).toMatch(/Hindi.*Pending.*review.*confirm/i);
+    expect(approval?.message).not.toMatch(/pumunta|buksan/i);
+    expect(next?.message).toMatch(/Pending.*reviews?.*schedule.*confirms?/i);
+    expect(general?.message).toMatch(/Resident.*Pending.*Administrator|BHW/i);
+    expect(
+      new Set([how, where, approval, next].map((response) => response?.message))
+        .size,
+    ).toBe(4);
+  });
+
+  it("switches appointment facets across bounded conversational follow-ups", () => {
+    const approval = workflowConversationResponseFor(
+      conversation(
+        "Paano ako magpapa-appointment?",
+        "Pumunta sa My Appointments.",
+        "Approved agad?",
+      ),
+      "resident",
+    );
+    const location = workflowConversationResponseFor(
+      conversation(
+        "Paano ako magpapa-appointment?",
+        "Pumunta sa My Appointments.",
+        "Approved agad?",
+        "Pending muna ito.",
+        "Saan nga ulit?",
+      ),
+      "resident",
+    );
+
+    expect(approval?.message).toMatch(/Pending.*review.*confirm/i);
+    expect(location?.message).toMatch(/^Sa My Appointments page/i);
+    expect(location?.actions).toEqual([
+      expect.objectContaining({ actionId: "open_appointment_request_form" }),
+    ]);
   });
 
   it("keeps exact service schedule facts deterministic", () => {
