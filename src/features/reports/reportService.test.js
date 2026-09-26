@@ -162,14 +162,14 @@ describe("report service", () => {
     ]);
     const service = createReportService(() => client);
     await expect(
-      service.exportRows("appointments", filters, "csv"),
+      service.exportRows("appointments", filters, "pdf"),
     ).resolves.toEqual({
       rows: [{ metric: "Completed", value: 4 }],
       total: 1,
     });
     expect(client.rpc).toHaveBeenCalledWith(
       "report_export_rows",
-      expect.objectContaining({ p_limit: 5000, p_offset: 0, p_format: "csv" }),
+      expect.objectContaining({ p_limit: 5000, p_offset: 0, p_format: "pdf" }),
     );
   });
 

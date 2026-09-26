@@ -606,9 +606,9 @@ export const SYSTEM_KNOWLEDGE_ENTRIES: readonly SystemKnowledgeEntry[] = [
     ],
     facts: {
       english:
-        "Reports provides authorized aggregate views for Overview, Resident Summary, and Appointment Reports with date filters and Excel, PDF, and Print outputs. It does not give ALAGA AI access to report rows or private records.",
+        "Reports provides authorized aggregate views for Overview, Resident Summary, and Appointment Reports with date filters and PDF and Print outputs. It does not give ALAGA AI access to report rows or private records.",
       filipino:
-        "Ang Reports ay nagbibigay ng awtorisadong aggregate views para sa Overview, Resident Summary, at Appointment Reports, kasama ang date filters at Excel, PDF, at Print outputs. Hindi nito binibigyan ang ALAGA AI ng access sa report rows o private records.",
+        "Ang Reports ay nagbibigay ng awtorisadong aggregate views para sa Overview, Resident Summary, at Appointment Reports, kasama ang date filters at PDF at Print outputs. Hindi nito binibigyan ang ALAGA AI ng access sa report rows o private records.",
     },
     access: {
       english:

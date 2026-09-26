@@ -1,11 +1,11 @@
 import {
   Activity,
   CalendarCheck,
-  Download,
+  FileDown,
   Printer,
   UsersRound,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { OfficialLogo } from "@/components/common/OfficialLogo";
@@ -179,6 +179,7 @@ export default function ReportsPage() {
   const [filterError, setFilterError] = useState("");
   const [exporting, setExporting] = useState("");
   const [exportError, setExportError] = useState("");
+  const exportInProgress = useRef(false);
   const puroks = usePuroks();
   const query = useReport(category, activeFilters, Boolean(category));
   const categoryLabel =
@@ -220,6 +221,12 @@ export default function ReportsPage() {
     setExportError("");
   };
   const exportReport = async (format) => {
+    if (format === "print") {
+      window.print();
+      return;
+    }
+    if (exportInProgress.current) return;
+    exportInProgress.current = true;
     setExporting(format);
     setExportError("");
     try {
@@ -228,24 +235,25 @@ export default function ReportsPage() {
         activeFilters,
         format,
       );
-      if (format === "print" || format === "pdf") {
-        window.print();
-      } else {
-        const { downloadReport } =
-          await import("@/features/reports/exportUtils");
-        downloadReport(
-          result.rows,
-          {
-            category,
-            startDate: activeFilters.start_date,
-            endDate: activeFilters.end_date,
-          },
-          format,
-        );
+      if (!result.rows.length) {
+        throw new Error("No report data is available for PDF export.");
       }
+      const { downloadPdfReport } =
+        await import("@/features/reports/exportUtils");
+      downloadPdfReport(result.rows, {
+        category,
+        categoryLabel,
+        startDate: activeFilters.start_date,
+        endDate: activeFilters.end_date,
+      });
     } catch (error) {
-      setExportError(error.message);
+      setExportError(
+        error instanceof Error
+          ? error.message
+          : "The PDF report could not be generated.",
+      );
     } finally {
+      exportInProgress.current = false;
       setExporting("");
     }
   };
@@ -280,11 +288,7 @@ export default function ReportsPage() {
                 disabled={Boolean(exporting) || query.isLoading}
                 onClick={() => exportReport(format)}
               >
-                {format === "print" || format === "pdf" ? (
-                  <Printer />
-                ) : (
-                  <Download />
-                )}
+                {format === "print" ? <Printer /> : <FileDown />}
                 {exporting === format ? "Preparing…" : label}
               </Button>
             ))}
