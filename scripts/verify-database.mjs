@@ -74,6 +74,7 @@ const expectedMigrations = [
   "20260720005800_ai_defense_readiness.sql",
   "20260720005900_show_scheduled_announcements_to_managers.sql",
   "20260720006000_conversational_ai_announcement_grounding.sql",
+  "20260720010000_permanent_announcement_delete.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -198,6 +199,8 @@ const reviewedPendingMigrationHashes = {
     "ea3ab7fafba1f3e1301b132be5de51400a6488de53d8c69b6954aa6031e58147",
   "20260720006000_conversational_ai_announcement_grounding.sql":
     "40c1c004e1d7500beddae6d2a7422c3ab61da664a7f775feabacfefd0e1189a6",
+  "20260720010000_permanent_announcement_delete.sql":
+    "ed040fcf239bce859758d4d12e8b8a5e19b6127f1e4b6f68768dd900742ec73f",
 };
 const expectedTables = [
   "account_retirements",
@@ -296,7 +299,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly sixty expected migrations exist in lexical order",
+  "Exactly sixty-one expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -822,7 +825,7 @@ check(
   "No client DELETE policy exists on public registry tables",
 );
 check(
-  !/grant\s+[^;]*delete[^;]*to\s+(?:anon|authenticated)/i.test(allSql),
+  !/grant\s+[^;]*\bdelete\b[^;]*to\s+(?:anon|authenticated)/i.test(allSql),
   "No client DELETE grant exists",
 );
 check(
@@ -1877,6 +1880,78 @@ check(
       scheduledAnnouncementManagementMigration,
     ),
   "Scheduled-announcement visibility preserves RPC-only table access",
+);
+
+const permanentAnnouncementDeletionMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("permanent_announcement_delete"),
+  )?.sql ?? "";
+const permanentAnnouncementDeletionAudit = auditPlpgsqlIntoTargets(
+  permanentAnnouncementDeletionMigration,
+);
+check(
+  permanentAnnouncementDeletionAudit.functionCount === 1 &&
+    permanentAnnouncementDeletionAudit.undeclared.length === 0,
+  "Permanent announcement deletion has declared PL/pgSQL targets",
+);
+check(
+  /assistance_require_role\([\s\S]*array\['admin'\]::public\.app_role\[\]/i.test(
+    permanentAnnouncementDeletionMigration,
+  ) &&
+    !/array\[[^\]]*'(?:barangay_health_worker|nurse|midwife|resident)'/i.test(
+      permanentAnnouncementDeletionMigration,
+    ) &&
+    /security definer[\s\S]*set search_path = ''/i.test(
+      permanentAnnouncementDeletionMigration,
+    ),
+  "Permanent announcement deletion is active-Administrator-only with a fixed search path",
+);
+check(
+  /where announcement\.id = p_id\s+for update[\s\S]*announcement not found[\s\S]*current_record\.archived_at is null[\s\S]*announcement must be archived before permanent deletion[\s\S]*current_record\.version <> p_expected_version/i.test(
+    permanentAnnouncementDeletionMigration,
+  ),
+  "Permanent announcement deletion locks and validates existence, archive state, and version",
+);
+check(
+  /delete from public\.assistance_notifications as notification\s+where notification\.source_type = 'announcements'\s+and notification\.source_id = p_id/i.test(
+    permanentAnnouncementDeletionMigration,
+  ) &&
+    !/(?:title|summary|dedup_key)\s*(?:=|like|ilike)/i.test(
+      permanentAnnouncementDeletionMigration,
+    ),
+  "Permanent announcement deletion removes only trusted source-linked notifications",
+);
+const permanentAnnouncementAuditPosition =
+  permanentAnnouncementDeletionMigration.indexOf("'announcement.deleted'");
+const permanentAnnouncementDeletePosition =
+  permanentAnnouncementDeletionMigration.indexOf(
+    "delete from public.announcements as announcement",
+  );
+check(
+  permanentAnnouncementAuditPosition >= 0 &&
+    permanentAnnouncementDeletePosition > permanentAnnouncementAuditPosition &&
+    /'Permanently deleted archived announcement'/i.test(
+      permanentAnnouncementDeletionMigration,
+    ) &&
+    !/delete from public\.(?:profiles|residents|appointments|health_encounters|audit_logs|outbound_notification_jobs)/i.test(
+      permanentAnnouncementDeletionMigration,
+    ),
+  "Permanent announcement deletion records minimized audit history before deleting only its target",
+);
+check(
+  /revoke all on function public\.announcement_delete\(uuid, bigint\)[\s\S]*from public, anon, authenticated/i.test(
+    permanentAnnouncementDeletionMigration,
+  ) &&
+    /grant execute on function public\.announcement_delete\(uuid, bigint\)[\s\S]*to authenticated, service_role/i.test(
+      permanentAnnouncementDeletionMigration,
+    ) &&
+    !/grant\s+delete\s+on\s+(?:table\s+)?public\.(?:announcements|assistance_notifications)/i.test(
+      permanentAnnouncementDeletionMigration,
+    ) &&
+    !/(?:create or replace|drop) function public\.ai_grounding_context/i.test(
+      permanentAnnouncementDeletionMigration,
+    ),
+  "Permanent announcement deletion remains RPC-only and does not broaden AI access",
 );
 
 const conversationalAiAnnouncementMigration =

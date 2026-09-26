@@ -191,6 +191,14 @@ export function createAssistanceService(clientProvider = getSupabaseClient) {
         "The announcement could not be archived.",
       );
     },
+    deleteAnnouncement(id, version) {
+      return rpc(
+        client(),
+        "announcement_delete",
+        { p_id: id, p_expected_version: version },
+        "The announcement could not be deleted.",
+      );
+    },
     async listNotifications(filters, signal) {
       const { pageNumber, pageSize, offset } = pagination(filters, 20, 50);
       const data = await rpc(

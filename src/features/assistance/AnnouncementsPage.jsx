@@ -1,4 +1,4 @@
-import { Archive, Megaphone, Pencil, Pin, Plus } from "lucide-react";
+import { Archive, Megaphone, Pencil, Pin, Plus, Trash2 } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -36,14 +37,15 @@ import {
   useAssistanceMutation,
 } from "@/features/assistance/hooks";
 import { useAuth } from "@/features/auth/authContext";
-import { PERMISSIONS } from "@/features/auth/permissions";
+import { PERMISSIONS, USER_ROLES } from "@/features/auth/permissions";
 import { RegistryPagination } from "@/features/registry/RegistryPagination";
 import { formatManilaDateTime } from "@/lib/dateTime";
 import { assistanceService } from "@/services/assistanceService";
 
 export default function AnnouncementsPage() {
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const canManage = can(PERMISSIONS.MANAGE_ANNOUNCEMENTS);
+  const canDeletePermanently = profile?.role === USER_ROLES.ADMINISTRATOR;
   const [filters, setFilters] = useState({
     search: "",
     category: "",
@@ -57,9 +59,14 @@ export default function AnnouncementsPage() {
   const archive = useAssistanceMutation(({ id, version }) =>
     assistanceService.archiveAnnouncement(id, version),
   );
+  const permanentDelete = useAssistanceMutation(({ id, version }) =>
+    assistanceService.deleteAnnouncement(id, version),
+  );
   const [editing, setEditing] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [archiving, setArchiving] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const open = (record = null) => {
     setEditing(record);
     setDialogOpen(true);
@@ -75,6 +82,26 @@ export default function AnnouncementsPage() {
       toast.success("Announcement archived");
     } catch (error) {
       toast.error("Announcement could not be archived", {
+        description: error.message,
+      });
+    }
+  };
+  const requestPermanentDelete = (record) => {
+    setDeleteConfirmation("");
+    setDeleting(record);
+  };
+  const deleteAnnouncement = async () => {
+    if (!deleting || deleteConfirmation !== "DELETE") return;
+    try {
+      await permanentDelete.mutateAsync({
+        id: deleting.id,
+        version: deleting.version,
+      });
+      setDeleting(null);
+      setDeleteConfirmation("");
+      toast.success("Announcement permanently deleted");
+    } catch (error) {
+      toast.error("Announcement could not be deleted", {
         description: error.message,
       });
     }
@@ -255,6 +282,19 @@ export default function AnnouncementsPage() {
                       </Button>
                     </div>
                   ) : null}
+                  {canDeletePermanently && item.archived_at ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => requestPermanentDelete(item)}
+                        disabled={permanentDelete.isPending}
+                      >
+                        <Trash2 />
+                        Delete permanently
+                      </Button>
+                    </div>
+                  ) : null}
                 </article>
               );
             })}
@@ -313,6 +353,61 @@ export default function AnnouncementsPage() {
             >
               <Archive />
               {archive.isPending ? "Archiving…" : "Archive announcement"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(deleting)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !permanentDelete.isPending) {
+            setDeleting(null);
+            setDeleteConfirmation("");
+          }
+        }}
+      >
+        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Permanently delete announcement?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the archived announcement and cannot be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="announcement-delete-confirmation">
+              Type DELETE to confirm
+            </Label>
+            <Input
+              id="announcement-delete-confirmation"
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              autoComplete="off"
+              disabled={permanentDelete.isPending}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={permanentDelete.isPending}
+              onClick={() => {
+                setDeleting(null);
+                setDeleteConfirmation("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={
+                permanentDelete.isPending || deleteConfirmation !== "DELETE"
+              }
+              onClick={deleteAnnouncement}
+            >
+              <Trash2 />
+              {permanentDelete.isPending ? "Deleting…" : "Delete permanently"}
             </Button>
           </DialogFooter>
         </DialogContent>

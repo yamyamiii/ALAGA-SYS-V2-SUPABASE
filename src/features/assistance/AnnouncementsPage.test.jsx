@@ -78,6 +78,7 @@ describe("announcement management actions", () => {
   function renderFor(role) {
     useAuth.mockReturnValue({
       can: (permission) => hasPermission(role, permission),
+      profile: { role },
     });
     return render(<AnnouncementsPage />);
   }
@@ -196,5 +197,97 @@ describe("announcement management actions", () => {
     expect(
       screen.queryByRole("heading", { name: "Archive announcement?" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows permanent delete only to an Administrator for an archived announcement", () => {
+    useAnnouncements.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { items: [archivedAnnouncement], total: 1 },
+      refetch: vi.fn(),
+    });
+
+    const { unmount } = renderFor(USER_ROLES.ADMINISTRATOR);
+    expect(
+      screen.getByRole("button", { name: "Delete permanently" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit or pin" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
+    unmount();
+
+    renderFor(USER_ROLES.BARANGAY_HEALTH_WORKER);
+    expect(
+      screen.queryByRole("button", { name: "Delete permanently" }),
+    ).toBeNull();
+  });
+
+  it.each([
+    ["Administrator active", USER_ROLES.ADMINISTRATOR, announcement],
+    [
+      "Administrator scheduled",
+      USER_ROLES.ADMINISTRATOR,
+      scheduledAnnouncement,
+    ],
+    ["Administrator expired", USER_ROLES.ADMINISTRATOR, expiredAnnouncement],
+    ["Nurse archived", USER_ROLES.NURSE, archivedAnnouncement],
+    ["Midwife archived", USER_ROLES.MIDWIFE, archivedAnnouncement],
+    ["Resident archived", USER_ROLES.RESIDENT, archivedAnnouncement],
+  ])("does not show permanent delete for %s", (_label, role, record) => {
+    useAnnouncements.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { items: [record], total: 1 },
+      refetch: vi.fn(),
+    });
+
+    renderFor(role);
+    expect(
+      screen.queryByRole("button", { name: "Delete permanently" }),
+    ).toBeNull();
+  });
+
+  it("requires typing DELETE before permanently deleting an archived announcement", async () => {
+    const user = userEvent.setup();
+    useAnnouncements.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: { items: [archivedAnnouncement], total: 1 },
+      refetch: vi.fn(),
+    });
+    renderFor(USER_ROLES.ADMINISTRATOR);
+
+    await user.click(
+      screen.getByRole("button", { name: "Delete permanently" }),
+    );
+    expect(
+      screen.getByRole("heading", {
+        name: "Permanently delete announcement?",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This permanently removes the archived announcement and cannot be undone.",
+      ),
+    ).toBeInTheDocument();
+    const confirmButton = screen.getByRole("button", {
+      name: "Delete permanently",
+    });
+    expect(confirmButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Type DELETE to confirm"), "DELETE");
+    expect(confirmButton).toBeEnabled();
+    await user.click(confirmButton);
+
+    expect(mutateAsync).toHaveBeenCalledWith({
+      id: archivedAnnouncement.id,
+      version: archivedAnnouncement.version,
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("heading", {
+          name: "Permanently delete announcement?",
+        }),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

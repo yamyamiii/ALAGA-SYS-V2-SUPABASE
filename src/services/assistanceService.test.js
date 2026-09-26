@@ -40,6 +40,15 @@ describe("assistance service", () => {
     });
   });
 
+  it("permanently deletes an announcement through the trusted versioned RPC", async () => {
+    const { rpc, service } = serviceWith(true);
+    await service.deleteAnnouncement("11111111-1111-4111-8111-111111111111", 6);
+    expect(rpc).toHaveBeenCalledWith("announcement_delete", {
+      p_id: "11111111-1111-4111-8111-111111111111",
+      p_expected_version: 6,
+    });
+  });
+
   it("submits distinct publication and event fields to the trusted RPC", async () => {
     const { rpc, service } = serviceWith([{ id: "announcement-one" }]);
     const values = {

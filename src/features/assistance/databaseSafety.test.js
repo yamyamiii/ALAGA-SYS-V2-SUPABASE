@@ -14,6 +14,10 @@ const scheduledAnnouncementManagement = fs.readFileSync(
   "supabase/migrations/20260720005900_show_scheduled_announcements_to_managers.sql",
   "utf8",
 );
+const permanentAnnouncementDeletion = fs.readFileSync(
+  "supabase/migrations/20260720010000_permanent_announcement_delete.sql",
+  "utf8",
+);
 
 describe("general assistance database boundary", () => {
   it("uses RPC-only tables with RLS and no authenticated table writes", () => {
@@ -156,6 +160,80 @@ describe("general assistance database boundary", () => {
     );
     expect(announcementNotificationCleanup).not.toMatch(
       /delete from public\.(?:announcements|audit_logs)/i,
+    );
+  });
+
+  it("limits permanent announcement deletion to active Administrators and archived rows", () => {
+    expect(permanentAnnouncementDeletion).toMatch(
+      /function public\.announcement_delete\([\s\S]*security definer[\s\S]*set search_path = ''/i,
+    );
+    expect(permanentAnnouncementDeletion).toMatch(
+      /assistance_require_role\([\s\S]*array\['admin'\]::public\.app_role\[\]/i,
+    );
+    expect(permanentAnnouncementDeletion).not.toMatch(
+      /array\[[^\]]*'(?:barangay_health_worker|nurse|midwife|resident)'/i,
+    );
+    expect(permanentAnnouncementDeletion).toMatch(
+      /where announcement\.id = p_id\s+for update[\s\S]*announcement must be archived before permanent deletion/i,
+    );
+  });
+
+  it("rejects missing, stale, and invalid permanent deletion targets", () => {
+    expect(permanentAnnouncementDeletion).toMatch(
+      /p_expected_version is null[\s\S]*invalid announcement deletion request[\s\S]*errcode = '22023'/i,
+    );
+    expect(permanentAnnouncementDeletion).toMatch(
+      /if not found then\s+raise exception 'announcement not found' using errcode = 'P0002'/i,
+    );
+    expect(permanentAnnouncementDeletion).toMatch(
+      /current_record\.version <> p_expected_version[\s\S]*announcement changed by another user/i,
+    );
+  });
+
+  it("deletes only trusted source-linked notifications and the selected announcement", () => {
+    expect(permanentAnnouncementDeletion).toMatch(
+      /delete from public\.assistance_notifications as notification\s+where notification\.source_type = 'announcements'\s+and notification\.source_id = p_id/i,
+    );
+    expect(permanentAnnouncementDeletion).not.toMatch(
+      /(?:title|summary|dedup_key)\s*(?:=|like|ilike)/i,
+    );
+    expect(permanentAnnouncementDeletion).toMatch(
+      /delete from public\.announcements as announcement\s+where announcement\.id = p_id\s+and announcement\.version = p_expected_version\s+and announcement\.archived_at is not null/i,
+    );
+    expect(permanentAnnouncementDeletion).not.toMatch(
+      /delete from public\.(?:profiles|residents|appointments|health_encounters|audit_logs|outbound_notification_jobs)/i,
+    );
+  });
+
+  it("records a minimized append-only audit before permanent deletion", () => {
+    const auditPosition = permanentAnnouncementDeletion.indexOf(
+      "'announcement.deleted'",
+    );
+    const deletePosition = permanentAnnouncementDeletion.indexOf(
+      "delete from public.announcements as announcement",
+    );
+    expect(auditPosition).toBeGreaterThan(-1);
+    expect(deletePosition).toBeGreaterThan(auditPosition);
+    expect(permanentAnnouncementDeletion).toContain(
+      "'Permanently deleted archived announcement'",
+    );
+    expect(permanentAnnouncementDeletion).not.toMatch(
+      /assistance_audit\([\s\S]*current_record\.(?:title|content)/i,
+    );
+  });
+
+  it("keeps permanent deletion RPC-only and leaves AI grounding unchanged", () => {
+    expect(permanentAnnouncementDeletion).toMatch(
+      /revoke all on function public\.announcement_delete\(uuid, bigint\)[\s\S]*from public, anon, authenticated/i,
+    );
+    expect(permanentAnnouncementDeletion).toMatch(
+      /grant execute on function public\.announcement_delete\(uuid, bigint\)[\s\S]*to authenticated, service_role/i,
+    );
+    expect(permanentAnnouncementDeletion).not.toMatch(
+      /grant\s+delete\s+on\s+(?:table\s+)?public\.(?:announcements|assistance_notifications)/i,
+    );
+    expect(permanentAnnouncementDeletion).not.toMatch(
+      /(?:create or replace|drop) function public\.ai_grounding_context/i,
     );
   });
 
