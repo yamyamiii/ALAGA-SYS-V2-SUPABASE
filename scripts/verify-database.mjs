@@ -75,6 +75,7 @@ const expectedMigrations = [
   "20260720005900_show_scheduled_announcements_to_managers.sql",
   "20260720006000_conversational_ai_announcement_grounding.sql",
   "20260720010000_permanent_announcement_delete.sql",
+  "20260720010100_allow_retired_resident_relink.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -201,6 +202,8 @@ const reviewedPendingMigrationHashes = {
     "40c1c004e1d7500beddae6d2a7422c3ab61da664a7f775feabacfefd0e1189a6",
   "20260720010000_permanent_announcement_delete.sql":
     "ed040fcf239bce859758d4d12e8b8a5e19b6127f1e4b6f68768dd900742ec73f",
+  "20260720010100_allow_retired_resident_relink.sql":
+    "f4805540bf51abedba8b02a46b7e3f8fde3825f4e5599ee4ce39090119df0247",
 };
 const expectedTables = [
   "account_retirements",
@@ -299,7 +302,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly sixty-one expected migrations exist in lexical order",
+  "Exactly sixty-two expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -338,6 +341,10 @@ const accountCleanupEligibility =
 const protectedAccountRetirement =
   migrationEntries.find(({ file }) =>
     file.includes("retire_protected_accounts"),
+  )?.sql ?? "";
+const retiredResidentRelink =
+  migrationEntries.find(({ file }) =>
+    file.includes("allow_retired_resident_relink"),
   )?.sql ?? "";
 const residentRegistrationNotificationType =
   migrationEntries.find(({ file }) =>
@@ -675,6 +682,60 @@ check(
       protectedAccountRetirement,
     ),
   "Account retirement state and RPCs remain service-role-only",
+);
+const retiredResidentRelinkDeclarationAudit = auditPlpgsqlIntoTargets(
+  retiredResidentRelink,
+);
+check(
+  retiredResidentRelinkDeclarationAudit.functionCount === 2 &&
+    retiredResidentRelinkDeclarationAudit.undeclared.length === 0,
+  "Every retired-Resident relinking SELECT INTO target is declared",
+);
+check(
+  /add column released_resident_id uuid[\s\S]*references public\.residents \(id\) on delete restrict/i.test(
+    retiredResidentRelink,
+  ) &&
+    /admin_prepare_account_retirement[\s\S]*resident\.linked_profile_id = target_profile\.id[\s\S]*for update[\s\S]*app\.trusted_resident_linking[\s\S]*linked_profile_id = null/i.test(
+      retiredResidentRelink,
+    ) &&
+    !/delete from public\.(?:profiles|residents|appointments|health_encounters|audit_logs)/i.test(
+      retiredResidentRelink,
+    ),
+  "Resident retirement releases only the current portal link while preserving history",
+);
+check(
+  /admin_restore_account_retirement[\s\S]*retirement_record\.released_resident_id[\s\S]*released Resident already has a replacement portal account[\s\S]*linked_profile_id = target_profile\.id[\s\S]*app\.trusted_account_retirement_restore/i.test(
+    retiredResidentRelink,
+  ),
+  "Failed Auth retirement restores the exact Resident link without replacing a newer account",
+);
+check(
+  /retirement\.profile_id = profile\.id[\s\S]*profile\.role = 'resident'::public\.app_role[\s\S]*profile\.account_status = 'inactive'::public\.account_status[\s\S]*profile\.retired_at is not null[\s\S]*retirement\.retired_at = profile\.retired_at[\s\S]*retirement\.retired_by = profile\.retired_by/i.test(
+    retiredResidentRelink,
+  ) &&
+    /retirement\.released_resident_id is null/i.test(retiredResidentRelink) &&
+    /resident_to_release\.linked_profile_id = profile\.id/i.test(
+      retiredResidentRelink,
+    ),
+  "Existing stale Resident links are reconciled only for consistent retired identities",
+);
+check(
+  /revoke all on function public\.admin_prepare_account_retirement[\s\S]*from public, anon, authenticated, service_role/i.test(
+    retiredResidentRelink,
+  ) &&
+    /revoke all on function public\.admin_restore_account_retirement[\s\S]*from public, anon, authenticated, service_role/i.test(
+      retiredResidentRelink,
+    ) &&
+    /grant execute on function public\.admin_prepare_account_retirement[\s\S]*to service_role/i.test(
+      retiredResidentRelink,
+    ) &&
+    /grant execute on function public\.admin_restore_account_retirement[\s\S]*to service_role/i.test(
+      retiredResidentRelink,
+    ) &&
+    !/grant execute on function public\.admin_(?:prepare|restore)_account_retirement[^;]*to authenticated/i.test(
+      retiredResidentRelink,
+    ),
+  "Retired-Resident relinking remains service-role-only",
 );
 check(
   /alter type public\.assistance_notification_type[\s\S]*add value if not exists 'resident_registration_pending'/i.test(

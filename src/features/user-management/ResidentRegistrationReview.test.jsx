@@ -131,6 +131,89 @@ describe("Administrator Resident registration review", () => {
     );
   });
 
+  it("keeps a currently linked Resident unavailable for takeover", async () => {
+    const linkedResident = {
+      id: "30000000-0000-4000-8000-000000000003",
+      resident_number: "RES-2026-000003",
+      first_name: "Ana",
+      middle_name: "Maria",
+      last_name: "Reyes",
+      date_of_birth: "1995-04-10",
+      sex: "female",
+      status: "active",
+      archived_at: null,
+      linked_profile_id: "30000000-0000-4000-8000-000000000099",
+      purok_name: "Purok 1",
+    };
+    userManagementService.listResidentRegistrations.mockResolvedValue({
+      items: [{ ...registration, possible_matches: [linkedResident] }],
+      total: 1,
+      page: 1,
+      page_size: 50,
+    });
+    const user = userEvent.setup();
+    renderReview();
+
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    const candidate = screen.getByRole("radio", {
+      name: /RES-2026-000003/i,
+    });
+    expect(candidate).toBeDisabled();
+    expect(screen.getByText(/account already linked/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Approve and link" }),
+    ).toBeDisabled();
+  });
+
+  it("allows explicit selection after a retired portal link is reconciled", async () => {
+    const reconciledResident = {
+      id: "30000000-0000-4000-8000-000000000004",
+      resident_number: "RES-2026-000010",
+      first_name: "Ana",
+      middle_name: "Maria",
+      last_name: "Reyes",
+      date_of_birth: "1995-04-10",
+      sex: "female",
+      status: "active",
+      archived_at: null,
+      linked_profile_id: null,
+      purok_name: "Purok 1",
+    };
+    userManagementService.listResidentRegistrations.mockResolvedValue({
+      items: [{ ...registration, possible_matches: [reconciledResident] }],
+      total: 1,
+      page: 1,
+      page_size: 50,
+    });
+    userManagementService.approveResidentRegistration.mockResolvedValue({
+      approved: true,
+      resident: {
+        id: reconciledResident.id,
+        resident_number: reconciledResident.resident_number,
+        linked_existing: true,
+      },
+    });
+    const user = userEvent.setup();
+    renderReview();
+
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    const candidate = screen.getByRole("radio", {
+      name: /RES-2026-000010/i,
+    });
+    expect(candidate).toBeEnabled();
+    expect(
+      screen.queryByText(/account already linked/i),
+    ).not.toBeInTheDocument();
+    await user.click(candidate);
+    await user.click(screen.getByRole("button", { name: "Approve and link" }));
+
+    await waitFor(() =>
+      expect(
+        userManagementService.approveResidentRegistration,
+      ).toHaveBeenCalledWith(registration.id, 1, reconciledResident.id),
+    );
+  });
+
   it("requires a second explicit action before rejection", async () => {
     const user = userEvent.setup();
     renderReview();
