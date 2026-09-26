@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const index = fs.readFileSync("supabase/functions/alaga-ai/index.ts", "utf8");
 const domain = fs.readFileSync("supabase/functions/alaga-ai/domain.ts", "utf8");
+const knowledge = fs.readFileSync(
+  "supabase/functions/alaga-ai/knowledge.ts",
+  "utf8",
+);
 const edgeEnvironment = fs.readFileSync(
   "supabase/functions/.env.example",
   "utf8",
@@ -327,9 +331,9 @@ describe("ALAGA AI Edge Function security boundary", () => {
       "conversationGroundingSourceTypesFor(messages)",
     );
     const gemini = handler.indexOf("new GoogleGenAI");
-    const scheduleCatalog = domain.slice(
-      domain.indexOf("BAGONGPOOK_HEALTH_SERVICE_SCHEDULE"),
-      domain.indexOf("const ALL_ROLES"),
+    const scheduleCatalog = knowledge.slice(
+      knowledge.indexOf("BAGONGPOOK_HEALTH_SERVICE_SCHEDULE"),
+      knowledge.indexOf("const ALL_ROLES"),
     );
 
     expect(scheduleResponse).toBeGreaterThan(-1);
@@ -386,6 +390,44 @@ describe("ALAGA AI Edge Function security boundary", () => {
       /\.filter\(\(message\) => message\.role === "user"\)/,
     );
     expect(domain).not.toMatch(/localStorage|sessionStorage|indexedDB/i);
+  });
+
+  it("uses centralized system knowledge and a bounded hybrid resolver", () => {
+    expect(knowledge).toMatch(/SYSTEM_KNOWLEDGE_ENTRIES/);
+    expect(knowledge).toMatch(/Resident registration workflow/);
+    expect(knowledge).toMatch(/Appointment lifecycle and status meaning/);
+    expect(knowledge).toMatch(/Health Records and encounters/);
+    expect(knowledge).toMatch(/ALAGA AI purpose and limits/);
+    expect(domain).toMatch(/resolveConversationTopic/);
+    expect(domain).toMatch(/slice\(-4\)/);
+    expect(domain).toMatch(/systemKnowledgeResponseFor/);
+    expect(domain).toMatch(/systemKnowledgeGroundingFor/);
+    expect(index).toMatch(/shouldLoadResidentAppointmentStatus\(messages/);
+    expect(index).toMatch(/withSystemKnowledgeGrounding/);
+  });
+
+  it("keeps static knowledge free of private records and mutations", () => {
+    expect(knowledge).not.toMatch(
+      /resident_number|appointment_number|request_key|diagnosis_text|clinical_notes|service_role_key/i,
+    );
+    expect(knowledge).not.toMatch(
+      /\b(?:insert|update|delete)\s+(?:into|from|public\.)/i,
+    );
+    expect(index).not.toMatch(
+      /\.from\("(?:residents|appointments|health_encounters)"\)/,
+    );
+  });
+
+  it("preserves Gemini as a bounded language provider rather than an authorization agent", () => {
+    expect(domain).toContain(
+      "language understanding and concise conversational composition only",
+    );
+    expect(domain).toContain("you do not decide authorization");
+    expect(index).toMatch(/model: env\.model/);
+    expect(index).toMatch(/max_output_tokens: 500/);
+    expect(index).toMatch(/thinking_level: "low"/);
+    expect(index).toMatch(/store: false/);
+    expect(index).not.toMatch(/tools:/);
   });
 
   it("keeps conversational grounding fields approved and strips them from browser responses", () => {

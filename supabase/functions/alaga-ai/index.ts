@@ -10,8 +10,10 @@ import {
   buildSystemInstruction,
   conversationGroundingSourceTypesFor,
   exactOriginCorsHeaders,
+  faqConversationResponseFor,
   groundedResponseFor,
   healthCenterConversationResponseFor,
+  humanEscalationResponseFor,
   isAnnouncementEventQuestion,
   isSupportedRole,
   MAX_BODY_BYTES,
@@ -28,8 +30,11 @@ import {
   simpleConversationResponseFor,
   isResidentAppointmentStatusIntent,
   sanitizeResidentAppointmentStatusRows,
+  shouldLoadResidentAppointmentStatus,
+  systemKnowledgeGroundingFor,
+  systemKnowledgeResponseFor,
   validateConversationPayload,
-  withWorkflowGrounding,
+  withSystemKnowledgeGrounding,
   uncertaintyMessageFor,
   workflowConversationResponseFor,
   workflowResponseFor,
@@ -485,7 +490,7 @@ Deno.serve(async (request) => {
       );
     }
 
-    if (isResidentAppointmentStatusIntent(finalUserMessage)) {
+    if (shouldLoadResidentAppointmentStatus(messages, profile.role)) {
       const statusLookup =
         profile.role === "resident"
           ? await loadResidentAppointmentStatus(admin, profile.id)
@@ -495,6 +500,7 @@ Deno.serve(async (request) => {
         profile.role,
         statusLookup.appointments,
         statusLookup.hasActiveResidentLink,
+        !isResidentAppointmentStatusIntent(finalUserMessage),
       );
       if (statusResponse) {
         logRequest(requestId, profile.role, statusResponse.category, startedAt);
@@ -607,6 +613,31 @@ Deno.serve(async (request) => {
       );
     }
 
+    const systemKnowledgeResponse = systemKnowledgeResponseFor(
+      messages,
+      profile.role,
+    );
+    if (systemKnowledgeResponse) {
+      logRequest(
+        requestId,
+        profile.role,
+        systemKnowledgeResponse.category,
+        startedAt,
+      );
+      return jsonResponse(
+        {
+          data: assistantData(
+            systemKnowledgeResponse.message,
+            systemKnowledgeResponse.sources,
+            systemKnowledgeResponse.actions,
+          ),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+
     if (!isAnnouncementEventQuestion(finalUserMessage)) {
       const serviceScheduleResponse =
         serviceScheduleResponseFor(finalUserMessage);
@@ -698,6 +729,30 @@ Deno.serve(async (request) => {
       );
     }
 
+    const faqConversationResponse = faqConversationResponseFor(
+      messages,
+      liveGrounding,
+    );
+    if (faqConversationResponse) {
+      logRequest(
+        requestId,
+        profile.role,
+        faqConversationResponse.category,
+        startedAt,
+      );
+      return jsonResponse(
+        {
+          data: assistantData(
+            faqConversationResponse.message,
+            faqConversationResponse.sources,
+          ),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+
     if (
       (requiresLiveGrounding(finalUserMessage) || sourceTypes.length > 0) &&
       liveGrounding.length === 0
@@ -705,7 +760,11 @@ Deno.serve(async (request) => {
       logRequest(requestId, profile.role, "grounding_empty", startedAt);
       return jsonResponse(
         {
-          data: assistantData(uncertaintyMessageFor(finalUserMessage)),
+          data: assistantData(
+            uncertaintyMessageFor(finalUserMessage),
+            [],
+            humanEscalationResponseFor(finalUserMessage, profile.role).actions,
+          ),
           request_id: requestId,
         },
         200,
@@ -730,7 +789,30 @@ Deno.serve(async (request) => {
         headers,
       );
     }
-    const grounding = withWorkflowGrounding(liveGrounding, profile.role);
+    const knowledgeGrounding = systemKnowledgeGroundingFor(
+      messages,
+      profile.role,
+    );
+    if (liveGrounding.length === 0 && knowledgeGrounding.length === 0) {
+      const unsupported = humanEscalationResponseFor(
+        finalUserMessage,
+        profile.role,
+      );
+      logRequest(requestId, profile.role, unsupported.category, startedAt);
+      return jsonResponse(
+        {
+          data: assistantData(unsupported.message, [], unsupported.actions),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+    const grounding = withSystemKnowledgeGrounding(
+      liveGrounding,
+      messages,
+      profile.role,
+    );
 
     const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
     let interaction;

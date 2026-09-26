@@ -9,23 +9,29 @@ import {
   groundedResponseFor,
   groundingSourceTypesFor,
   healthCenterConversationResponseFor,
+  humanEscalationResponseFor,
   isAnnouncementEventQuestion,
   MAX_CONVERSATION_TURNS,
   MAX_MESSAGE_CHARACTERS,
   navigationActionIdsForRole,
   navigationResponseFor,
+  normalizeConversationalText,
   parseAllowedOrigins,
   parsePositiveInteger,
   productContextResponseFor,
   residentAppointmentStatusResponseFor,
   requiresLiveGrounding,
+  resolveConversationTopic,
   resolveAnnouncementConversationContext,
   safetyResponseFor,
   sanitizeGroundingSources,
   sanitizeNavigationActions,
   sanitizeResidentAppointmentStatusRows,
   serviceScheduleResponseFor,
+  shouldLoadResidentAppointmentStatus,
   simpleConversationResponseFor,
+  systemKnowledgeGroundingFor,
+  systemKnowledgeResponseFor,
   validateConversationPayload,
   withWorkflowGrounding,
   workflowConversationResponseFor,
@@ -1008,5 +1014,107 @@ Deno.test("appointment status lookup stays Resident-own-data only", () => {
       "resident",
     ),
     null,
+  );
+});
+
+Deno.test("resolves system-wide topics and informal Filipino", () => {
+  assertEquals(
+    normalizeConversationalText("Pano naba nangyare yon?"),
+    "paano na ba nangyari yun",
+  );
+  const cases: Array<[string, string]> = [
+    ["appointment_workflow", "Explain the appointment lifecycle"],
+    ["own_appointment_status", "Ano na nangyare sa appointment ko?"],
+    ["announcement", "Ano latest announcement?"],
+    ["health_center", "What are the health center hours?"],
+    ["faq", "What does the FAQ say about appointments?"],
+    ["service_schedule", "Kailan ang immunization?"],
+    ["registration", "Pano mag register as Resident?"],
+    ["notifications", "Ano ginagawa ng notifications?"],
+    ["inquiries", "What are inquiries?"],
+    ["reports", "Para saan Reports?"],
+    ["resident_registry", "Para saan Resident Registry?"],
+    ["health_records", "Ano pinagkaiba appointment at health record?"],
+    ["user_management", "Bakit may User Management?"],
+    ["account_management", "How does password recovery work?"],
+    ["alaga_ai", "Ano ginagawa ng ALAGA AI?"],
+    ["general_system", "Ano ba ang ALAGA-SYS?"],
+  ];
+  for (const [topic, message] of cases) {
+    assertEquals(
+      resolveConversationTopic([{ role: "user", content: message }])?.topic,
+      topic,
+    );
+  }
+});
+
+Deno.test(
+  "uses bounded topic context and switches on a new explicit topic",
+  () => {
+    const followUp = resolveConversationTopic([
+      { role: "user", content: "Para saan Health Records?" },
+      { role: "assistant", content: "It documents authorized clinical care." },
+      { role: "user", content: "Sino pwede gumamit nun?" },
+    ]);
+    assertEquals(followUp?.topic, "health_records");
+    assertEquals(followUp?.contextual, true);
+
+    const switched = resolveConversationTopic([
+      { role: "user", content: "Ano latest announcement?" },
+      { role: "assistant", content: "A current announcement is available." },
+      { role: "user", content: "Open my appointments." },
+    ]);
+    assertEquals(switched?.topic, "appointment_workflow");
+  },
+);
+
+Deno.test("answers static knowledge with role-aware navigation", () => {
+  const messages = [
+    { role: "user" as const, content: "Para saan Reports?" },
+    { role: "assistant" as const, content: "Reports contains aggregates." },
+    { role: "user" as const, content: "Saan ko makikita yun?" },
+  ];
+  const resident = systemKnowledgeResponseFor(messages, "resident");
+  const admin = systemKnowledgeResponseFor(messages, "admin");
+  assertEquals(resident?.actions, []);
+  assert(resident?.message.includes("Hindi available"));
+  assertEquals(admin?.actions[0]?.actionId, "open_reports");
+  assert(systemKnowledgeGroundingFor(messages, "admin").length > 0);
+});
+
+Deno.test("keeps own appointment follow-ups Resident-scoped", () => {
+  const messages = [
+    { role: "user" as const, content: "Ano na appointment ko?" },
+    { role: "assistant" as const, content: "Pending pa ito." },
+    { role: "user" as const, content: "Anong oras?" },
+  ];
+  assertEquals(shouldLoadResidentAppointmentStatus(messages, "resident"), true);
+  assertEquals(shouldLoadResidentAppointmentStatus(messages, "nurse"), false);
+});
+
+Deno.test("offers only approved human escalation paths", () => {
+  const resident = humanEscalationResponseFor(
+    "May doctor ba bukas?",
+    "resident",
+  );
+  assertEquals(
+    resident.actions.map((action) => action.actionId),
+    ["open_health_center", "open_inquiries"],
+  );
+  const nurse = humanEscalationResponseFor("May doctor ba bukas?", "nurse");
+  assertEquals(
+    nurse.actions.map((action) => action.actionId),
+    ["open_health_center"],
+  );
+});
+
+Deno.test("Filipino medical safety overrides conversational context", () => {
+  assertEquals(
+    safetyResponseFor("Anong gamot sa mataas na blood pressure?")?.category,
+    "medical_boundary",
+  );
+  assertEquals(
+    safetyResponseFor("Masakit dibdib ko, ano sakit ko?")?.category,
+    "emergency_guidance",
   );
 });

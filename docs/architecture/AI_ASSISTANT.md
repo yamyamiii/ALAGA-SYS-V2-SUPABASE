@@ -1,9 +1,11 @@
 # ALAGA AI Assistant architecture
 
-Phase 9C polishes the authenticated assistant with narrowly approved,
-read-only grounding, deterministic fact responses, and deterministic navigation. It does not give Gemini a
-database connection, route control, mutation tool, or access to resident and
-clinical data.
+ALAGA AI is a grounded conversational assistant for ALAGA-SYS. It can explain
+verified system workflows and permitted information conversationally, while
+actual authorization remains enforced independently and professional healthcare
+judgment remains outside the AI's role. It does not give Gemini a database
+connection, route control, mutation tool, or access to resident and clinical
+data.
 
 ## Request path
 
@@ -14,16 +16,17 @@ Authenticated AppShell
   -> authenticated alaga-ai Edge Function
   -> exact-origin CORS, getUser, active profile, canonical role
   -> strict payload and deterministic medical/security checks
-  -> Resident-own appointment-status intent
+  -> explicit symbolic navigation/actions
+  -> bounded recent-turn topic resolution
+  -> Resident-own appointment-status topic
      -> service-role ai_resident_appointment_status RPC
      -> bounded deterministic answer; never sent to Gemini
-  -> deterministic navigation parser (before Gemini)
-     -> symbolic action IDs only
+  -> centralized verified static system-knowledge retrieval
   -> service-role ai_grounding_context RPC
      -> active FAQ, health-center, and announcement text only
   -> server sanitization and character/source limits
-  -> deterministic hours/services/current-announcement synthesis when matched
-  -> Gemini Interactions API with store=false
+  -> deterministic exact facts when matched
+  -> Gemini Interactions API for grounded language composition, with store=false
   -> { message, sources, actions }
   -> frontend schema and role/action allowlist
   -> fixed local route, after user confirmation when ambiguous
@@ -32,6 +35,31 @@ Authenticated AppShell
 Pages and visual components never call Gemini or query grounding tables. The
 browser knows no Gemini key, service-role key, system instruction, database
 rate-limit table, or provider response object.
+
+## Hybrid conversational architecture
+
+The request boundary follows six layers: safety and authorization, explicit
+navigation/actions, security-sensitive structured lookups, bounded topic
+resolution, approved knowledge retrieval, and grounded natural-language
+composition. Deterministic handlers remain authoritative for medical/security
+refusals, navigation IDs, a Resident's own appointment summary, dates, times,
+status, public contact fields, current announcements, and canonical service
+schedules. Gemini may interpret or phrase safe language only after the server
+has selected the approved facts; it never chooses a role, database scope,
+record, route, or permission.
+
+`knowledge.ts` is the centralized static product-knowledge catalog. It covers
+the product, roles, registration, appointments, Registry, Health Records,
+announcements, notifications, inquiries, FAQ, reports, User Management,
+account lifecycle, printable outputs, navigation, ALAGA AI, and the authority
+of the Barangay Bagongpook service schedule. The catalog contains behavior and
+access descriptions only, never copied private database content.
+
+The request-local resolver examines only the most recent validated user turns
+and recognizes the approved topic set. It supports English, conversational
+Filipino, Taglish, common informal spellings, and short pronoun follow-ups.
+An explicit new topic replaces prior context. Conversation history remains
+in-memory only and is never permanent AI memory.
 
 ## Approved grounding
 
@@ -44,8 +72,8 @@ It may return only bounded fields from:
   contacts, hours, and services; and
 - non-archived announcements inside their publish and expiry window.
 
-The Edge Function adds role-specific workflow descriptions from static server
-code. It never supplies profile IDs, resident or household data, staff names,
+The Edge Function adds selected role-specific entries from the centralized
+static knowledge catalog. It never supplies profile IDs, resident or household data, staff names,
 appointments, appointment reasons, encounters, vital signs,
 diagnoses, allergies, pregnancy/child records, reports, inquiries, audit logs,
 authors, or clinical narratives. Grounding is loaded live for each eligible
@@ -58,6 +86,13 @@ the model from paraphrasing or inventing these high-confidence operational
 facts. English, Filipino, and common Taglish intents share this path. FAQ and
 workflow questions continue through the bounded provider path when no
 deterministic response applies.
+
+Source authority stays distinct: static system knowledge describes product
+behavior; canonical operational information describes the maintained service
+schedule; live public information comes only from approved announcement,
+health-center, and FAQ grounding; and personal authorized information is only
+the deterministic Resident-own appointment summary. Arbitrary Resident,
+clinical, staff, report-row, audit, and internal-ID data is prohibited.
 
 Grounding rows are data, never instructions. Gemini is instructed to ignore
 commands embedded in source text and to say that verified information is

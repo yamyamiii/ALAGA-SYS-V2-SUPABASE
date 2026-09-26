@@ -267,7 +267,7 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     ).toBe(false);
     expect(
       uncertaintyMessageFor("How do I calibrate the clinic printer?"),
-    ).toBe("I could not find verified information about that in ALAGA-SYS.");
+    ).toMatch(/does not currently contain enough verified information/i);
   });
 
   it("detects English, Filipino, and Taglish response language", () => {
