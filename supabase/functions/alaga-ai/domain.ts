@@ -15,8 +15,10 @@ export type GroundingSource = {
   title: string;
   content: string;
   category?: string | null;
+  publishAt?: string | null;
   eventStartAt?: string | null;
   eventEndAt?: string | null;
+  expiresAt?: string | null;
   updatedAt: string | null;
 };
 
@@ -642,7 +644,7 @@ const TERSE_NAVIGATION_REQUEST =
 export type ResponseLanguage = "english" | "filipino" | "taglish";
 
 const FILIPINO_LANGUAGE_MARKERS =
-  /\b(?:ano|anong|ang|ng|mga|may|ba|paano|pano|saan|pwede|maaari|gusto|kumuha|kumusta|salamat|buksan|punta|pumunta|tingnan|tignan|ipakita|ko|akin|iyong|nasaan|kailan|oras|serbisyo|anunsyo|pabatid|ulat|talaan|pangangalaga)\b/i;
+  /\b(?:ano|anong|ang|ng|mga|may|ba|naman|paano|pano|saan|pwede|maaari|gusto|kumuha|kumusta|salamat|buksan|punta|pumunta|tingnan|tignan|ipakita|ko|akin|iyong|nasaan|kailan|oras|serbisyo|anunsyo|pabatid|ulat|talaan|pangangalaga)\b/i;
 const ENGLISH_LANGUAGE_MARKERS =
   /\b(?:what|how|open|show|view|my|appointments?|notifications?|announcements?|services?|operating|hours?|available|health|center|reports?|records?|queue|user|management|audit)\b/i;
 
@@ -963,6 +965,12 @@ const TEMPORARY_EVENT_TIME_CUE =
   /\b(?:today|tomorrow|this week|ngayon|bukas|ngayong linggo|what time|what date|anong oras|anong petsa)\b/i;
 const TEMPORARY_EVENT_REFERENCE =
   /\b(?:event|activity|announcement|anunsyo|pabatid|medical mission)\b/i;
+const SPECIFIC_TEMPORARY_EVENT_QUESTION =
+  /\b(?:when|kailan|kelan|what time|anong oras|what date|anong petsa)\b[\s\S]*\b(?:yung|iyon|yun|yan|that|the event|announcement|anunsyo|pabatid)\b|\b(?:yung|iyon|yun|yan|that|the event|announcement|anunsyo|pabatid)\b[\s\S]*\b(?:when|kailan|kelan|what time|anong oras|what date|anong petsa)\b/i;
+const TEMPORARY_EVENT_DETAILS_QUESTION =
+  /\b(?:details?|more information|ano(?: pa)?(?:ng)? details?|ano(?:ng)? laman)\b/i;
+const GENERAL_TEMPORARY_EVENT_PERIOD_QUESTION =
+  /\b(?:what(?:'s| is) happening|ano(?:ng)? (?:event|announcement|anunsyo|pabatid)|may (?:event|announcement|anunsyo|pabatid))\b[\s\S]*\b(?:today|tomorrow|this week|ngayon|bukas|ngayong linggo)\b/i;
 const FAQ_QUESTION =
   /\b(?:faqs?|frequently asked questions?|help articles?|procedure|requirements?|request process|madalas (?:na )?itanong|mga kinakailangan)\b/i;
 const HEALTH_CENTER_QUESTION =
@@ -980,9 +988,11 @@ const HEALTH_CENTER_EMERGENCY_CONTACT_QUESTION =
 
 export function isAnnouncementEventQuestion(message: string) {
   return (
-    TEMPORARY_EVENT_SUBJECT.test(message) &&
-    (TEMPORARY_EVENT_TIME_CUE.test(message) ||
-      TEMPORARY_EVENT_REFERENCE.test(message))
+    GENERAL_TEMPORARY_EVENT_PERIOD_QUESTION.test(message) ||
+    (TEMPORARY_EVENT_SUBJECT.test(message) &&
+      (TEMPORARY_EVENT_TIME_CUE.test(message) ||
+        TEMPORARY_EVENT_REFERENCE.test(message) ||
+        SPECIFIC_TEMPORARY_EVENT_QUESTION.test(message)))
   );
 }
 
@@ -1005,7 +1015,9 @@ export function groundingSourceTypesFor(message: string) {
   }
   if (
     ANNOUNCEMENT_QUESTION.test(message) ||
-    isAnnouncementEventQuestion(message)
+    isAnnouncementEventQuestion(message) ||
+    (TEMPORARY_EVENT_SUBJECT.test(message) &&
+      TEMPORARY_EVENT_DETAILS_QUESTION.test(message))
   ) {
     requested.add("announcement");
   }
@@ -1060,18 +1072,27 @@ export function sanitizeGroundingSources(rows: unknown): GroundingSource[] {
       updatedAt,
     };
     if (source.type === "announcement") {
+      const publishAt = normalizedTimestamp(row.publish_at);
       const eventStartAt = normalizedTimestamp(row.event_start_at);
       const candidateEndAt = normalizedTimestamp(row.event_end_at);
+      const candidateExpiresAt = normalizedTimestamp(row.expires_at);
       source.category =
         typeof row.category === "string"
           ? row.category.trim().slice(0, 60) || null
           : null;
+      source.publishAt = publishAt;
       source.eventStartAt = eventStartAt;
       source.eventEndAt =
         eventStartAt &&
         candidateEndAt &&
         Date.parse(candidateEndAt) > Date.parse(eventStartAt)
           ? candidateEndAt
+          : null;
+      source.expiresAt =
+        publishAt &&
+        candidateExpiresAt &&
+        Date.parse(candidateExpiresAt) > Date.parse(publishAt)
+          ? candidateExpiresAt
           : null;
     }
     sources.push(source);
@@ -1256,8 +1277,14 @@ const manilaDatePartsFormatter = new Intl.DateTimeFormat("en-CA", {
 });
 const manilaEventFormatter = new Intl.DateTimeFormat("en-PH", {
   timeZone: "Asia/Manila",
-  dateStyle: "medium",
+  dateStyle: "long",
   timeStyle: "short",
+});
+const manilaTimeFormatter = new Intl.DateTimeFormat("en-PH", {
+  timeZone: "Asia/Manila",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
 });
 
 function manilaDayNumber(value: string | Date) {
@@ -1377,6 +1404,587 @@ export function announcementEventResponseFor(
         : `Kasalukuyang temporary announcement event schedule:\n${details}\nTingnan ang Announcements o mag-confirm sa Barangay Health Center para sa updates.`,
     sources: selected,
   };
+}
+
+type AnnouncementDetail =
+  | "summary"
+  | "event_start"
+  | "event_end"
+  | "publish"
+  | "expiration"
+  | "category"
+  | "content"
+  | "active"
+  | "has_event"
+  | "location"
+  | "requirements"
+  | "eligibility"
+  | "instructions"
+  | "contact";
+
+export type AnnouncementConversationContext = {
+  announcement: GroundingSource | null;
+  detail: AnnouncementDetail;
+  contextual: boolean;
+  needsClarification: boolean;
+};
+
+const LATEST_ANNOUNCEMENT_QUESTION =
+  /\b(?:(?:what(?:'s| is)|ano(?: ang| yung)?|may)?\s*(?:the )?(?:latest|newest|most recent|pinakabagong|bagong)\s+(?:announcement|anunsyo|pabatid)|latest\s+(?:announcement|anunsyo|pabatid))\b/i;
+const ANNOUNCEMENT_FOLLOW_UP_REFERENCE =
+  /\b(?:yun|iyon|yan|nun|nito|that|it|that one|the announcement|yung announcement|ang announcement)\b/i;
+const ANNOUNCEMENT_DATE_FOLLOW_UP =
+  /\b(?:anong (?:date|petsa)(?: at oras)?|date and time|what (?:date|time)|when is (?:that|it)|kailan|kelan|anong oras|what time is (?:that|it)|what time)\b/i;
+const ANNOUNCEMENT_CONTEXTUAL_DETAIL =
+  /\b(?:ano pa details?|tell me more|more details?|hanggang anong oras|kailan matatapos|hanggang kailan|kailan pinost|published kailan|when was (?:it|that) published|ano(?:ng)? category|what category|ano(?:ng)? laman|active pa ba|is (?:it|that) still active|may event ba|does (?:it|that) have an event|saan|where|requirements?|dalhin|bring|eligible|eligibility|instructions?|contact)\b/i;
+const HEALTH_CENTER_FOLLOW_UP =
+  /^(?:ano(?:ng)?\s+)?(?:contact number|phone number|email|address|location|operating hours?|opening hours?|services?)(?:\s+naman)?[?.!]*$/i;
+const WORKFLOW_LOCATION_FOLLOW_UP =
+  /^(?:(?:saan|nasaan)(?: ko)? (?:yun|iyon|yan|ito) makikita|where (?:can|do) i (?:find|see|open) (?:that|it)|how do i open (?:that|it))[?.!]*$/i;
+
+function normalizedLookupText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("en-US")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function announcementDetailFor(message: string): AnnouncementDetail | null {
+  if (
+    /\b(?:hanggang kailan (?:makikita|visible|active)|when (?:does|will) (?:it|that|the announcement) expire|expiration|expiry|how long (?:is|will) (?:it|that) (?:be )?visible)\b/i.test(
+      message,
+    )
+  ) {
+    return "expiration";
+  }
+  if (
+    /\b(?:kailan pinost|published kailan|when was (?:it|that|the announcement) published|publish(?:ed)? date)\b/i.test(
+      message,
+    )
+  ) {
+    return "publish";
+  }
+  if (
+    /\b(?:hanggang anong oras|kailan matatapos|what time (?:does|will) (?:it|that|the event) end|when (?:does|will) (?:it|that|the event) end|event end)\b/i.test(
+      message,
+    ) ||
+    /^\s*hanggang kailan[?.!]*\s*$/i.test(message)
+  ) {
+    return "event_end";
+  }
+  if (ANNOUNCEMENT_DATE_FOLLOW_UP.test(message)) return "event_start";
+  if (/\b(?:category|kategorya)\b/i.test(message)) return "category";
+  if (/\b(?:active pa ba|still active|current pa ba)\b/i.test(message)) {
+    return "active";
+  }
+  if (/\b(?:may event ba|does .* have an event)\b/i.test(message)) {
+    return "has_event";
+  }
+  if (
+    /^(?:saan(?:\s+gaganapin)?|where(?:\s+(?:is|will be))?)(?:\s+(?:yun|iyon|yan|it|that|the event))?[?.!]*$/i.test(
+      message,
+    )
+  ) {
+    return "location";
+  }
+  if (/\b(?:requirements?|ano ang kailangan|dalhin|bring)\b/i.test(message)) {
+    return "requirements";
+  }
+  if (
+    /\b(?:eligible|eligibility|sino ang pwede|who can join)\b/i.test(message)
+  ) {
+    return "eligibility";
+  }
+  if (/\b(?:instructions?|tagubilin|ano ang gagawin)\b/i.test(message)) {
+    return "instructions";
+  }
+  if (/\b(?:contact|phone|telephone|email)\b/i.test(message)) return "contact";
+  if (
+    /\b(?:details?|tell me more|more information|ano(?: pa)?(?:ng)? details?|ano(?:ng)? laman|tungkol saan|what is it about)\b/i.test(
+      message,
+    )
+  ) {
+    return "content";
+  }
+  return null;
+}
+
+function isAnnouncementFollowUp(message: string) {
+  const detail = announcementDetailFor(message);
+  if (!detail) return false;
+  const wordCount = normalizedLookupText(message)
+    .split(/\s+/)
+    .filter(Boolean).length;
+  return (
+    ANNOUNCEMENT_FOLLOW_UP_REFERENCE.test(message) ||
+    ANNOUNCEMENT_CONTEXTUAL_DETAIL.test(message) ||
+    wordCount <= 7
+  );
+}
+
+function latestAnnouncements(sources: GroundingSource[], now: Date) {
+  const currentTime = now.getTime();
+  return sources
+    .filter(
+      (source) =>
+        source.type === "announcement" &&
+        Boolean(source.publishAt) &&
+        Date.parse(source.publishAt ?? "") <= currentTime &&
+        (!source.expiresAt || Date.parse(source.expiresAt) > currentTime),
+    )
+    .map((source, index) => ({ source, index }))
+    .sort((left, right) => {
+      const publicationDifference =
+        Date.parse(right.source.publishAt ?? "") -
+        Date.parse(left.source.publishAt ?? "");
+      if (publicationDifference) return publicationDifference;
+      const titleDifference = left.source.title.localeCompare(
+        right.source.title,
+        "en",
+        { sensitivity: "base" },
+      );
+      return titleDifference || left.index - right.index;
+    })
+    .map(({ source }) => source);
+}
+
+function titleMatchedAnnouncement(
+  message: string,
+  announcements: GroundingSource[],
+) {
+  const normalizedMessage = normalizedLookupText(message);
+  return announcements.find((source) => {
+    const normalizedTitle = normalizedLookupText(source.title);
+    return (
+      normalizedTitle.length >= 3 && normalizedMessage.includes(normalizedTitle)
+    );
+  });
+}
+
+function topicMatchedAnnouncement(
+  message: string,
+  announcements: GroundingSource[],
+) {
+  const ignored = new Set([
+    "announcement",
+    "announcements",
+    "anunsyo",
+    "pabatid",
+    "about",
+    "tungkol",
+    "details",
+  ]);
+  const queryTokens = [...faqSearchTokens(message)].filter(
+    (token) => !ignored.has(token),
+  );
+  if (!queryTokens.length) return null;
+  return (
+    announcements
+      .map((source, index) => {
+        const sourceTokens = faqSearchTokens(
+          `${source.title} ${source.category ?? ""} ${source.content}`,
+        );
+        const score = queryTokens.reduce(
+          (total, token) => total + Number(sourceTokens.has(token)),
+          0,
+        );
+        return { source, score, index };
+      })
+      .filter(({ score }) => score > 0)
+      .sort(
+        (left, right) => right.score - left.score || left.index - right.index,
+      )
+      .at(0)?.source ?? null
+  );
+}
+
+function directAnnouncementFor(
+  message: string,
+  announcements: GroundingSource[],
+  now: Date,
+) {
+  if (LATEST_ANNOUNCEMENT_QUESTION.test(message))
+    return announcements[0] ?? null;
+  const titleMatch = titleMatchedAnnouncement(message, announcements);
+  if (titleMatch) return titleMatch;
+  if (isAnnouncementEventQuestion(message)) {
+    return (
+      announcements.find(
+        (source) =>
+          announcementMatchesSubject(message, source) &&
+          (!source.eventStartAt ||
+            announcementMatchesPeriod(message, source.eventStartAt, now)),
+      ) ?? null
+    );
+  }
+  if (ANNOUNCEMENT_QUESTION.test(message)) {
+    return (
+      topicMatchedAnnouncement(message, announcements) ??
+      announcements[0] ??
+      null
+    );
+  }
+  return null;
+}
+
+function isStrongAnnouncementTopic(message: string) {
+  return (
+    LATEST_ANNOUNCEMENT_QUESTION.test(message) ||
+    ANNOUNCEMENT_QUESTION.test(message) ||
+    isAnnouncementEventQuestion(message)
+  );
+}
+
+function isStrongHealthCenterTopic(message: string) {
+  return (
+    HEALTH_CENTER_QUESTION.test(message) ||
+    HEALTH_CENTER_NAME_QUESTION.test(message) ||
+    HEALTH_CENTER_ADDRESS_QUESTION.test(message) ||
+    HEALTH_CENTER_CONTACT_QUESTION.test(message) ||
+    HEALTH_CENTER_EMAIL_QUESTION.test(message) ||
+    HEALTH_CENTER_EMERGENCY_CONTACT_QUESTION.test(message) ||
+    OPERATING_HOURS_QUESTION.test(message) ||
+    SERVICES_QUESTION.test(message)
+  );
+}
+
+function previousConversationTopic(messages: ConversationMessage[]): {
+  type: "announcement" | "health_center" | "workflow";
+  message: string;
+} | null {
+  const previousUserMessages = messages
+    .slice(0, -1)
+    .filter((message) => message.role === "user")
+    .slice(-4)
+    .reverse();
+
+  for (const previous of previousUserMessages) {
+    if (
+      isAnnouncementFollowUp(previous.content) ||
+      HEALTH_CENTER_FOLLOW_UP.test(previous.content) ||
+      WORKFLOW_LOCATION_FOLLOW_UP.test(previous.content)
+    ) {
+      continue;
+    }
+    if (isStrongAnnouncementTopic(previous.content)) {
+      return { type: "announcement", message: previous.content };
+    }
+    if (isStrongHealthCenterTopic(previous.content)) {
+      return { type: "health_center", message: previous.content };
+    }
+    if (
+      isAppointmentRequestWorkflow(previous.content) ||
+      isAssignedAppointmentsWorkflow(previous.content) ||
+      isAppointmentConfirmationWorkflow(previous.content)
+    ) {
+      return { type: "workflow", message: previous.content };
+    }
+    return null;
+  }
+  return null;
+}
+
+export function conversationGroundingSourceTypesFor(
+  messages: ConversationMessage[],
+) {
+  const finalMessage = messages.at(-1)?.content ?? "";
+  const requested = new Set(groundingSourceTypesFor(finalMessage));
+  const topic = previousConversationTopic(messages);
+  if (isAnnouncementFollowUp(finalMessage) && topic?.type === "announcement") {
+    requested.add("announcement");
+  }
+  if (
+    HEALTH_CENTER_FOLLOW_UP.test(finalMessage) &&
+    topic?.type === "health_center"
+  ) {
+    requested.add("health_center");
+  }
+  return [...requested];
+}
+
+export function resolveAnnouncementConversationContext(
+  messages: ConversationMessage[],
+  sources: GroundingSource[],
+  now = new Date(),
+): AnnouncementConversationContext | null {
+  const finalMessage = messages.at(-1)?.content ?? "";
+  const announcements = latestAnnouncements(sources, now);
+  const direct = directAnnouncementFor(finalMessage, announcements, now);
+  if (direct) {
+    return {
+      announcement: direct,
+      detail:
+        announcementDetailFor(finalMessage) ??
+        (LATEST_ANNOUNCEMENT_QUESTION.test(finalMessage)
+          ? "summary"
+          : "content"),
+      contextual: false,
+      needsClarification: false,
+    };
+  }
+  if (!isAnnouncementFollowUp(finalMessage)) return null;
+
+  const topic = previousConversationTopic(messages);
+  if (topic?.type !== "announcement") {
+    return {
+      announcement: null,
+      detail: announcementDetailFor(finalMessage) ?? "content",
+      contextual: true,
+      needsClarification: true,
+    };
+  }
+  return {
+    announcement: directAnnouncementFor(topic.message, announcements, now),
+    detail: announcementDetailFor(finalMessage) ?? "content",
+    contextual: true,
+    needsClarification: false,
+  };
+}
+
+function conciseAnnouncementContent(content: string, maximum = 420) {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  return normalized.length <= maximum
+    ? normalized
+    : `${normalized.slice(0, maximum - 1).trimEnd()}…`;
+}
+
+function announcementContentField(
+  content: string,
+  detail: Extract<
+    AnnouncementDetail,
+    "location" | "requirements" | "eligibility" | "instructions" | "contact"
+  >,
+) {
+  const labels: Record<typeof detail, RegExp> = {
+    location: /^(?:venue|location|place|lugar|lokasyon|saan)\s*[:\-]\s*(.+)$/i,
+    requirements:
+      /^(?:requirements?|kailangan|what to bring|dalhin)\s*[:\-]\s*(.+)$/i,
+    eligibility:
+      /^(?:eligibility|eligible|who can join|sino ang pwede)\s*[:\-]\s*(.+)$/i,
+    instructions: /^(?:instructions?|tagubilin|steps?)\s*[:\-]\s*(.+)$/i,
+    contact:
+      /^(?:contact|contact number|phone|telephone|email)\s*[:\-]\s*(.+)$/i,
+  };
+  return content
+    .split(/\r?\n/)
+    .map((line) => line.trim().match(labels[detail])?.[1]?.trim())
+    .find(Boolean);
+}
+
+function formatAnnouncementDateTime(value: string) {
+  return manilaEventFormatter.format(new Date(value));
+}
+
+function announcementScheduleSentence(
+  source: GroundingSource,
+  language: ResponseLanguage,
+) {
+  if (!source.eventStartAt) return "";
+  const start = formatAnnouncementDateTime(source.eventStartAt);
+  const end = source.eventEndAt
+    ? manilaTimeFormatter.format(new Date(source.eventEndAt))
+    : null;
+  if (language === "english") {
+    return end
+      ? `The event is scheduled for ${start} until ${end}.`
+      : `The event is scheduled for ${start}.`;
+  }
+  return end
+    ? `Naka-schedule ang event sa ${start} hanggang ${end}.`
+    : `Naka-schedule ang event sa ${start}.`;
+}
+
+function announcementConversationMessage(
+  source: GroundingSource,
+  detail: AnnouncementDetail,
+  message: string,
+) {
+  const language = detectResponseLanguage(message);
+  const filipino = language !== "english";
+  const title = `“${source.title}”`;
+  if (detail === "summary") {
+    const content = conciseAnnouncementContent(source.content, 280);
+    const schedule = announcementScheduleSentence(source, language);
+    return filipino
+      ? [`Ang latest announcement ay ${title}.`, content, schedule]
+          .filter(Boolean)
+          .join(" ")
+      : [`The latest announcement is ${title}.`, content, schedule]
+          .filter(Boolean)
+          .join(" ");
+  }
+  if (detail === "event_start") {
+    if (!source.eventStartAt) {
+      return filipino
+        ? `Walang nakatalang structured event date o oras para sa ${title}. Hindi ko gagamitin ang publish o expiration date bilang event schedule.`
+        : `${title} has no structured event date or time. I will not substitute its publication or expiration date.`;
+    }
+    return filipino
+      ? `Ang event para sa ${title} ay naka-schedule sa ${formatAnnouncementDateTime(source.eventStartAt)}.`
+      : `The event for ${title} is scheduled for ${formatAnnouncementDateTime(source.eventStartAt)}.`;
+  }
+  if (detail === "event_end") {
+    if (!source.eventEndAt) {
+      return filipino
+        ? `Walang nakatalang event end time para sa ${title}.`
+        : `${title} does not include a structured event end time.`;
+    }
+    return filipino
+      ? `Matatapos ang event para sa ${title} sa ${formatAnnouncementDateTime(source.eventEndAt)}.`
+      : `The event for ${title} ends on ${formatAnnouncementDateTime(source.eventEndAt)}.`;
+  }
+  if (detail === "publish") {
+    return source.publishAt
+      ? filipino
+        ? `Na-publish ang ${title} noong ${formatAnnouncementDateTime(source.publishAt)}.`
+        : `${title} was published on ${formatAnnouncementDateTime(source.publishAt)}.`
+      : filipino
+        ? `Walang available na verified publish date para sa ${title}.`
+        : `No verified publication date is available for ${title}.`;
+  }
+  if (detail === "expiration") {
+    return source.expiresAt
+      ? filipino
+        ? `Mananatiling current ang ${title} hanggang ${formatAnnouncementDateTime(source.expiresAt)}.`
+        : `${title} remains current until ${formatAnnouncementDateTime(source.expiresAt)}.`
+      : filipino
+        ? `Walang nakatalang expiration date para sa ${title}.`
+        : `${title} has no configured expiration date.`;
+  }
+  if (detail === "category") {
+    return source.category
+      ? filipino
+        ? `Ang category ng ${title} ay ${source.category}.`
+        : `The category of ${title} is ${source.category}.`
+      : filipino
+        ? `Walang nakatalang category para sa ${title}.`
+        : `${title} has no configured category.`;
+  }
+  if (detail === "active") {
+    return filipino
+      ? `Oo. Current pa ang ${title} dahil published ito, hindi archived, at hindi pa expired.`
+      : `Yes. ${title} is currently published, not archived, and not expired.`;
+  }
+  if (detail === "has_event") {
+    return source.eventStartAt
+      ? filipino
+        ? `Oo. ${announcementScheduleSentence(source, language)}`
+        : `Yes. ${announcementScheduleSentence(source, language)}`
+      : filipino
+        ? `Walang nakatalang structured event schedule para sa ${title}.`
+        : `${title} has no structured event schedule.`;
+  }
+  if (
+    detail === "location" ||
+    detail === "requirements" ||
+    detail === "eligibility" ||
+    detail === "instructions" ||
+    detail === "contact"
+  ) {
+    const value = announcementContentField(source.content, detail);
+    if (value) {
+      return filipino
+        ? `Ayon sa verified announcement ${title}: ${value}`
+        : `According to the verified announcement ${title}: ${value}`;
+    }
+    return filipino
+      ? `Hindi tinukoy ng verified announcement ${title} ang impormasyong iyon.`
+      : `The verified announcement ${title} does not specify that information.`;
+  }
+  const details = [
+    filipino
+      ? `Narito ang detalye ng ${title}:`
+      : `Here are the details for ${title}:`,
+    conciseAnnouncementContent(source.content),
+    source.category
+      ? filipino
+        ? `Category: ${source.category}.`
+        : `Category: ${source.category}.`
+      : "",
+    announcementScheduleSentence(source, language),
+  ];
+  return details.filter(Boolean).join(" ");
+}
+
+export function announcementConversationResponseFor(
+  messages: ConversationMessage[],
+  sources: GroundingSource[],
+  now = new Date(),
+): { category: string; message: string; sources: GroundingSource[] } | null {
+  const context = resolveAnnouncementConversationContext(
+    messages,
+    sources,
+    now,
+  );
+  if (!context) return null;
+  const finalMessage = messages.at(-1)?.content ?? "";
+  if (context.needsClarification || !context.announcement) {
+    return {
+      category: "grounding_announcement_clarification",
+      message:
+        detectResponseLanguage(finalMessage) === "english"
+          ? "Which announcement or ALAGA-SYS item do you mean?"
+          : "Aling announcement o ALAGA-SYS item ang tinutukoy mo?",
+      sources: [],
+    };
+  }
+  return {
+    category: context.contextual
+      ? "grounding_announcement_follow_up"
+      : "grounding_announcement_details",
+    message: announcementConversationMessage(
+      context.announcement,
+      context.detail,
+      finalMessage,
+    ),
+    sources: [context.announcement],
+  };
+}
+
+export function healthCenterConversationResponseFor(
+  messages: ConversationMessage[],
+  sources: GroundingSource[],
+) {
+  const finalMessage = messages.at(-1)?.content ?? "";
+  if (!HEALTH_CENTER_FOLLOW_UP.test(finalMessage)) return null;
+  if (previousConversationTopic(messages)?.type !== "health_center")
+    return null;
+  const language = detectResponseLanguage(finalMessage);
+  const normalized = normalizedLookupText(finalMessage);
+  const expanded =
+    normalized.includes("contact") || normalized.includes("phone")
+      ? language === "english"
+        ? "What is the health center contact number?"
+        : "Ano ang contact number ng health center?"
+      : normalized.includes("email")
+        ? language === "english"
+          ? "What is the health center email?"
+          : "Ano ang email ng health center?"
+        : normalized.includes("address") || normalized.includes("location")
+          ? language === "english"
+            ? "What is the health center address?"
+            : "Ano ang address ng health center?"
+          : normalized.includes("hour")
+            ? language === "english"
+              ? "What are the health center operating hours?"
+              : "Ano ang operating hours ng health center?"
+            : language === "english"
+              ? "What services are offered by the health center?"
+              : "Anong services ang available sa health center?";
+  return groundedResponseFor(expanded, sources);
+}
+
+export function workflowConversationResponseFor(
+  messages: ConversationMessage[],
+  role: CanonicalRole,
+) {
+  const finalMessage = messages.at(-1)?.content ?? "";
+  if (!WORKFLOW_LOCATION_FOLLOW_UP.test(finalMessage)) return null;
+  const topic = previousConversationTopic(messages);
+  if (topic?.type !== "workflow") return null;
+  return workflowResponseFor(topic.message, role);
 }
 
 export function groundedResponseFor(
@@ -2195,12 +2803,18 @@ export function buildProviderInput(
             source.type === "announcement"
               ? [
                   source.category ? `Category: ${source.category}` : null,
+                  source.publishAt
+                    ? `Published: ${source.publishAt}`
+                    : "Published: Not provided",
                   source.eventStartAt
                     ? `Event start: ${source.eventStartAt}`
                     : "Event start: Not provided",
                   source.eventEndAt
                     ? `Event end: ${source.eventEndAt}`
                     : "Event end: Not provided",
+                  source.expiresAt
+                    ? `Expires: ${source.expiresAt}`
+                    : "Expires: Not provided",
                 ]
                   .filter(Boolean)
                   .join("\n")

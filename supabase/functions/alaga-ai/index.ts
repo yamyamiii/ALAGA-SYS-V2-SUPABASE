@@ -3,13 +3,15 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 import {
   AiAssistantError,
+  announcementConversationResponseFor,
   announcementEventResponseFor,
   boundedResponse,
   buildProviderInput,
   buildSystemInstruction,
+  conversationGroundingSourceTypesFor,
   exactOriginCorsHeaders,
   groundedResponseFor,
-  groundingSourceTypesFor,
+  healthCenterConversationResponseFor,
   isAnnouncementEventQuestion,
   isSupportedRole,
   MAX_BODY_BYTES,
@@ -29,6 +31,7 @@ import {
   validateConversationPayload,
   withWorkflowGrounding,
   uncertaintyMessageFor,
+  workflowConversationResponseFor,
   workflowResponseFor,
   type AssistantAction,
   type CanonicalRole,
@@ -579,15 +582,64 @@ Deno.serve(async (request) => {
       );
     }
 
-    if (isAnnouncementEventQuestion(finalUserMessage)) {
-      const announcementGrounding = await loadApprovedGrounding(
-        admin,
-        profile.id,
-        ["announcement"],
+    const workflowConversationResponse = workflowConversationResponseFor(
+      messages,
+      profile.role,
+    );
+    if (workflowConversationResponse) {
+      logRequest(
+        requestId,
+        profile.role,
+        `${workflowConversationResponse.category}_follow_up`,
+        startedAt,
       );
+      return jsonResponse(
+        {
+          data: assistantData(
+            workflowConversationResponse.message,
+            workflowConversationResponse.sources,
+            workflowConversationResponse.actions,
+          ),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+
+    if (!isAnnouncementEventQuestion(finalUserMessage)) {
+      const serviceScheduleResponse =
+        serviceScheduleResponseFor(finalUserMessage);
+      if (serviceScheduleResponse) {
+        logRequest(
+          requestId,
+          profile.role,
+          serviceScheduleResponse.category,
+          startedAt,
+        );
+        return jsonResponse(
+          {
+            data: assistantData(
+              serviceScheduleResponse.message,
+              serviceScheduleResponse.sources,
+            ),
+            request_id: requestId,
+          },
+          200,
+          headers,
+        );
+      }
+    }
+
+    const sourceTypes = conversationGroundingSourceTypesFor(messages);
+    const liveGrounding = sourceTypes.length
+      ? await loadApprovedGrounding(admin, profile.id, sourceTypes)
+      : [];
+
+    if (isAnnouncementEventQuestion(finalUserMessage)) {
       const eventResponse = announcementEventResponseFor(
         finalUserMessage,
-        announcementGrounding,
+        liveGrounding,
       );
       if (eventResponse) {
         logRequest(requestId, profile.role, eventResponse.category, startedAt);
@@ -602,20 +654,20 @@ Deno.serve(async (request) => {
       }
     }
 
-    const serviceScheduleResponse =
-      serviceScheduleResponseFor(finalUserMessage);
-    if (serviceScheduleResponse) {
+    const announcementConversationResponse =
+      announcementConversationResponseFor(messages, liveGrounding);
+    if (announcementConversationResponse) {
       logRequest(
         requestId,
         profile.role,
-        serviceScheduleResponse.category,
+        announcementConversationResponse.category,
         startedAt,
       );
       return jsonResponse(
         {
           data: assistantData(
-            serviceScheduleResponse.message,
-            serviceScheduleResponse.sources,
+            announcementConversationResponse.message,
+            announcementConversationResponse.sources,
           ),
           request_id: requestId,
         },
@@ -624,11 +676,32 @@ Deno.serve(async (request) => {
       );
     }
 
-    const sourceTypes = groundingSourceTypesFor(finalUserMessage);
-    const liveGrounding = sourceTypes.length
-      ? await loadApprovedGrounding(admin, profile.id, sourceTypes)
-      : [];
-    if (requiresLiveGrounding(finalUserMessage) && liveGrounding.length === 0) {
+    const healthCenterConversationResponse =
+      healthCenterConversationResponseFor(messages, liveGrounding);
+    if (healthCenterConversationResponse) {
+      logRequest(
+        requestId,
+        profile.role,
+        `${healthCenterConversationResponse.category}_follow_up`,
+        startedAt,
+      );
+      return jsonResponse(
+        {
+          data: assistantData(
+            healthCenterConversationResponse.message,
+            healthCenterConversationResponse.sources,
+          ),
+          request_id: requestId,
+        },
+        200,
+        headers,
+      );
+    }
+
+    if (
+      (requiresLiveGrounding(finalUserMessage) || sourceTypes.length > 0) &&
+      liveGrounding.length === 0
+    ) {
       logRequest(requestId, profile.role, "grounding_empty", startedAt);
       return jsonResponse(
         {

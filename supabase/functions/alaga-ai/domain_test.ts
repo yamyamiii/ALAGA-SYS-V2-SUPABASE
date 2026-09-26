@@ -1,11 +1,14 @@
 import {
   AiAssistantError,
+  announcementConversationResponseFor,
   announcementEventResponseFor,
   buildProviderInput,
   buildSystemInstruction,
+  conversationGroundingSourceTypesFor,
   exactOriginCorsHeaders,
   groundedResponseFor,
   groundingSourceTypesFor,
+  healthCenterConversationResponseFor,
   isAnnouncementEventQuestion,
   MAX_CONVERSATION_TURNS,
   MAX_MESSAGE_CHARACTERS,
@@ -16,6 +19,7 @@ import {
   productContextResponseFor,
   residentAppointmentStatusResponseFor,
   requiresLiveGrounding,
+  resolveAnnouncementConversationContext,
   safetyResponseFor,
   sanitizeGroundingSources,
   sanitizeNavigationActions,
@@ -24,6 +28,7 @@ import {
   simpleConversationResponseFor,
   validateConversationPayload,
   withWorkflowGrounding,
+  workflowConversationResponseFor,
   workflowResponseFor,
   workflowGrounding,
 } from "./domain.ts";
@@ -723,7 +728,7 @@ Deno.test(
       false,
     );
     assertEquals(response?.category, "grounding_announcement_event");
-    assert(response?.message.includes("Sep 26, 2026"));
+    assert(response?.message.includes("September 26, 2026"));
     assert(response?.message.includes("1:45 PM"));
     assert(
       serviceScheduleResponseFor("Kailan ang immunization?")?.message.includes(
@@ -760,8 +765,155 @@ Deno.test(
     assertEquals(response?.category, "grounding_announcement_event_missing");
     assert(!response?.message.includes("Sep 25"));
     assert(!response?.message.includes("Sep 27"));
-    assert(!JSON.stringify(sources).includes("publish_at"));
-    assert(!JSON.stringify(sources).includes("expires_at"));
+    assertEquals(sources[0].publishAt, "2026-09-25T00:00:00.000Z");
+    assertEquals(sources[0].expiresAt, "2026-09-27T00:00:00.000Z");
+  },
+);
+
+Deno.test(
+  "resolves bounded conversational announcement and health-center follow-ups",
+  () => {
+    const now = new Date("2026-09-25T04:00:00.000Z");
+    const announcements = sanitizeGroundingSources([
+      {
+        source_type: "announcement",
+        source_label: "Announcement",
+        title: "Older pinned advisory",
+        content: "An edited older advisory.",
+        category: "advisory",
+        publish_at: "2026-09-20T00:00:00.000Z",
+        event_start_at: null,
+        event_end_at: null,
+        expires_at: "2026-10-01T00:00:00.000Z",
+        updated_at: "2026-09-25T03:59:00.000Z",
+      },
+      {
+        source_type: "announcement",
+        source_label: "Announcement",
+        title: "Bakuna",
+        content:
+          "Vaccination activity for residents.\nVenue: Bagongpook Covered Court",
+        category: "health_event",
+        publish_at: "2026-09-25T00:00:00.000Z",
+        event_start_at: "2026-09-26T06:57:00.000Z",
+        event_end_at: "2026-09-26T09:00:00.000Z",
+        expires_at: "2026-09-30T00:00:00.000Z",
+        updated_at: "2026-09-25T00:05:00.000Z",
+      },
+      {
+        source_type: "announcement",
+        source_label: "Announcement",
+        title: "Future announcement",
+        content: "Not currently published.",
+        category: "advisory",
+        publish_at: "2026-09-27T00:00:00.000Z",
+        event_start_at: "2026-09-28T01:00:00.000Z",
+        event_end_at: null,
+        expires_at: null,
+        updated_at: "2026-09-25T03:00:00.000Z",
+      },
+    ]);
+    const messages = (content: string) => [
+      { role: "user" as const, content: "Ano latest announcement?" },
+      { role: "assistant" as const, content: "Bakuna ang latest." },
+      { role: "user" as const, content },
+    ];
+
+    const eventResponse = announcementConversationResponseFor(
+      messages("Anong date at time nun?"),
+      announcements,
+      now,
+    );
+    assertEquals(eventResponse?.sources[0]?.title, "Bakuna");
+    assert(eventResponse?.message.includes("September 26, 2026 at 2:57 PM"));
+    assert(!eventResponse?.message.match(/published|expiration|updated/i));
+    assertEquals(
+      conversationGroundingSourceTypesFor(messages("Anong date at time nun?")),
+      ["announcement"],
+    );
+    assert(
+      announcementConversationResponseFor(
+        messages("Hanggang anong oras?"),
+        announcements,
+        now,
+      )?.message.includes("September 26, 2026 at 5:00 PM"),
+    );
+    assert(
+      announcementConversationResponseFor(
+        messages("Kailan pinost?"),
+        announcements,
+        now,
+      )?.message.includes("September 25, 2026 at 8:00 AM"),
+    );
+    assert(
+      announcementConversationResponseFor(
+        messages("Hanggang kailan makikita?"),
+        announcements,
+        now,
+      )?.message.includes("September 30, 2026 at 8:00 AM"),
+    );
+    assert(
+      announcementConversationResponseFor(
+        messages("Saan?"),
+        announcements,
+        now,
+      )?.message.includes("Bagongpook Covered Court"),
+    );
+    assertEquals(
+      resolveAnnouncementConversationContext(
+        [{ role: "user", content: "Anong date at time nun?" }],
+        announcements,
+        now,
+      )?.needsClarification,
+      true,
+    );
+    assertEquals(
+      announcementConversationResponseFor(
+        [{ role: "user", content: "What's the latest announcement?" }],
+        announcements,
+        now,
+      )?.sources[0]?.title,
+      "Bakuna",
+    );
+
+    const healthSources = sanitizeGroundingSources([
+      {
+        source_type: "health_center",
+        source_label: "Health Center Information",
+        title: "Brgy. Bagongpook Health Center",
+        content:
+          "Contact number: 0917 000 0000\nOperating hours: Monday to Friday, 8:00 AM to 5:00 PM.",
+        updated_at: "2026-09-25T00:00:00.000Z",
+      },
+    ]);
+    const healthMessages = [
+      {
+        role: "user" as const,
+        content: "Ano operating hours ng health center?",
+      },
+      { role: "assistant" as const, content: "Monday to Friday." },
+      { role: "user" as const, content: "Contact number naman?" },
+    ];
+    assert(
+      healthCenterConversationResponseFor(
+        healthMessages,
+        healthSources,
+      )?.message.includes("0917 000 0000"),
+    );
+    assertEquals(
+      workflowConversationResponseFor(
+        [
+          {
+            role: "user",
+            content: "Paano mag-request ng appointment?",
+          },
+          { role: "assistant", content: "Open My Appointments." },
+          { role: "user", content: "Saan ko yun makikita?" },
+        ],
+        "resident",
+      )?.actions[0]?.actionId,
+      "open_appointment_request_form",
+    );
   },
 );
 

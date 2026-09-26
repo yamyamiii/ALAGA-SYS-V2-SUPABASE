@@ -73,6 +73,7 @@ const expectedMigrations = [
   "20260720005700_add_bagongpook_appointment_services.sql",
   "20260720005800_ai_defense_readiness.sql",
   "20260720005900_show_scheduled_announcements_to_managers.sql",
+  "20260720006000_conversational_ai_announcement_grounding.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -195,6 +196,8 @@ const reviewedPendingMigrationHashes = {
     "285c7722f18eb5590926353b85fc390e677603b2dab4f7ae7b5a94aa8ec3b10e",
   "20260720005900_show_scheduled_announcements_to_managers.sql":
     "ea3ab7fafba1f3e1301b132be5de51400a6488de53d8c69b6954aa6031e58147",
+  "20260720006000_conversational_ai_announcement_grounding.sql":
+    "40c1c004e1d7500beddae6d2a7422c3ab61da664a7f775feabacfefd0e1189a6",
 };
 const expectedTables = [
   "account_retirements",
@@ -293,7 +296,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly fifty-nine expected migrations exist in lexical order",
+  "Exactly sixty expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -1874,6 +1877,86 @@ check(
       scheduledAnnouncementManagementMigration,
     ),
   "Scheduled-announcement visibility preserves RPC-only table access",
+);
+
+const conversationalAiAnnouncementMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("conversational_ai_announcement_grounding"),
+  )?.sql ?? "";
+const conversationalAiDeclarationAudit = auditPlpgsqlIntoTargets(
+  conversationalAiAnnouncementMigration,
+);
+const conversationalAiGroundingFunction =
+  conversationalAiAnnouncementMigration.slice(
+    conversationalAiAnnouncementMigration.indexOf(
+      "create or replace function public.ai_grounding_context",
+    ),
+    conversationalAiAnnouncementMigration.indexOf(
+      "revoke all on function public.ai_grounding_context",
+    ),
+  );
+check(
+  conversationalAiDeclarationAudit.functionCount === 1 &&
+    conversationalAiDeclarationAudit.undeclared.length === 0,
+  "Conversational AI grounding has declared PL/pgSQL targets",
+);
+check(
+  /returns table \([\s\S]*category text[\s\S]*publish_at timestamptz[\s\S]*event_start_at timestamptz[\s\S]*event_end_at timestamptz[\s\S]*expires_at timestamptz[\s\S]*updated_at timestamptz/i.test(
+    conversationalAiGroundingFunction,
+  ) &&
+    /announcement\.category::text[\s\S]*announcement\.publish_at[\s\S]*announcement\.event_start_at[\s\S]*announcement\.event_end_at[\s\S]*announcement\.expires_at[\s\S]*announcement\.updated_at/i.test(
+      conversationalAiGroundingFunction,
+    ),
+  "Conversational AI grounding exposes only approved announcement timing fields",
+);
+check(
+  /announcement\.archived_at is null[\s\S]*announcement\.publish_at <= pg_catalog\.statement_timestamp\(\)[\s\S]*announcement\.expires_at > pg_catalog\.statement_timestamp\(\)/i.test(
+    conversationalAiGroundingFunction,
+  ) &&
+    /row_number\(\) over \(\s*order by announcement\.publish_at desc, announcement\.id\s*\)/i.test(
+      conversationalAiGroundingFunction,
+    ) &&
+    /order by grounding\.source_order, grounding\.source_rank/i.test(
+      conversationalAiGroundingFunction,
+    ) &&
+    !/announcement\.is_pinned[\s\S]*announcement\.publish_at desc/i.test(
+      conversationalAiGroundingFunction,
+    ),
+  "Latest AI announcement means current most recently published content",
+);
+check(
+  /profile\.account_status = 'active'::public\.account_status/i.test(
+    conversationalAiGroundingFunction,
+  ) &&
+    /active supported profile required for AI grounding/i.test(
+      conversationalAiGroundingFunction,
+    ) &&
+    /revoke all on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*from public, anon, authenticated/i.test(
+      conversationalAiAnnouncementMigration,
+    ) &&
+    /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i.test(
+      conversationalAiAnnouncementMigration,
+    ) &&
+    !/grant execute[^;]*to (?:anon|authenticated)/i.test(
+      conversationalAiAnnouncementMigration,
+    ),
+  "Conversational AI grounding remains active-profile-bound and service-role-only",
+);
+const conversationalAiReturnShape = conversationalAiGroundingFunction.slice(
+  conversationalAiGroundingFunction.indexOf("returns table"),
+  conversationalAiGroundingFunction.indexOf("language plpgsql"),
+);
+check(
+  !/\b(?:id|created_by|updated_by|request_key|notification_id)\b/i.test(
+    conversationalAiReturnShape,
+  ) &&
+    !/from public\.(?:residents|appointments|health_encounters|vital_signs|maternal_|child_|audit_logs|resident_inquiries)/i.test(
+      conversationalAiGroundingFunction,
+    ) &&
+    !/\b(?:insert\s+into|update\s+public|delete\s+from|execute\s+format|nextval)\b/i.test(
+      conversationalAiGroundingFunction,
+    ),
+  "Conversational AI grounding stays read-only and excludes private records and identifiers",
 );
 
 const finalQaMigration =

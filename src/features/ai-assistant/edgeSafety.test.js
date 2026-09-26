@@ -21,6 +21,10 @@ const announcementSchedulingMigration = fs.readFileSync(
   "supabase/migrations/20260720005900_show_scheduled_announcements_to_managers.sql",
   "utf8",
 );
+const conversationalAnnouncementMigration = fs.readFileSync(
+  "supabase/migrations/20260720006000_conversational_ai_announcement_grounding.sql",
+  "utf8",
+);
 const frontend = [
   "src/services/aiAssistantService.js",
   "src/features/ai-assistant/FloatingAiAssistant.jsx",
@@ -146,7 +150,9 @@ describe("ALAGA AI Edge Function security boundary", () => {
     const simple = handler.indexOf(
       "simpleConversationResponseFor(finalUserMessage)",
     );
-    const grounding = handler.indexOf("groundingSourceTypesFor(");
+    const grounding = handler.indexOf(
+      "conversationGroundingSourceTypesFor(messages)",
+    );
     const gemini = handler.indexOf("new GoogleGenAI");
 
     expect(safety).toBeGreaterThan(-1);
@@ -208,6 +214,9 @@ describe("ALAGA AI Edge Function security boundary", () => {
       /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
     );
     expect(announcementSchedulingMigration).toMatch(
+      /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
+    );
+    expect(conversationalAnnouncementMigration).toMatch(
       /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
     );
     expect(index).not.toMatch(
@@ -314,7 +323,9 @@ describe("ALAGA AI Edge Function security boundary", () => {
   it("answers the static Bagongpook service schedule before live data or Gemini", () => {
     const handler = index.slice(index.indexOf("Deno.serve"));
     const scheduleResponse = handler.indexOf("serviceScheduleResponseFor(");
-    const sourceTypes = handler.indexOf("groundingSourceTypesFor(");
+    const sourceTypes = handler.indexOf(
+      "conversationGroundingSourceTypesFor(messages)",
+    );
     const gemini = handler.indexOf("new GoogleGenAI");
     const scheduleCatalog = domain.slice(
       domain.indexOf("BAGONGPOOK_HEALTH_SERVICE_SCHEDULE"),
@@ -335,18 +346,63 @@ describe("ALAGA AI Edge Function security boundary", () => {
     const eventIntent = handler.indexOf(
       "isAnnouncementEventQuestion(finalUserMessage)",
     );
+    const scheduleGuard = handler.indexOf(
+      "if (!isAnnouncementEventQuestion(finalUserMessage))",
+    );
     const eventResponse = handler.indexOf("announcementEventResponseFor(");
     const scheduleResponse = handler.indexOf("serviceScheduleResponseFor(");
     const gemini = handler.indexOf("new GoogleGenAI");
 
     expect(eventIntent).toBeGreaterThan(-1);
+    expect(scheduleGuard).toBeGreaterThan(-1);
     expect(eventResponse).toBeGreaterThan(eventIntent);
-    expect(eventResponse).toBeLessThan(scheduleResponse);
     expect(eventResponse).toBeLessThan(gemini);
+    expect(scheduleResponse).toBeGreaterThan(scheduleGuard);
     expect(index).toMatch(
-      /loadApprovedGrounding\([\s\S]*\["announcement"\][\s\S]*announcementEventResponseFor/i,
+      /conversationGroundingSourceTypesFor\(messages\)[\s\S]*loadApprovedGrounding\(admin, profile\.id, sourceTypes\)[\s\S]*announcementEventResponseFor/i,
     );
     expect(index).not.toMatch(/\.from\("announcements"\)/);
+  });
+
+  it("resolves request-local conversation context after safety and explicit navigation", () => {
+    const handler = index.slice(index.indexOf("Deno.serve"));
+    const safety = handler.indexOf("safetyResponseFor(finalUserMessage)");
+    const navigation = handler.indexOf("navigationResponseFor(");
+    const contextSources = handler.indexOf(
+      "conversationGroundingSourceTypesFor(messages)",
+    );
+    const announcementContext = handler.indexOf(
+      "announcementConversationResponseFor(messages, liveGrounding)",
+    );
+    const provider = handler.indexOf("new GoogleGenAI");
+
+    expect(safety).toBeGreaterThan(-1);
+    expect(navigation).toBeGreaterThan(safety);
+    expect(contextSources).toBeGreaterThan(navigation);
+    expect(announcementContext).toBeGreaterThan(contextSources);
+    expect(announcementContext).toBeLessThan(provider);
+    expect(domain).toMatch(/previousConversationTopic/);
+    expect(domain).toMatch(
+      /\.filter\(\(message\) => message\.role === "user"\)/,
+    );
+    expect(domain).not.toMatch(/localStorage|sessionStorage|indexedDB/i);
+  });
+
+  it("keeps conversational grounding fields approved and strips them from browser responses", () => {
+    expect(domain).toMatch(/publishAt\?: string \| null/);
+    expect(domain).toMatch(/expiresAt\?: string \| null/);
+    expect(domain).toMatch(/Published: \$\{source\.publishAt\}/);
+    expect(domain).toMatch(/Expires: \$\{source\.expiresAt\}/);
+    const assistantData = index.slice(
+      index.indexOf("function assistantData"),
+      index.indexOf("async function withProviderTimeout"),
+    );
+    expect(assistantData).not.toMatch(
+      /content|publishAt|eventStartAt|eventEndAt|expiresAt/,
+    );
+    expect(conversationalAnnouncementMigration).not.toMatch(
+      /grant execute[^;]*to (?:anon|authenticated)/i,
+    );
   });
 
   it("keeps appointment workflow guidance static, read-only, and PHI-free", () => {

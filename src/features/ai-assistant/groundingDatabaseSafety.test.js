@@ -35,6 +35,18 @@ const latestFunctionBody = announcementSchedulingMigration.slice(
     "revoke all on function public.ai_grounding_context",
   ),
 );
+const conversationalAnnouncementMigration = fs.readFileSync(
+  "supabase/migrations/20260720006000_conversational_ai_announcement_grounding.sql",
+  "utf8",
+);
+const conversationalFunctionBody = conversationalAnnouncementMigration.slice(
+  conversationalAnnouncementMigration.indexOf(
+    "create or replace function public.ai_grounding_context",
+  ),
+  conversationalAnnouncementMigration.indexOf(
+    "revoke all on function public.ai_grounding_context",
+  ),
+);
 
 describe("ALAGA AI approved grounding database boundary", () => {
   it("returns only explicitly approved source fields", () => {
@@ -141,6 +153,52 @@ describe("ALAGA AI approved grounding database boundary", () => {
     );
     expect(announcementSchedulingMigration).toMatch(
       /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
+    );
+  });
+
+  it("adds safe publication semantics without exposing announcement internals", () => {
+    expect(conversationalFunctionBody).toMatch(
+      /returns table \([\s\S]*category text[\s\S]*publish_at timestamptz[\s\S]*event_start_at timestamptz[\s\S]*event_end_at timestamptz[\s\S]*expires_at timestamptz[\s\S]*updated_at timestamptz/i,
+    );
+    expect(conversationalFunctionBody).toMatch(
+      /announcement\.archived_at is null[\s\S]*announcement\.publish_at <= pg_catalog\.statement_timestamp\(\)[\s\S]*announcement\.expires_at > pg_catalog\.statement_timestamp\(\)/i,
+    );
+    expect(conversationalFunctionBody).toMatch(
+      /row_number\(\) over \(\s*order by announcement\.publish_at desc, announcement\.id\s*\)/i,
+    );
+    expect(conversationalFunctionBody).not.toMatch(
+      /announcement\.is_pinned[\s\S]*announcement\.publish_at desc/i,
+    );
+    expect(conversationalFunctionBody).toMatch(
+      /order by grounding\.source_order, grounding\.source_rank/i,
+    );
+    const returnShape = conversationalFunctionBody.slice(
+      conversationalFunctionBody.indexOf("returns table"),
+      conversationalFunctionBody.indexOf("language plpgsql"),
+    );
+    expect(returnShape).not.toMatch(
+      /\b(?:id|created_by|updated_by|request_key|notification_id)\b/i,
+    );
+  });
+
+  it("keeps conversational grounding active-profile-bound and service-role-only", () => {
+    expect(conversationalFunctionBody).toMatch(
+      /profile\.account_status = 'active'::public\.account_status/i,
+    );
+    expect(conversationalFunctionBody).toMatch(
+      /actor_role not in \([\s\S]*'admin'[\s\S]*'barangay_health_worker'[\s\S]*'nurse'[\s\S]*'midwife'[\s\S]*'resident'/i,
+    );
+    expect(conversationalAnnouncementMigration).toMatch(
+      /revoke all on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*from public, anon, authenticated/i,
+    );
+    expect(conversationalAnnouncementMigration).toMatch(
+      /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
+    );
+    expect(conversationalAnnouncementMigration).not.toMatch(
+      /grant execute[^;]*to (?:anon|authenticated)/i,
+    );
+    expect(conversationalFunctionBody).not.toMatch(
+      /from public\.(?:residents|appointments|health_encounters|vital_signs|maternal_|child_|audit_logs|resident_inquiries)/i,
     );
   });
 });
