@@ -255,6 +255,12 @@ describe("general assistance database boundary", () => {
     );
   });
 
+  it("returns the authenticated recipient's available notifications newest first", () => {
+    expect(migration).toMatch(
+      /function public\.assistance_notification_list[\s\S]*recipient_profile_id=auth\.uid\(\)[\s\S]*available_at<=now\(\)[\s\S]*order by n\.available_at desc,\s*n\.created_at desc,\s*n\.id/i,
+    );
+  });
+
   it("creates concise event notifications from trusted row relationships", () => {
     expect(migration).toMatch(
       /create trigger appointments_assistance_notifications/i,

@@ -76,6 +76,7 @@ const expectedMigrations = [
   "20260720006000_conversational_ai_announcement_grounding.sql",
   "20260720010000_permanent_announcement_delete.sql",
   "20260720010100_allow_retired_resident_relink.sql",
+  "20260720010200_realtime_state_consistency.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -204,6 +205,8 @@ const reviewedPendingMigrationHashes = {
     "ed040fcf239bce859758d4d12e8b8a5e19b6127f1e4b6f68768dd900742ec73f",
   "20260720010100_allow_retired_resident_relink.sql":
     "f4805540bf51abedba8b02a46b7e3f8fde3825f4e5599ee4ce39090119df0247",
+  "20260720010200_realtime_state_consistency.sql":
+    "3f9a6c8734f174cc1999b3f88c3ff6be0f12e7028148adca1e5b86451b291008",
 };
 const expectedTables = [
   "account_retirements",
@@ -236,6 +239,7 @@ const expectedTables = [
   "outbound_notification_jobs",
   "profiles",
   "puroks",
+  "realtime_sync_events",
   "resident_account_deletion_staging",
   "resident_allergies",
   "resident_inquiries",
@@ -302,7 +306,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly sixty-two expected migrations exist in lexical order",
+  "Exactly sixty-three expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -310,6 +314,53 @@ const migrationEntries = migrationFiles.map((file) => ({
   sql: fs.readFileSync(path.join(migrationsDirectory, file), "utf8"),
 }));
 const allSql = migrationEntries.map(({ sql }) => sql).join("\n");
+const realtimeStateConsistency =
+  migrationEntries.find(({ file }) =>
+    file.includes("realtime_state_consistency"),
+  )?.sql ?? "";
+
+check(
+  /create table public\.realtime_sync_events/i.test(realtimeStateConsistency) &&
+    /alter table public\.realtime_sync_events enable row level security/i.test(
+      realtimeStateConsistency,
+    ) &&
+    /audience_profile_id = auth\.uid\(\)[\s\S]*audience_role = public\.current_profile_role\(\)/i.test(
+      realtimeStateConsistency,
+    ),
+  "Realtime invalidation events are minimized and audience-filtered by RLS",
+);
+check(
+  /alter publication supabase_realtime add table public\.realtime_sync_events/i.test(
+    realtimeStateConsistency,
+  ) &&
+    !/alter publication supabase_realtime add table public\.(?:profiles|residents|appointments|announcements|assistance_notifications|health_encounters)/i.test(
+      realtimeStateConsistency,
+    ),
+  "Realtime publishes only the minimized synchronization event table",
+);
+check(
+  /grant select on table public\.realtime_sync_events to authenticated/i.test(
+    realtimeStateConsistency,
+  ) &&
+    !/grant (?:insert|update|delete)[^;]*realtime_sync_events to authenticated/i.test(
+      realtimeStateConsistency,
+    ) &&
+    /revoke all on function public\.emit_realtime_sync_event[\s\S]*from public, anon, authenticated/i.test(
+      realtimeStateConsistency,
+    ),
+  "Browser roles cannot write realtime events or invoke the trusted emitter",
+);
+check(
+  /profiles_realtime_sync/i.test(realtimeStateConsistency) &&
+    /resident_registration_requests_realtime_sync/i.test(
+      realtimeStateConsistency,
+    ) &&
+    /residents_realtime_sync/i.test(realtimeStateConsistency) &&
+    /appointments_realtime_sync/i.test(realtimeStateConsistency) &&
+    /assistance_notifications_realtime_sync/i.test(realtimeStateConsistency) &&
+    /announcements_realtime_sync/i.test(realtimeStateConsistency),
+  "Realtime triggers cover account, registration, registry, appointment, notification, and announcement changes",
+);
 const securityHardeningMigration =
   migrationEntries.find(({ file }) =>
     file.includes("production_security_hardening"),

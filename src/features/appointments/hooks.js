@@ -48,7 +48,6 @@ export function useAppointmentQueue(parameters, options = {}) {
     queryKey: appointmentKeys.queue(parameters),
     queryFn: () => appointmentService.listQueue(parameters),
     placeholderData: (previous) => previous,
-    refetchInterval: options.poll ? 30_000 : false,
     enabled: options.enabled ?? true,
   });
 }
@@ -107,6 +106,7 @@ export function useIncomingResidentAppointmentRequests(enabled = true) {
     queryFn: () => appointmentService.listResidentAppointmentRequests(),
     enabled,
     staleTime: 30_000,
+    refetchOnWindowFocus: "always",
   });
 }
 

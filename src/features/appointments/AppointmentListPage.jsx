@@ -381,13 +381,13 @@ function StaffAppointmentListPage({ profile }) {
                 <table className="w-full min-w-[1040px] text-left text-sm">
                   <thead className="border-b text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
-                      <th className="px-3 py-3">Appointment</th>
+                      <th className="px-3 py-3">Appointment reference</th>
                       <th className="px-3 py-3">Resident</th>
                       <th className="px-3 py-3">Schedule</th>
                       <th className="px-3 py-3">Service</th>
                       <th className="px-3 py-3">Priority</th>
                       <th className="px-3 py-3">Status</th>
-                      <th className="px-3 py-3">Staff</th>
+                      <th className="px-3 py-3">Assigned staff</th>
                       <th className="w-12 px-3 py-3">
                         <span className="sr-only">Actions</span>
                       </th>

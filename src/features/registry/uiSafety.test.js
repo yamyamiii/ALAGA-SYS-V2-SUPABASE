@@ -100,6 +100,16 @@ describe("registry UI boundaries", () => {
     expect(residentPage).not.toMatch(/setDetailId\(item\.resident_number\)/);
   });
 
+  it("distinguishes Resident Registry status from portal account access", () => {
+    expect(residentPage).toMatch(/Registry status/);
+    expect(residentPage).toMatch(/Portal account/);
+    expect(residentPage).toMatch(/PORTAL_ACCOUNT_STATUS_LABELS/);
+    expect(registryService).toMatch(/portal_account_status/);
+    expect(registryService).toMatch(
+      /profiles!residents_linked_profile_id_fkey\(account_status,retired_at\)/,
+    );
+  });
+
   it("hides household controls from the Resident form while retaining shared search support", () => {
     expect(residentForm).not.toMatch(/HouseholdSearchField/);
     expect(residentForm).not.toMatch(

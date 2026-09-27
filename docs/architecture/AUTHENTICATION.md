@@ -75,6 +75,9 @@ On application start and relevant auth events, the service:
 
 Network failures use a retryable, fail-closed screen. Terminal session or
 profile failures clear the local auth session and return the user to sign-in.
+An RLS-filtered realtime profile event triggers the same server validation, so
+an account changed to inactive or suspended loses protected access without a
+manual refresh.
 
 ## Roles and permissions
 
@@ -117,9 +120,13 @@ never used.
 The public `/register/resident` route uses Supabase email signup and submits only
 the approved Resident identity fields. The Auth trigger always assigns the
 `resident` role and `invited` status; it never reads a role or status from user
-metadata. A pending account is signed out and cannot enter protected routes.
-An Administrator must approve and create or explicitly link the Resident record
-through the `manage-user` Edge Function before the profile becomes active.
+metadata. Signup does not keep an immediate unconfirmed session. After email
+confirmation and sign-in, a pending account may retain a restricted Supabase
+session only for its own profile/registration event; it remains unauthenticated
+to ALAGA-SYS protected routes and cannot read application modules. An
+Administrator must approve and create or explicitly link the Resident record
+through the `manage-user` Edge Function before the profile becomes active. The
+waiting page then revalidates automatically through the targeted event.
 Staff accounts continue to be provisioned only by trusted administrators.
 
 Only `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` belong in the
@@ -138,8 +145,10 @@ Supabase project with migrations applied and a trusted active test account.
 Safe own-profile settings use the existing self-update RLS policy and protection
 trigger. Privileged role, status, email invitation, Auth creation, and other-user
 profile actions use the trusted Edge Function only. The provider revalidates an
-authenticated profile on focus, tab visibility, Auth events, and every five
-minutes. Database RLS reflects status and role changes immediately.
+authenticated or restricted pending profile on targeted realtime events,
+focus, tab visibility, Auth events, and every five minutes. Database RLS
+reflects status and role changes immediately. See
+[Realtime state consistency](REALTIME_STATE_CONSISTENCY.md).
 
 See [Trusted user management](USER_MANAGEMENT.md) for the server boundary and
 [Administrator bootstrap](../security/ADMIN_BOOTSTRAP.md) for the one-time

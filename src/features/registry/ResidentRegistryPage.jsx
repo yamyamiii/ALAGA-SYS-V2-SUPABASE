@@ -12,6 +12,7 @@ import { useAuth } from "@/features/auth/authContext";
 import { hasPermission, PERMISSIONS } from "@/features/auth/permissions";
 import {
   initialResidentFilters,
+  PORTAL_ACCOUNT_STATUS_LABELS,
   RESIDENT_SORTS,
   RESIDENT_STATUS_LABELS,
   SEX_LABELS,
@@ -147,7 +148,7 @@ export default function ResidentRegistryPage() {
       <PageHeading
         eyebrow="Registry"
         title="Residents"
-        description="Search and maintain demographic registry records. Ages are calculated from date of birth and resident numbers are database-generated."
+        description="Maintain healthcare registry identities and locality details. Registry status is separate from portal account access."
         actions={
           canManage ? (
             <Button
@@ -335,7 +336,7 @@ export default function ResidentRegistryPage() {
           ) : (
             <>
               <div className="hidden overflow-x-auto lg:block">
-                <table className="w-full min-w-[1080px] text-left text-sm">
+                <table className="w-full min-w-[1180px] text-left text-sm">
                   <thead className="border-b text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="px-3 py-3">Resident number</th>
@@ -345,7 +346,8 @@ export default function ResidentRegistryPage() {
                       <th className="px-3 py-3">Purok</th>
                       <th className="px-3 py-3">Household</th>
                       <th className="px-3 py-3">Phone</th>
-                      <th className="px-3 py-3">Status</th>
+                      <th className="px-3 py-3">Registry status</th>
+                      <th className="px-3 py-3">Portal account</th>
                       <th className="px-3 py-3">
                         <span className="sr-only">Actions</span>
                       </th>
@@ -370,6 +372,15 @@ export default function ResidentRegistryPage() {
                         <td className="px-3 py-4">
                           <StatusBadge
                             status={RESIDENT_STATUS_LABELS[item.status]}
+                          />
+                        </td>
+                        <td className="px-3 py-4">
+                          <StatusBadge
+                            status={
+                              PORTAL_ACCOUNT_STATUS_LABELS[
+                                item.portal_account_status
+                              ]
+                            }
                           />
                         </td>
                         <td className="px-3 py-4">
@@ -405,9 +416,14 @@ export default function ResidentRegistryPage() {
                           {item.resident_number}
                         </p>
                       </div>
-                      <StatusBadge
-                        status={RESIDENT_STATUS_LABELS[item.status]}
-                      />
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Registry status
+                        </span>
+                        <StatusBadge
+                          status={RESIDENT_STATUS_LABELS[item.status]}
+                        />
+                      </div>
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                       <span>
@@ -416,6 +432,12 @@ export default function ResidentRegistryPage() {
                       <span>{item.purok_name}</span>
                       <span>{item.household_number || "No household"}</span>
                       <span>{item.phone_number || "No phone"}</span>
+                      <span className="col-span-2">
+                        Portal account:{" "}
+                        {PORTAL_ACCOUNT_STATUS_LABELS[
+                          item.portal_account_status
+                        ] ?? "No portal account"}
+                      </span>
                     </div>
                   </button>
                 ))}
@@ -515,9 +537,10 @@ export default function ResidentRegistryPage() {
         onConfirm={confirmStatus}
       />
       <div className="flex items-start gap-2 rounded-xl border bg-card p-4 text-xs text-muted-foreground">
-        <UsersRound className="h-4 w-4 shrink-0 text-primary" />
-        This phase stores demographic registry information only. No clinical,
-        appointment, medicine, or maternal-care records are shown.
+        <UsersRound className="h-4 w-4 shrink-0 text-primary" />A Resident is
+        the healthcare registry identity. Portal account status controls system
+        access separately and does not archive or deactivate the Resident
+        record.
       </div>
     </div>
   );

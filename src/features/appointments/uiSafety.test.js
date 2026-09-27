@@ -41,6 +41,14 @@ const aiUiActions = fs.readFileSync(
 );
 
 describe("appointment UI boundaries", () => {
+  it("presents the staff table as transactional appointment records", () => {
+    expect(pages[0]).toMatch(/Appointment reference/);
+    expect(pages[0]).toMatch(/Resident/);
+    expect(pages[0]).toMatch(/Schedule/);
+    expect(pages[0]).toMatch(/Service/);
+    expect(pages[0]).toMatch(/Assigned staff/);
+  });
+
   it("uses separate route permissions for resident-safe and staff-only views", () => {
     expect(router).toMatch(
       /ROUTES\.appointments[\s\S]*PERMISSIONS\.VIEW_APPOINTMENTS/i,

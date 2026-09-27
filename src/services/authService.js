@@ -77,6 +77,7 @@ export class AuthServiceError extends Error {
     this.name = "AuthServiceError";
     this.code = code;
     this.recoverable = options.recoverable ?? false;
+    this.profileId = options.profileId ?? null;
   }
 }
 
@@ -285,7 +286,9 @@ export function createAuthService(clientProvider = getSupabaseClient) {
         });
       }
       if (registration?.status === "pending") {
-        throw new AuthServiceError(AUTH_ERROR_CODES.PROFILE_PENDING);
+        throw new AuthServiceError(AUTH_ERROR_CODES.PROFILE_PENDING, {
+          profileId: userId,
+        });
       }
       if (registration?.status === "rejected") {
         throw new AuthServiceError(AUTH_ERROR_CODES.PROFILE_REJECTED);
@@ -352,7 +355,11 @@ export function createAuthService(clientProvider = getSupabaseClient) {
     try {
       return await loadProfile(supabaseClient, userData.user.id);
     } catch (error) {
-      if (error instanceof AuthServiceError && !error.recoverable) {
+      if (
+        error instanceof AuthServiceError &&
+        !error.recoverable &&
+        error.code !== AUTH_ERROR_CODES.PROFILE_PENDING
+      ) {
         await clearInvalidSession(supabaseClient);
       }
       throw error;

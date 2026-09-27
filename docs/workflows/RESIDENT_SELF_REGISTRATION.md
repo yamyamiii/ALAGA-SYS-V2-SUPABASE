@@ -18,7 +18,10 @@ UUID, or Resident number.
 
 Signup ends any immediate local Auth session and displays a pending-verification
 screen. Email confirmation may run before or after that screen, depending on the
-hosted Auth setting. Confirmation does not activate ALAGA-SYS access.
+hosted Auth setting. Confirmation does not activate ALAGA-SYS access. If the
+confirmed Resident signs in while review is still pending, ALAGA-SYS retains a
+restricted session for the approval screen only; protected routes remain
+blocked and only the caller's own profile/registration event is visible.
 
 The registration form and service use independent single-flight guards, so a
 double click or repeated Enter key press produces only one `signUp` request.
@@ -32,6 +35,11 @@ Pending and rejected profiles fail active-role helpers and protected routes.
 They cannot read other Residents, appointments, health records, or private
 application data. Their own registration status is the only direct table read
 granted through RLS.
+
+Administrator approval emits a targeted event after the same trusted approval
+transaction activates and links the profile. An open pending screen revalidates
+and proceeds to the permitted authenticated state without F5. Focus/reconnect
+reconciliation covers missed events.
 
 An unconfirmed signup does not alert staff. When email confirmation makes a
 pending registration actionable, the database creates exactly one concise
@@ -79,12 +87,12 @@ credentials to the browser.
 
 ## Deployment
 
-The repository contains exactly 56 migrations. Migrations 54 and 55 respectively
-add the registration notification type and its trusted confirmation triggers;
-Migration 56 applies the separate appointment start-slot rule. Repository
-presence does not prove hosted deployment, so review the linked migration dry
-run before applying any pending files. Migrations 54 and 55 do not require an
-Edge Function deployment.
+Migrations 54 and 55 respectively add the registration notification type and
+its trusted confirmation triggers; Migration 56 applies the separate
+appointment start-slot rule. The later realtime migration adds only minimized
+authorization-filtered invalidation events. Repository presence does not prove
+hosted deployment, so review the linked migration dry run before applying any
+pending files. These migrations do not require an Edge Function deployment.
 Then enable email signup, keep anonymous sign-in disabled, configure exact Site
 URLs, choose the email-confirmation policy, and review CAPTCHA/rate limits. See
 `docs/deployment/SUPABASE_AUTH_SETTINGS.md`.

@@ -16,6 +16,12 @@ Admin React module
   -> React Query cache and admin UI
 ```
 
+User Management represents portal accounts: Auth identity, role, account
+status, registration review, linking, and lifecycle. It is not a duplicate
+Resident Registry. A concise linked-Resident context may be shown where an
+account workflow needs it, while full healthcare demographics remain in the
+Registry.
+
 Frontend route guards and hidden controls are usability measures. The Edge
 Function independently verifies the Auth user and profile, while each privileged
 database RPC independently requires an active administrator actor. The final
@@ -143,7 +149,9 @@ because no trusted actor can be resolved.
 ## Role and status propagation
 
 Database RLS checks the current profile on every protected database operation,
-so role removal, inactivity, or suspension takes effect there immediately. The
-Phase 2A provider revalidates on focus, when the tab becomes visible, on Auth
-events, and at a five-minute interval. This updates navigation or signs out an
-account without trusting stale frontend role state.
+so role removal, inactivity, or suspension takes effect there immediately.
+Minimized role/profile events invalidate Administrator account lists and cause
+the affected current session to revalidate. Focus, visibility, reconnect, Auth
+events, and a five-minute authorization fallback repair missed events. This
+updates navigation or signs out an account without trusting stale frontend
+role state.

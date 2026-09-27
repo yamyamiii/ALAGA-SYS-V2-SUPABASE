@@ -58,6 +58,19 @@ function DraftRoute({ onMount }) {
   );
 }
 
+function AuthStatusProbe() {
+  const auth = useAuth();
+  return (
+    <div>
+      <span>{auth.status}</span>
+      <span>{auth.pendingProfileId ?? "no-pending-profile"}</span>
+      <button type="button" onClick={auth.refreshProfile}>
+        Revalidate profile
+      </button>
+    </div>
+  );
+}
+
 function TestRoutes({ onMount }) {
   return (
     <MemoryRouter initialEntries={["/protected"]}>
@@ -121,6 +134,30 @@ describe("AuthProvider focus recovery", () => {
       "Clinical draft stays in memory",
     );
     expect(onMount).toHaveBeenCalledTimes(1);
+  });
+
+  it("promotes a pending registration after authorized profile revalidation", async () => {
+    authMocks.recoverSession.mockReset().mockRejectedValueOnce(
+      new AuthServiceError(AUTH_ERROR_CODES.PROFILE_PENDING, {
+        profileId: "pending-profile",
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <AuthProvider>
+        <AuthStatusProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText("pending")).toBeInTheDocument();
+    expect(screen.getByText("pending-profile")).toBeInTheDocument();
+    authMocks.recoverSession.mockResolvedValueOnce(profile);
+    await user.click(
+      screen.getByRole("button", { name: "Revalidate profile" }),
+    );
+
+    expect(await screen.findByText("authenticated")).toBeInTheDocument();
+    expect(screen.getByText("no-pending-profile")).toBeInTheDocument();
   });
 
   it("keeps the route and draft during a temporary focus network failure", async () => {
@@ -209,7 +246,7 @@ describe("AuthProvider focus recovery", () => {
     expect(screen.queryByLabelText("Unsaved draft")).not.toBeInTheDocument();
   });
 
-  it("clears authentication when an active account becomes suspended", async () => {
+  it("signs out and redirects when an active account becomes suspended", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     render(<TestRoutes onMount={vi.fn()} />);
     await screen.findByLabelText("Unsaved draft");
@@ -224,10 +261,7 @@ describe("AuthProvider focus recovery", () => {
       );
     });
 
-    expect(
-      await screen.findByText("Session verification unavailable"),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/account has been suspended/i)).toBeInTheDocument();
+    expect(await screen.findByText("Login screen")).toBeInTheDocument();
     expect(screen.queryByLabelText("Unsaved draft")).not.toBeInTheDocument();
   });
 

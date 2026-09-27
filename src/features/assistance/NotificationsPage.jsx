@@ -105,68 +105,99 @@ export default function NotificationsPage() {
         </label>
         <Badge variant="secondary">{query.data?.unread ?? 0} unread</Badge>
       </div>
-      <NotificationPreferencesCard />
-      <Card>
-        {query.isLoading ? (
-          <LoadingState title="Loading notifications" />
-        ) : query.isError ? (
-          <ErrorState
-            title="Notifications unavailable"
-            description={query.error.message}
-            actionLabel="Try again"
-            onAction={() => query.refetch()}
+      <section
+        className="space-y-3"
+        aria-labelledby="notification-feed-heading"
+      >
+        <div>
+          <h2
+            id="notification-feed-heading"
+            className="font-heading text-lg font-semibold"
+          >
+            Latest notifications
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Newest account updates appear first.
+          </p>
+        </div>
+        <Card>
+          {query.isLoading ? (
+            <LoadingState title="Loading notifications" />
+          ) : query.isError ? (
+            <ErrorState
+              title="Notifications unavailable"
+              description={query.error.message}
+              actionLabel="Try again"
+              onAction={() => query.refetch()}
+            />
+          ) : query.data.items.length === 0 ? (
+            <EmptyState
+              title={
+                filters.unread_only
+                  ? "No unread notifications"
+                  : "No notifications yet."
+              }
+              description="Relevant account updates will appear here."
+            />
+          ) : (
+            <div className="divide-y">
+              {query.data.items.map((item) => (
+                <article key={item.id}>
+                  <button
+                    type="button"
+                    className={`group flex min-h-11 w-full gap-3 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:p-5 ${item.read_at ? "" : "bg-primary/5"}`}
+                    onClick={() => activate(item)}
+                    aria-label={activationLabel(item)}
+                  >
+                    <Bell
+                      aria-hidden="true"
+                      className="mt-1 h-5 w-5 shrink-0 text-primary"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold">{item.title}</span>
+                        {!item.read_at ? (
+                          <span className="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
+                            New
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="mt-1 block text-sm text-muted-foreground">
+                        {item.summary}
+                      </span>
+                      <span className="mt-2 block text-xs text-muted-foreground">
+                        {NOTIFICATION_LABELS[item.notification_type] ??
+                          item.notification_type}{" "}
+                        · {formatManilaDateTime(item.available_at)}
+                      </span>
+                    </span>
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+          <RegistryPagination
+            page={filters.page}
+            pageSize={filters.page_size}
+            total={query.data?.total ?? 0}
+            onChange={(change) =>
+              setFilters((value) => ({ ...value, ...change }))
+            }
           />
-        ) : query.data.items.length === 0 ? (
-          <EmptyState
-            title="No notifications"
-            description="There are no notifications in this view."
-          />
-        ) : (
-          <div className="divide-y">
-            {query.data.items.map((item) => (
-              <article key={item.id}>
-                <button
-                  type="button"
-                  className={`group flex min-h-11 w-full gap-3 p-4 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:p-5 ${item.read_at ? "" : "bg-primary/5"}`}
-                  onClick={() => activate(item)}
-                  aria-label={activationLabel(item)}
-                >
-                  <Bell
-                    aria-hidden="true"
-                    className="mt-1 h-5 w-5 shrink-0 text-primary"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold">{item.title}</span>
-                      {!item.read_at ? (
-                        <span className="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
-                          New
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="mt-1 block text-sm text-muted-foreground">
-                      {item.summary}
-                    </span>
-                    <span className="mt-2 block text-xs text-muted-foreground">
-                      {NOTIFICATION_LABELS[item.notification_type] ??
-                        item.notification_type}{" "}
-                      · {formatManilaDateTime(item.available_at)}
-                    </span>
-                  </span>
-                </button>
-              </article>
-            ))}
-          </div>
-        )}
-        <RegistryPagination
-          page={filters.page}
-          pageSize={filters.page_size}
-          total={query.data?.total ?? 0}
-          onChange={(change) =>
-            setFilters((value) => ({ ...value, ...change }))
-          }
-        />
-      </Card>
+        </Card>
+      </section>
+
+      <details className="rounded-xl border bg-card p-4 sm:p-5">
+        <summary className="cursor-pointer font-heading text-base font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+          Notification settings
+        </summary>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Manage delivery channels, update types, and message language.
+        </p>
+        <div className="mt-4">
+          <NotificationPreferencesCard />
+        </div>
+      </details>
     </div>
   );
 }

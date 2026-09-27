@@ -212,7 +212,7 @@ describe("notification settings UI", () => {
     );
   });
 
-  it("shows notifications and preferences without delivery monitoring", () => {
+  it("shows the notification feed before secondary preferences at every breakpoint", () => {
     render(<NotificationsPage />);
 
     expect(
@@ -222,6 +222,16 @@ describe("notification settings UI", () => {
     expect(
       screen.getByRole("button", { name: /mark all as read/i }),
     ).toBeInTheDocument();
+    const feed = screen.getByRole("region", { name: "Latest notifications" });
+    const settings = screen
+      .getByText("Notification settings")
+      .closest("details");
+    expect(
+      feed.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText("No notifications yet.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Notification settings"));
     expect(
       screen.getByRole("heading", { name: /notification preferences/i }),
     ).toBeInTheDocument();
@@ -237,6 +247,81 @@ describe("notification settings UI", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/recent delivery jobs/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Unconfigured")).not.toBeInTheDocument();
+  });
+
+  it("keeps unread updates prominent and preserves newest-first server order", () => {
+    useNotifications.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        items: [
+          {
+            id: "newest-notification",
+            notification_type: "appointment_approved",
+            title: "Newest update",
+            summary: "The latest safe account update.",
+            action_path: "/appointments",
+            available_at: "2026-09-28T02:30:00Z",
+            read_at: null,
+          },
+          {
+            id: "older-notification",
+            notification_type: "new_announcement",
+            title: "Older update",
+            summary: "An earlier safe account update.",
+            action_path: "/announcements",
+            available_at: "2026-09-27T02:30:00Z",
+            read_at: "2026-09-27T03:00:00Z",
+          },
+        ],
+        total: 2,
+        unread: 1,
+      },
+      refetch: vi.fn(),
+    });
+
+    render(<NotificationsPage />);
+
+    const cards = within(
+      screen.getByRole("region", { name: "Latest notifications" }),
+    ).getAllByRole("button");
+    expect(cards[0]).toHaveAccessibleName(/newest update/i);
+    expect(cards[1]).toHaveAccessibleName(/older update/i);
+    expect(within(cards[0]).getByText("New")).toBeInTheDocument();
+    expect(screen.getByText("1 unread")).toBeInTheDocument();
+  });
+
+  it("renders a realtime-refetched notification and unread count without remounting", () => {
+    let notificationData = { items: [], total: 0, unread: 0 };
+    useNotifications.mockImplementation(() => ({
+      isLoading: false,
+      isError: false,
+      data: notificationData,
+      refetch: vi.fn(),
+    }));
+    const view = render(<NotificationsPage />);
+    expect(screen.getByText("No notifications yet.")).toBeInTheDocument();
+
+    notificationData = {
+      items: [
+        {
+          id: "realtime-notification",
+          notification_type: "appointment_approved",
+          title: "Appointment updated",
+          summary: "Your appointment schedule changed.",
+          action_path: "/appointments",
+          available_at: "2026-09-28T03:00:00Z",
+          read_at: null,
+        },
+      ],
+      total: 1,
+      unread: 1,
+    };
+    view.rerender(<NotificationsPage />);
+
+    expect(screen.getByText("Appointment updated")).toBeInTheDocument();
+    expect(screen.getByText("1 unread")).toBeInTheDocument();
+    expect(screen.queryByText("No notifications yet.")).not.toBeInTheDocument();
   });
 
   it("keeps mark-all and unread-only interactions available", async () => {

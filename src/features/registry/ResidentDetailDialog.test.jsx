@@ -105,6 +105,7 @@ describe("ResidentDetailDialog error state", () => {
         last_name: "Reyes",
         sex: "female",
         status: "active",
+        portal_account_status: "inactive",
         archived_at: null,
         household_id: null,
         household: null,
@@ -120,6 +121,9 @@ describe("ResidentDetailDialog error state", () => {
     renderDialog();
 
     expect(screen.getByText("No household")).toBeInTheDocument();
+    expect(screen.getAllByText("Registry status").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Portal account").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Inactive").length).toBeGreaterThan(0);
   });
 
   it("shows household-head status and the explicit management action", () => {

@@ -51,5 +51,12 @@ optimistic `version` checks. List RPCs enforce bounded server pagination.
 Frontend requests have a 20-second timeout, an offline preflight, safe error
 mapping, and AbortSignal forwarding where the Supabase client supports it.
 
+Notifications and announcements remain RPC-only. Trusted triggers write a
+separate minimized RLS-filtered invalidation event addressed to the recipient
+or active role. The browser uses it only to refetch the existing authoritative
+RPC. Scheduled publication/availability and announcement-expiration boundaries
+are preserved; no notification or announcement content is published through
+Realtime.
+
 No SMS, email, browser push, delivery worker, AI, or real-time chat is part of
 this phase.

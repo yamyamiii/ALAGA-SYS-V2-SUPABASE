@@ -70,6 +70,9 @@ describe("release-candidate role-aware UI", () => {
     expect(notificationsPage).toMatch(/Unread only/);
     expect(notificationsPage).toMatch(/Mark all as read/);
     expect(notificationsPage).toMatch(/query\.data\.items\.map/);
+    expect(notificationsPage).toMatch(
+      /Latest notifications[\s\S]*Notification settings[\s\S]*NotificationPreferencesCard/,
+    );
     expect(notificationsPage).not.toMatch(/NotificationDeliveryDashboard/);
     expect(notificationsPage).not.toMatch(
       /External delivery status|Recent delivery jobs|destination_hint/i,
@@ -84,9 +87,9 @@ describe("release-candidate role-aware UI", () => {
     expect(notificationNavigation).toMatch(
       /resident_registration_pending[\s\S]*ROUTES\.userManagement[\s\S]*PERMISSIONS\.MANAGE_USERS/i,
     );
-    expect(fs.readFileSync("src/features/assistance/hooks.js", "utf8")).toMatch(
-      /refetchInterval:\s*enabled\s*\?\s*30_000\s*:\s*false/i,
-    );
+    expect(
+      fs.readFileSync("src/features/assistance/hooks.js", "utf8"),
+    ).not.toMatch(/refetchInterval/i);
   });
 
   it("retains hidden external-delivery service and hook infrastructure", () => {

@@ -176,10 +176,10 @@ export function UserDetailDialog({
     >
       <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>User details</DialogTitle>
+          <DialogTitle>Portal account details</DialogTitle>
           <DialogDescription>
-            Only approved Auth and profile fields are returned by the trusted
-            service.
+            Account access, role, and lifecycle information returned by the
+            trusted service. Resident healthcare details remain in the Registry.
           </DialogDescription>
         </DialogHeader>
 
@@ -224,17 +224,22 @@ export function UserDetailDialog({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline">{getRoleLabel(user.role)}</Badge>
-                  <Badge
-                    variant={
-                      user.account_status === "active"
-                        ? "success"
-                        : user.account_status === "suspended"
-                          ? "destructive"
-                          : "secondary"
-                    }
-                  >
-                    {user.account_status}
-                  </Badge>
+                  <span className="inline-flex items-center gap-1 text-xs">
+                    <span className="text-muted-foreground">
+                      Account status:
+                    </span>
+                    <Badge
+                      variant={
+                        user.account_status === "active"
+                          ? "success"
+                          : user.account_status === "suspended"
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
+                      {user.account_status}
+                    </Badge>
+                  </span>
                 </div>
               </div>
               <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">

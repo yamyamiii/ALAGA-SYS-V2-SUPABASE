@@ -71,6 +71,13 @@ describe("User Management permanent account deletion visibility", () => {
     vi.clearAllMocks();
   });
 
+  it("labels lifecycle state explicitly as Account status", async () => {
+    renderPage();
+    expect(
+      await screen.findByRole("columnheader", { name: "Account status" }),
+    ).toBeInTheDocument();
+  });
+
   it.each([
     ["legacy Administrator-created active Resident", "active", null],
     ["self-registered active Resident", "active", "approved"],

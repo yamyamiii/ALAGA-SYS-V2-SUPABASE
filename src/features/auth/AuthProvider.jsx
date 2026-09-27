@@ -13,6 +13,7 @@ import {
 const initialState = {
   status: "loading",
   profile: null,
+  pendingProfileId: null,
   error: null,
 };
 
@@ -40,29 +41,53 @@ export function AuthProvider({ children }) {
       setState({
         status: profile ? "authenticated" : "unauthenticated",
         profile,
+        pendingProfileId: null,
         error: null,
       });
     } catch (error) {
       if (currentRequest !== requestId.current) return;
       if (
         error instanceof AuthServiceError &&
+        [AUTH_ERROR_CODES.PROFILE_PENDING].includes(error.code)
+      ) {
+        queryClient.clear();
+        setState({
+          status: "pending",
+          profile: null,
+          pendingProfileId: error.profileId,
+          error: null,
+        });
+        return;
+      }
+      if (
+        error instanceof AuthServiceError &&
         [
-          AUTH_ERROR_CODES.PROFILE_PENDING,
           AUTH_ERROR_CODES.PROFILE_REJECTED,
+          AUTH_ERROR_CODES.PROFILE_INACTIVE,
+          AUTH_ERROR_CODES.PROFILE_SUSPENDED,
+          AUTH_ERROR_CODES.PROFILE_MISSING,
+          AUTH_ERROR_CODES.INVALID_ROLE,
+          AUTH_ERROR_CODES.INVALID_SESSION,
         ].includes(error.code)
       ) {
         queryClient.clear();
-        setState({ status: "unauthenticated", profile: null, error: null });
+        setState({
+          status: "unauthenticated",
+          profile: null,
+          pendingProfileId: null,
+          error: null,
+        });
         return;
       }
       if (silent && error instanceof AuthServiceError && error.recoverable) {
         reportAuthDiagnostic(reason ?? "session_revalidation_deferred", error);
         setState((current) =>
-          current.status === "authenticated"
+          ["authenticated", "pending"].includes(current.status)
             ? { ...current, error }
             : {
                 status: "error",
                 profile: null,
+                pendingProfileId: null,
                 error,
               },
         );
@@ -76,13 +101,14 @@ export function AuthProvider({ children }) {
       setState({
         status: configurationError ? "configuration-error" : "error",
         profile: null,
+        pendingProfileId: null,
         error,
       });
     }
   }, []);
 
   useEffect(() => {
-    if (state.status !== "authenticated") return undefined;
+    if (!["authenticated", "pending"].includes(state.status)) return undefined;
 
     const revalidate = () =>
       recover({ silent: true, reason: "periodic_or_focus_revalidation" });
@@ -102,7 +128,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let active = true;
     if (window.location.pathname === ROUTES.resetPassword) {
-      setState({ status: "unauthenticated", profile: null, error: null });
+      setState({
+        status: "unauthenticated",
+        profile: null,
+        pendingProfileId: null,
+        error: null,
+      });
     } else {
       recover();
     }
@@ -143,23 +174,59 @@ export function AuthProvider({ children }) {
 
   const signIn = useCallback(async (credentials) => {
     const currentRequest = ++requestId.current;
-    const profile = await authService.signIn(credentials);
-    if (currentRequest === requestId.current) {
-      setState({ status: "authenticated", profile, error: null });
+    try {
+      const profile = await authService.signIn(credentials);
+      if (currentRequest === requestId.current) {
+        setState({
+          status: "authenticated",
+          profile,
+          pendingProfileId: null,
+          error: null,
+        });
+      }
+      return profile;
+    } catch (error) {
+      if (
+        currentRequest === requestId.current &&
+        error instanceof AuthServiceError &&
+        error.code === AUTH_ERROR_CODES.PROFILE_PENDING
+      ) {
+        setState({
+          status: "pending",
+          profile: null,
+          pendingProfileId: error.profileId,
+          error: null,
+        });
+      }
+      throw error;
     }
-    return profile;
   }, []);
 
   const signOut = useCallback(async () => {
     requestId.current += 1;
-    setState({ status: "loading", profile: null, error: null });
+    setState({
+      status: "loading",
+      profile: null,
+      pendingProfileId: null,
+      error: null,
+    });
     try {
       await authService.signOut();
     } finally {
       queryClient.clear();
-      setState({ status: "unauthenticated", profile: null, error: null });
+      setState({
+        status: "unauthenticated",
+        profile: null,
+        pendingProfileId: null,
+        error: null,
+      });
     }
   }, []);
+
+  const refreshProfile = useCallback(
+    () => recover({ silent: true, reason: "realtime_profile_revalidation" }),
+    [recover],
+  );
 
   const value = useMemo(
     () => ({
@@ -168,11 +235,11 @@ export function AuthProvider({ children }) {
       signIn,
       signOut,
       retry: recover,
-      refreshProfile: () => recover({ silent: true }),
+      refreshProfile,
       can: (permission) => hasPermission(state.profile?.role, permission),
       hasRole: (roles) => hasRole(state.profile?.role, roles),
     }),
-    [recover, signIn, signOut, state],
+    [recover, refreshProfile, signIn, signOut, state],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

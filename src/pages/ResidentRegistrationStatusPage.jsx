@@ -53,7 +53,8 @@ export default function ResidentRegistrationStatusPage() {
           ) : null}
           <p className="mt-4 text-xs leading-5 text-muted-foreground">
             Pending accounts cannot view other Residents, appointments, or
-            private health information.
+            private health information. If you are signed in to this pending
+            account, this page updates automatically after Administrator review.
           </p>
           <Button asChild className="mt-7 w-full sm:w-auto">
             <Link to={ROUTES.login} replace>

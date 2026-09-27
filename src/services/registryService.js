@@ -216,6 +216,27 @@ function resultPage(data, page, pageSize) {
   };
 }
 
+function portalAccountStatus(row) {
+  if (!row.linked_profile_id) return "none";
+  const portalAccount = Array.isArray(row.portal_account)
+    ? row.portal_account[0]
+    : row.portal_account;
+  if (!portalAccount) {
+    throw new RegistryServiceError(
+      "portal_account_unavailable",
+      "The linked portal account status could not be loaded.",
+    );
+  }
+  return portalAccount.retired_at ? "retired" : portalAccount.account_status;
+}
+
+function withPortalAccountStatus(row) {
+  return {
+    ...row,
+    portal_account_status: portalAccountStatus(row),
+  };
+}
+
 export function buildHouseholdListParameters(filters, barangayId = null) {
   return {
     p_search: nullable(filters.search?.trim()),
@@ -353,7 +374,39 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
         buildResidentListParameters(filters, context.barangay.id),
       );
       if (error) throw mapError(error, "Residents could not be loaded.");
-      return resultPage(data, filters.page ?? 1, filters.page_size ?? 20);
+      const rows = data ?? [];
+      if (rows.length === 0) {
+        return resultPage(rows, filters.page ?? 1, filters.page_size ?? 20);
+      }
+      const { data: accountRows, error: accountError } = await client()
+        .from("residents")
+        .select(
+          "id, linked_profile_id, portal_account:profiles!residents_linked_profile_id_fkey(account_status,retired_at)",
+        )
+        .in(
+          "id",
+          rows.map((row) => row.id),
+        );
+      if (accountError) {
+        throw mapError(
+          accountError,
+          "Resident portal account statuses could not be loaded.",
+        );
+      }
+      const accountByResident = new Map(
+        (accountRows ?? []).map((row) => [row.id, row]),
+      );
+      const enrichedRows = rows.map((row) =>
+        withPortalAccountStatus({
+          ...row,
+          ...accountByResident.get(row.id),
+        }),
+      );
+      return resultPage(
+        enrichedRows,
+        filters.page ?? 1,
+        filters.page_size ?? 20,
+      );
     },
 
     async listPuroks() {
@@ -435,7 +488,7 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       const { data, error } = await client()
         .from("residents")
         .select(
-          "id, resident_number, linked_profile_id, household_id, barangay_id, purok_id, first_name, middle_name, last_name, suffix, date_of_birth, sex, civil_status, blood_type, nationality, religion, phone_number, email, occupation, address_line, philhealth_number, emergency_contact_name, emergency_contact_number, emergency_contact_relationship, is_senior_citizen, is_pwd, pregnancy_status, status, photo_path, created_by, updated_by, created_at, updated_at, archived_at, barangay:barangays(id,name,city_or_municipality,province), purok:puroks(id,name,code), household:households!residents_household_matches_location(id,household_number,address_line,status,head_resident_id,updated_at,archived_at)",
+          "id, resident_number, linked_profile_id, household_id, barangay_id, purok_id, first_name, middle_name, last_name, suffix, date_of_birth, sex, civil_status, blood_type, nationality, religion, phone_number, email, occupation, address_line, philhealth_number, emergency_contact_name, emergency_contact_number, emergency_contact_relationship, is_senior_citizen, is_pwd, pregnancy_status, status, photo_path, created_by, updated_by, created_at, updated_at, archived_at, barangay:barangays(id,name,city_or_municipality,province), purok:puroks(id,name,code), household:households!residents_household_matches_location(id,household_number,address_line,status,head_resident_id,updated_at,archived_at), portal_account:profiles!residents_linked_profile_id_fkey(account_status,retired_at)",
         )
         .eq("id", id)
         .maybeSingle();
@@ -454,7 +507,7 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
         throw notFoundError;
       }
 
-      return data;
+      return withPortalAccountStatus(data);
     },
 
     async findResidentDuplicates(values, excludeId = null) {

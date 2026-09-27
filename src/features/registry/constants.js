@@ -26,6 +26,15 @@ export const RESIDENT_STATUS_LABELS = Object.freeze({
   archived: "Archived",
 });
 
+export const PORTAL_ACCOUNT_STATUS_LABELS = Object.freeze({
+  active: "Active",
+  inactive: "Inactive",
+  suspended: "Suspended",
+  invited: "Pending / Invited",
+  retired: "Retired",
+  none: "No portal account",
+});
+
 export const SEX_OPTIONS = Object.freeze(["male", "female"]);
 export const SEX_LABELS = Object.freeze({ male: "Male", female: "Female" });
 

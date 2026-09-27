@@ -105,7 +105,21 @@ describe("registry service", () => {
 
   it("uses the RLS-preserving RPC and returns total count", async () => {
     const rpc = deploymentRpc();
-    const service = createRegistryService(() => ({ rpc }));
+    const inFilter = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "one",
+          linked_profile_id: null,
+          portal_account: null,
+        },
+      ],
+      error: null,
+    });
+    const select = vi.fn(() => ({ in: inFilter }));
+    const service = createRegistryService(() => ({
+      rpc,
+      from: vi.fn(() => ({ select })),
+    }));
     const result = await service.listResidents({ page: 1, page_size: 10 });
     expect(rpc).toHaveBeenCalledWith(
       "registry_list_residents",
@@ -116,6 +130,13 @@ describe("registry service", () => {
       }),
     );
     expect(result).toMatchObject({ total: 12, page: 1, page_size: 10 });
+    expect(result.items[0]).toMatchObject({
+      id: "one",
+      portal_account_status: "none",
+    });
+    expect(select).toHaveBeenCalledWith(
+      expect.stringContaining("account_status,retired_at"),
+    );
   });
 
   it("maps database authorization failures to a safe service error", async () => {
@@ -214,13 +235,18 @@ describe("registry service", () => {
     const row = {
       id: residentId,
       resident_number: "RES-2026-000001",
+      linked_profile_id: "55555555-5555-4555-8555-555555555555",
+      portal_account: { account_status: "inactive", retired_at: null },
       archived_at: null,
       household: { household_number: "HH-2026-000001" },
     };
     const detail = residentDetailClient({ data: row, error: null });
     const service = createRegistryService(() => detail.client);
 
-    await expect(service.getResident(residentId)).resolves.toEqual(row);
+    await expect(service.getResident(residentId)).resolves.toEqual({
+      ...row,
+      portal_account_status: "inactive",
+    });
     expect(detail.from).toHaveBeenCalledWith("residents");
     expect(detail.select).toHaveBeenCalledWith(
       expect.stringContaining(
@@ -229,6 +255,9 @@ describe("registry service", () => {
     );
     expect(detail.select).toHaveBeenCalledWith(
       expect.stringContaining("head_resident_id"),
+    );
+    expect(detail.select).toHaveBeenCalledWith(
+      expect.stringContaining("portal_account:profiles"),
     );
     expect(detail.eq).toHaveBeenCalledWith("id", residentId);
     expect(detail.maybeSingle).toHaveBeenCalledOnce();
@@ -266,13 +295,56 @@ describe("registry service", () => {
     const archivedRow = {
       id: residentId,
       resident_number: "RES-2026-000001",
+      linked_profile_id: null,
       status: "archived",
       archived_at: "2026-07-20T00:00:00Z",
     };
     const detail = residentDetailClient({ data: archivedRow, error: null });
     const service = createRegistryService(() => detail.client);
 
-    await expect(service.getResident(residentId)).resolves.toEqual(archivedRow);
+    await expect(service.getResident(residentId)).resolves.toEqual({
+      ...archivedRow,
+      portal_account_status: "none",
+    });
+  });
+
+  it("keeps Registry status independent from an inactive portal account", async () => {
+    const row = {
+      id: residentId,
+      resident_number: "RES-2026-000001",
+      status: "active",
+      archived_at: null,
+      linked_profile_id: "55555555-5555-4555-8555-555555555555",
+      portal_account: { account_status: "inactive", retired_at: null },
+    };
+    const detail = residentDetailClient({ data: row, error: null });
+    const service = createRegistryService(() => detail.client);
+
+    await expect(service.getResident(residentId)).resolves.toMatchObject({
+      status: "active",
+      portal_account_status: "inactive",
+    });
+  });
+
+  it("derives retired portal presentation without changing the Resident", async () => {
+    const row = {
+      id: residentId,
+      resident_number: "RES-2026-000001",
+      status: "active",
+      archived_at: null,
+      linked_profile_id: "55555555-5555-4555-8555-555555555555",
+      portal_account: {
+        account_status: "inactive",
+        retired_at: "2026-08-20T00:00:00Z",
+      },
+    };
+    const detail = residentDetailClient({ data: row, error: null });
+    const service = createRegistryService(() => detail.client);
+
+    await expect(service.getResident(residentId)).resolves.toMatchObject({
+      status: "active",
+      portal_account_status: "retired",
+    });
   });
 
   it("rejects resident numbers and other non-UUID detail identifiers", async () => {

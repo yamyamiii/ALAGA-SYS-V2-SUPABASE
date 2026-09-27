@@ -210,7 +210,7 @@ export default function UserManagementPage() {
       <PageHeading
         eyebrow="Administration"
         title="User Management"
-        description="Invite, provision, review, and safely manage trusted ALAGA-SYS accounts. Every privileged action is server-verified and audited."
+        description="Manage portal authentication, roles, registration review, account status, and account linking. Resident healthcare identities remain in the Registry."
         actions={
           <Button onClick={() => setFormOpen(true)}>
             <UserPlus /> Add or invite user
@@ -294,7 +294,9 @@ export default function UserManagementPage() {
                       <th className="px-3 py-3 font-semibold">Name</th>
                       <th className="px-3 py-3 font-semibold">Email</th>
                       <th className="px-3 py-3 font-semibold">Role</th>
-                      <th className="px-3 py-3 font-semibold">Status</th>
+                      <th className="px-3 py-3 font-semibold">
+                        Account status
+                      </th>
                       <th className="px-3 py-3 font-semibold">Last login</th>
                       <th className="px-3 py-3 font-semibold">Created</th>
                       <th className="w-12 px-3 py-3">
@@ -357,9 +359,14 @@ export default function UserManagementPage() {
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Badge variant="outline">{getRoleLabel(user.role)}</Badge>
-                      <Badge variant={statusVariant(user.account_status)}>
-                        {user.account_status}
-                      </Badge>
+                      <span className="inline-flex items-center gap-1 text-xs">
+                        <span className="text-muted-foreground">
+                          Account status:
+                        </span>
+                        <Badge variant={statusVariant(user.account_status)}>
+                          {user.account_status}
+                        </Badge>
+                      </span>
                       {user.registration_status ? (
                         <Badge variant="outline">
                           Registration {user.registration_status}
@@ -413,8 +420,9 @@ export default function UserManagementPage() {
 
       <div className="flex items-start gap-2 rounded-xl border bg-card p-4 text-xs leading-5 text-muted-foreground">
         <Users className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-        Email and last-login values come from the trusted server response.
-        Passwords, tokens, identities, and Auth metadata are never returned.
+        This page administers portal accounts, not Resident Registry records.
+        Email and last-login values come from the trusted server response;
+        passwords, tokens, and Auth metadata are never returned.
       </div>
 
       <UserFormDialog

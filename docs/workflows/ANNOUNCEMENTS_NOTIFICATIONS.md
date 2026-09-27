@@ -36,11 +36,13 @@ Mark-all-as-read affects only the caller. Staff therefore see only
 notifications addressed to them, such as an assigned appointment update or a
 general announcement.
 
-Notification queries poll every 30 seconds while enabled so the header bell,
-Dashboard summary, and Notifications page discover trusted server-created
-events without requiring a route reload. Marking one row read still invalidates
-all of the current account's notification query variants; it never changes
-another recipient's read state.
+The header bell, Dashboard summary, and Notifications page subscribe to a
+minimized recipient-scoped invalidation event. They refetch the trusted RPC when
+an eligible notification reaches `available_at`; no title, summary, or source
+content is carried by the realtime payload. Marking one row read still
+invalidates all of the current account's notification query variants; it never
+changes another recipient's read state. Reconnect and throttled focus
+reconciliation replace the former 30-second notification polling loop.
 
 The in-app notification center is the authoritative user-facing channel.
 Optional server-side email/SMS delivery infrastructure exists but remains

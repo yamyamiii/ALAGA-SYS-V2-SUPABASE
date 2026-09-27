@@ -79,11 +79,22 @@ it contains no reason, contact information, message body, or delivery status.
 - `/appointments` — paginated list, filters, create, walk-in, details, and
   authorized lifecycle actions
 - `/appointments/calendar` — 42-day month grid and mobile day agenda
-- `/appointments/queue` — daily operational queue with 30-second polling while
-  the page is open
+- `/appointments/queue` — daily operational queue synchronized by targeted
+  appointment events and reconnect/focus reconciliation
 
 Resident details include paginated scheduling history. The dashboard shows
 RLS-filtered appointment totals and a five-row queue preview.
+
+Appointment views are transactional: the primary identity is the appointment
+reference, followed by Resident, current service schedule, assigned staff,
+source, and lifecycle status. They do not duplicate portal-account or Resident
+Registry administration.
+
+Appointment inserts and updates emit audience-targeted invalidation events for
+Admin/BHW, the linked Resident account, and current/previous assigned staff.
+Lists, details, calendar, dashboard, and queue then refetch through the existing
+RLS-preserving APIs. Check-in, schedule, status, assignment, and completion
+changes therefore reconcile without relying on a polling loop.
 
 Residents receive only `/appointments`, rendered as their own appointment
 cards with request and pending-cancellation actions. Calendar and queue routes

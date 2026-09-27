@@ -468,7 +468,7 @@ describe("auth service", () => {
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
-  it("keeps a self-registered pending Resident out of protected routes", async () => {
+  it("keeps a pending Resident out of protected routes while retaining only their authorized session", async () => {
     const client = createClient({
       profile: {
         ...activeProfile,
@@ -481,8 +481,9 @@ describe("auth service", () => {
 
     await expect(service.recoverSession()).rejects.toMatchObject({
       code: AUTH_ERROR_CODES.PROFILE_PENDING,
+      profileId: "user-1",
     });
-    expect(client.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(client.auth.signOut).not.toHaveBeenCalled();
   });
 
   it("returns a safe rejected-registration state without protected access", async () => {

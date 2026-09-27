@@ -18,6 +18,20 @@ The browser contains only a project URL and publishable key. Frontend permission
 checks control navigation and actions for usability, while table grants and RLS
 remain authoritative.
 
+## Registry identity versus portal access
+
+The Resident is the durable healthcare identity; the portal profile is only an
+optional access relationship. Registry list and detail views therefore label
+**Registry Status** separately from the read-only **Portal Account** state.
+Supported portal presentation states are Active, Inactive, Suspended,
+Pending / Invited, Retired, and No portal account. Account deactivation never
+changes Resident status. Portal lifecycle administration remains in User
+Management.
+
+Registry and profile-link changes emit minimized RLS-filtered invalidation
+events. Authorized open Registry views refetch through their existing RPC and
+table policies rather than receiving demographic rows in realtime payloads.
+
 ## Single-barangay deployment context
 
 The current deployment is fixed to `Brgy. Bagongpook`. Registry forms and

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   PREGNANCY_STATUS_LABELS,
+  PORTAL_ACCOUNT_STATUS_LABELS,
   RESIDENT_STATUS_LABELS,
   SEX_LABELS,
 } from "@/features/registry/constants";
@@ -138,9 +139,26 @@ export function ResidentDetailDialog({
                   </p>
                 </div>
               </div>
-              <Badge variant={archived ? "secondary" : "success"}>
-                {RESIDENT_STATUS_LABELS[record.status] ?? record.status}
-              </Badge>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Registry status
+                  </p>
+                  <Badge variant={archived ? "secondary" : "success"}>
+                    {RESIDENT_STATUS_LABELS[record.status] ?? record.status}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Portal account
+                  </p>
+                  <Badge variant="outline">
+                    {PORTAL_ACCOUNT_STATUS_LABELS[
+                      record.portal_account_status
+                    ] ?? "No portal account"}
+                  </Badge>
+                </div>
+              </div>
             </div>
 
             <DetailSection title="1. Personal Information">
@@ -237,8 +255,9 @@ export function ResidentDetailDialog({
                   ? formatDate(record.archived_at, true)
                   : "No"}
               </Value>
-              <Value label="Linked portal profile">
-                {record.linked_profile_id ? "Linked" : "Not linked"}
+              <Value label="Portal account">
+                {PORTAL_ACCOUNT_STATUS_LABELS[record.portal_account_status] ??
+                  "No portal account"}
               </Value>
             </DetailSection>
 
