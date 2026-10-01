@@ -233,6 +233,51 @@ describe("ResidentAppointmentRequestDialog", () => {
       screen.queryByRole("button", { name: "Book appointment" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Available date")).not.toBeInTheDocument();
+    expect(useResidentAppointmentAvailability).toHaveBeenLastCalledWith(
+      expect.objectContaining({ serviceType: "Postpartum Home Visit" }),
+      false,
+    );
+  });
+
+  it("requests the bounded window from the Manila date rather than the UTC date", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-09-30T18:00:00Z"));
+      renderDialog();
+      expect(useResidentAppointmentAvailability).toHaveBeenLastCalledWith(
+        {
+          serviceType: "General Consultation",
+          dateFrom: "2026-10-01",
+          dateTo: "2026-11-30",
+        },
+        true,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a safe retry path for an RPC failure rather than calling it zero capacity", async () => {
+    useResidentAppointmentAvailability.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: true,
+      error: { message: "Available appointment times could not be loaded." },
+      refetch: refetchAvailability,
+    });
+    const user = userEvent.setup();
+    renderDialog();
+    expect(
+      screen.getByText("Available appointment times could not be loaded."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/no appointment dates currently have/i),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refetchAvailability).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("button", { name: "Book appointment" }),
+    ).toBeDisabled();
   });
 
   it("renders loading, empty, and error availability states", () => {

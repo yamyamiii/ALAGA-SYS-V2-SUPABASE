@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 
 import { describe, expect, it } from "vitest";
 
@@ -8,6 +9,10 @@ const migration = fs.readFileSync(
 );
 const realtimeMigration = fs.readFileSync(
   "supabase/migrations/20260720010200_realtime_state_consistency.sql",
+  "utf8",
+);
+const correction = fs.readFileSync(
+  "supabase/migrations/20260720010400_fix_automated_appointment_availability.sql",
   "utf8",
 );
 
@@ -233,5 +238,100 @@ describe("automated Resident appointment database safety", () => {
     expect(migration).not.toMatch(
       /create or replace function public\.appointment_dashboard_summary/i,
     );
+  });
+});
+
+describe("automated appointment availability forward repair", () => {
+  const canonical = (sql) => sql.replace(/\r\n?/g, "\n").trim();
+  const originalAvailability = functionBlock(
+    "appointment_resident_available_slots",
+    "appointment_validate_schedule",
+  ).split("-- Reuse the centralized role/service predicate")[0];
+  const repairedAvailability = correction.slice(
+    correction.indexOf(
+      "create or replace function public.appointment_resident_available_slots(",
+    ),
+    correction.indexOf("-- Automatic assignment"),
+  );
+
+  it("leaves applied Migration 103 canonical content unchanged", () => {
+    expect(
+      crypto
+        .createHash("sha256")
+        .update(migration.replace(/\r\n?/g, "\n"), "utf8")
+        .digest("hex"),
+    ).toBe("5320c249a91ac5c2caa59b354ee8f8f335f68d947a63219e19ea756ed4f2f3dd");
+  });
+
+  it("fixes the real resident_id ambiguity without changing the availability contract", () => {
+    expect(repairedAvailability).toMatch(/v_resident_id uuid;/);
+    expect(repairedAvailability).toMatch(
+      /own_appointment\.resident_id = v_resident_id/,
+    );
+    expect(repairedAvailability).not.toMatch(
+      /own_appointment\.resident_id = resident_id\b/,
+    );
+    expect(canonical(repairedAvailability)).toBe(
+      canonical(originalAvailability)
+        .replace("resident_id uuid;", "v_resident_id uuid;")
+        .replace("into resident_id", "into v_resident_id")
+        .replace("if resident_id is null", "if v_resident_id is null")
+        .replace(
+          "own_appointment.resident_id = resident_id",
+          "own_appointment.resident_id = v_resident_id",
+        ),
+    );
+  });
+
+  it("only replaces the two affected functions with fixed paths and preserved grants", () => {
+    expect(
+      [
+        ...correction.matchAll(/create or replace function public\.([a-z_]+)/g),
+      ].map((match) => match[1]),
+    ).toEqual([
+      "appointment_resident_available_slots",
+      "appointment_validate_schedule",
+    ]);
+    expect(
+      correction.match(/security definer\s+set search_path = ''/g),
+    ).toHaveLength(2);
+    expect(correction).toMatch(
+      /grant execute on function public\.appointment_resident_available_slots\([\s\S]*?to authenticated, service_role/,
+    );
+    expect(correction).toMatch(
+      /revoke all on function public\.appointment_validate_schedule\([\s\S]*?from public, anon, authenticated/,
+    );
+    expect(correction).not.toMatch(
+      /create table|alter table|create policy|drop function|delete from|insert into/,
+    );
+    expect(correction).not.toMatch(
+      /#variable_conflict\s+use_(?:variable|column)/,
+    );
+  });
+
+  it("keeps Resident reasons optional with server assignment but not staff-created reasons", () => {
+    const validator = correction.slice(
+      correction.indexOf(
+        "create or replace function public.appointment_validate_schedule(",
+      ),
+    );
+    expect(validator).toMatch(
+      /resident_reason_optional boolean :=[\s\S]*current_profile_role\(\) = 'resident'[\s\S]*linked_resident\.id = p_resident_id[\s\S]*linked_resident\.linked_profile_id = auth\.uid\(\)[\s\S]*linked_resident\.status = 'active'[\s\S]*linked_resident\.archived_at is null/,
+    );
+    expect(validator).not.toMatch(/and p_staff_id is null/);
+    expect(validator).toMatch(
+      /and not resident_reason_optional[\s\S]*an appointment reason is required/,
+    );
+    expect(validator).toMatch(/appointment_staff_role_eligible/);
+    expect(validator).toMatch(/appointment_assert_slot_available/);
+    const originalValidator = functionBlock(
+      "appointment_validate_schedule",
+      "appointment_search_staff",
+    );
+    const remainder = (sql) =>
+      canonical(
+        sql.slice(sql.indexOf("legacy_service_preserved boolean")),
+      ).split("\n\ncommit;")[0];
+    expect(remainder(validator)).toBe(remainder(originalValidator));
   });
 });

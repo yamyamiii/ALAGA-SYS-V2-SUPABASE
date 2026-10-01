@@ -78,6 +78,7 @@ const expectedMigrations = [
   "20260720010100_allow_retired_resident_relink.sql",
   "20260720010200_realtime_state_consistency.sql",
   "20260720010300_automated_resident_appointments.sql",
+  "20260720010400_fix_automated_appointment_availability.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -210,6 +211,8 @@ const reviewedPendingMigrationHashes = {
     "3f9a6c8734f174cc1999b3f88c3ff6be0f12e7028148adca1e5b86451b291008",
   "20260720010300_automated_resident_appointments.sql":
     "5320c249a91ac5c2caa59b354ee8f8f335f68d947a63219e19ea756ed4f2f3dd",
+  "20260720010400_fix_automated_appointment_availability.sql":
+    "4b7170a43008f05a9fac49906655237df81c544f240ede0721ad6652b260dfa1",
 };
 const expectedTables = [
   "account_retirements",
@@ -310,7 +313,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly sixty-four expected migrations exist in lexical order",
+  "Exactly sixty-five expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -416,6 +419,10 @@ const bagongpookAppointmentServices =
 const automatedResidentAppointments =
   migrationEntries.find(({ file }) =>
     file.includes("automated_resident_appointments"),
+  )?.sql ?? "";
+const automatedAppointmentAvailabilityRepair =
+  migrationEntries.find(({ file }) =>
+    file.includes("fix_automated_appointment_availability"),
   )?.sql ?? "";
 
 check(
@@ -942,6 +949,60 @@ check(
       automatedResidentAppointments,
     ),
   "Automated appointment RPC grants preserve the trusted mutation boundary",
+);
+
+const availabilityRepairDeclarationAudit = auditPlpgsqlIntoTargets(
+  automatedAppointmentAvailabilityRepair,
+);
+check(
+  availabilityRepairDeclarationAudit.functionCount === 2 &&
+    availabilityRepairDeclarationAudit.undeclared.length === 0,
+  "The availability repair replaces only two functions with declared INTO targets",
+);
+check(
+  /v_resident_id uuid[\s\S]*resident\.id into v_resident_id[\s\S]*own_appointment\.resident_id = v_resident_id/i.test(
+    automatedAppointmentAvailabilityRepair,
+  ) &&
+    !/own_appointment\.resident_id = resident_id\b/i.test(
+      automatedAppointmentAvailabilityRepair,
+    ) &&
+    /returns table \(\s*scheduled_date date,\s*start_time time,\s*end_time time\s*\)/i.test(
+      automatedAppointmentAvailabilityRepair,
+    ),
+  "Availability no longer has a Resident variable/column ambiguity and retains its safe return contract",
+);
+check(
+  /p_date_to - p_date_from > 62[\s\S]*schedule\.booking_mode <> 'AUTO_SLOT'[\s\S]*appointment_service_date_allowed[\s\S]*appointment_staff_role_eligible/i.test(
+    automatedAppointmentAvailabilityRepair,
+  ) &&
+    /statement_timestamp\(\) at time zone 'Asia\/Manila'/i.test(
+      automatedAppointmentAvailabilityRepair,
+    ),
+  "Availability retains the bounded Manila-date, recurring-service and capacity rules",
+);
+check(
+  /resident_reason_optional boolean :=[\s\S]*current_profile_role\(\) = 'resident'[\s\S]*linked_resident\.id = p_resident_id[\s\S]*linked_resident\.linked_profile_id = auth\.uid\(\)[\s\S]*linked_resident\.status = 'active'[\s\S]*linked_resident\.archived_at is null/i.test(
+    automatedAppointmentAvailabilityRepair,
+  ) &&
+    /and not resident_reason_optional[\s\S]*an appointment reason is required/i.test(
+      automatedAppointmentAvailabilityRepair,
+    ) &&
+    /appointment_assert_slot_available/i.test(
+      automatedAppointmentAvailabilityRepair,
+    ),
+  "Automatic assignment preserves the own-linked-Resident optional reason without relaxing staff validation",
+);
+check(
+  /grant execute on function public\.appointment_resident_available_slots\([\s\S]*?to authenticated, service_role/i.test(
+    automatedAppointmentAvailabilityRepair,
+  ) &&
+    /revoke all on function public\.appointment_validate_schedule\([\s\S]*?from public, anon, authenticated/i.test(
+      automatedAppointmentAvailabilityRepair,
+    ) &&
+    !/create table|alter table|create policy|drop function|grant\s+(?:insert|update|delete)/i.test(
+      automatedAppointmentAvailabilityRepair,
+    ),
+  "Availability repair preserves RPC grants, private validation, RLS, and the trusted mutation boundary",
 );
 
 for (const [file, expectedHash] of Object.entries(completedMigrationHashes)) {

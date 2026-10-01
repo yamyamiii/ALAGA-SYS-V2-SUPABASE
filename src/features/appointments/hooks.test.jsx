@@ -92,6 +92,12 @@ describe("appointment mutation cache propagation", () => {
       appointmentKeys.history("resident-id", 1),
       appointmentKeys.dashboard,
       appointmentKeys.residentRequests,
+      appointmentKeys.residentServices,
+      appointmentKeys.residentAvailability({
+        serviceType: "General Consultation",
+        dateFrom: "2026-10-01",
+        dateTo: "2026-11-30",
+      }),
     ];
     for (const key of affectedKeys) client.setQueryData(key, { stale: true });
 

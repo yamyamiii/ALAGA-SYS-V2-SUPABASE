@@ -449,6 +449,91 @@ describe("appointment service", () => {
     );
   });
 
+  it("treats zero staff capacity as a successful empty availability result", async () => {
+    const client = rpcClient({ data: [], error: null });
+    const service = createAppointmentService(() => client);
+
+    await expect(
+      service.listResidentAvailableSlots({
+        serviceType: "General Consultation",
+        dateFrom: "2026-10-01",
+        dateTo: "2026-11-30",
+      }),
+    ).resolves.toEqual([]);
+    expect(client.rpc).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["08:00:00", "08:30:00"],
+    ["12:30:00", "13:00:00"],
+    ["16:00:00", "16:30:00"],
+  ])(
+    "normalizes the PostgreSQL time %s before Resident slot validation",
+    async (startTime, endTime) => {
+      const client = sequentialRpcClient([
+        {
+          data: [
+            {
+              scheduled_date: "2026-10-01",
+              start_time: startTime,
+              end_time: endTime,
+            },
+          ],
+          error: null,
+        },
+        {
+          data: [{ id: appointmentId, status: "confirmed", version: 1 }],
+          error: null,
+        },
+      ]);
+      const service = createAppointmentService(() => client);
+      const [slot] = await service.listResidentAvailableSlots({
+        serviceType: "General Consultation",
+        dateFrom: "2026-10-01",
+        dateTo: "2026-11-30",
+      });
+      expect(slot.end_time).toBe(endTime.slice(0, 5));
+      await service.requestResidentAppointment(
+        { ...slot, service_type: "General Consultation", reason: "" },
+        requestKey,
+      );
+      expect(client.rpc).toHaveBeenLastCalledWith(
+        "resident_appointment_request",
+        {
+          p_service_type: "General Consultation",
+          p_scheduled_date: "2026-10-01",
+          p_start_time: startTime.slice(0, 5),
+          p_reason: null,
+          p_request_key: requestKey,
+        },
+      );
+    },
+  );
+
+  it("retains the real SQLSTATE for diagnostics without displaying database internals", async () => {
+    const providerError = {
+      code: "42702",
+      message: 'column reference "resident_id" is ambiguous',
+      details:
+        "It could refer to either a PL/pgSQL variable or a table column.",
+    };
+    const service = createAppointmentService(() =>
+      rpcClient({ data: null, error: providerError }),
+    );
+
+    await expect(
+      service.listResidentAvailableSlots({
+        serviceType: "General Consultation",
+        dateFrom: "2026-10-01",
+        dateTo: "2026-11-30",
+      }),
+    ).rejects.toMatchObject({
+      code: "appointment_request_failed",
+      message: "Available appointment times could not be loaded.",
+      cause: providerError,
+    });
+  });
+
   it("maps an atomic capacity race to an actionable stale-slot error", async () => {
     const client = rpcClient({
       data: null,
