@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import AnnouncementsPage from "@/features/assistance/AnnouncementsPage";
@@ -9,6 +10,10 @@ import {
 } from "@/features/assistance/hooks";
 import { useAuth } from "@/features/auth/authContext";
 import { hasPermission, USER_ROLES } from "@/features/auth/permissions";
+import { useHealthEventAnnouncementLinks } from "@/features/health-events/hooks";
+vi.mock("@/features/health-events/hooks", () => ({
+  useHealthEventAnnouncementLinks: vi.fn(),
+}));
 
 vi.mock("@/features/assistance/hooks", () => ({
   useAnnouncements: vi.fn(),
@@ -63,6 +68,7 @@ describe("announcement management actions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useHealthEventAnnouncementLinks.mockReturnValue({ data: {} });
     useAnnouncements.mockReturnValue({
       isLoading: false,
       isError: false,
@@ -80,8 +86,45 @@ describe("announcement management actions", () => {
       can: (permission) => hasPermission(role, permission),
       profile: { role },
     });
-    return render(<AnnouncementsPage />);
+    return render(
+      <MemoryRouter>
+        <AnnouncementsPage />
+      </MemoryRouter>,
+    );
   }
+
+  it("linked announcement offers a trusted event CTA; informational content does not", () => {
+    useHealthEventAnnouncementLinks.mockReturnValue({
+      data: { [announcement.id]: "55555555-5555-4555-8555-555555555555" },
+    });
+    const rendered = renderFor(USER_ROLES.RESIDENT);
+    expect(
+      screen.getByRole("link", { name: "View event / Book appointment" }),
+    ).toHaveAttribute(
+      "href",
+      "/appointments/events?event=55555555-5555-4555-8555-555555555555",
+    );
+    rendered.unmount();
+    useHealthEventAnnouncementLinks.mockReturnValue({ data: {} });
+    renderFor(USER_ROLES.RESIDENT);
+    expect(
+      screen.queryByRole("link", { name: "View event / Book appointment" }),
+    ).not.toBeInTheDocument();
+  });
+  it("archived announcement never retains a stale event CTA", () => {
+    useAnnouncements.mockReturnValue({
+      data: { items: [archivedAnnouncement], total: 1 },
+    });
+    useHealthEventAnnouncementLinks.mockReturnValue({
+      data: {
+        [archivedAnnouncement.id]: "55555555-5555-4555-8555-555555555555",
+      },
+    });
+    renderFor(USER_ROLES.ADMINISTRATOR);
+    expect(
+      screen.queryByRole("link", { name: "View event / Book appointment" }),
+    ).not.toBeInTheDocument();
+  });
 
   it.each([
     ["Administrator", USER_ROLES.ADMINISTRATOR],

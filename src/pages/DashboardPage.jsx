@@ -48,6 +48,7 @@ import {
 } from "@/features/auth/permissions";
 import { openAiAssistant } from "@/features/ai-assistant/launcher";
 import { useDashboardSummary } from "@/features/reports/hooks";
+import { HealthEventSummary } from "@/features/health-events/HealthEventSummary";
 
 const STAFF_ROLES = [
   USER_ROLES.ADMINISTRATOR,
@@ -514,6 +515,10 @@ export default function DashboardPage() {
         ) : null}
       </section>
 
+      <HealthEventSummary
+        from={manilaDateKey(new Date())}
+        to={manilaDateKey(new Date())}
+      />
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Megaphone className="h-4 w-4" />
         Only verified, permission-filtered information is displayed.

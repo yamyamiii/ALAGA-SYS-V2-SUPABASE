@@ -173,3 +173,6 @@ describe("Reports PDF and Print actions", () => {
     expect(mocks.print).not.toHaveBeenCalled();
   });
 });
+vi.mock("@/features/health-events/HealthEventSummary", () => ({
+  HealthEventSummary: () => null,
+}));

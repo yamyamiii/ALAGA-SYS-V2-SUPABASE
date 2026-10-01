@@ -249,3 +249,6 @@ describe("role-safe dashboard aggregates", () => {
     expect(useAppointmentDashboard).toHaveBeenCalledWith(true);
   });
 });
+vi.mock("@/features/health-events/HealthEventSummary", () => ({
+  HealthEventSummary: () => null,
+}));

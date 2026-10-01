@@ -37,6 +37,34 @@ const NOTIFICATION_DESTINATIONS = Object.freeze({
 });
 
 export function resolveNotificationDestination(notification, can) {
+  // The existing notification-list RPC intentionally omits source identifiers.
+  // Its exact allowlisted path can still open the event index safely; never
+  // derive an event ID or arbitrary URL from notification text.
+  if (
+    notification?.action_path === ROUTES.healthEvents &&
+    notification.source_type == null &&
+    notification.source_id == null &&
+    ["appointment_approved", "appointment_cancelled"].includes(
+      notification.notification_type,
+    )
+  ) {
+    return typeof can === "function" && can(PERMISSIONS.VIEW_APPOINTMENTS)
+      ? ROUTES.healthEvents
+      : null;
+  }
+  if (notification?.source_type === "health_events") {
+    return ["appointment_approved", "appointment_cancelled"].includes(
+      notification.notification_type,
+    ) &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        notification.source_id ?? "",
+      ) &&
+      notification.action_path === ROUTES.healthEvents &&
+      typeof can === "function" &&
+      can(PERMISSIONS.VIEW_APPOINTMENTS)
+      ? `${ROUTES.healthEvents}?event=${notification.source_id}`
+      : null;
+  }
   const target = NOTIFICATION_DESTINATIONS[notification?.notification_type];
   if (
     !target ||

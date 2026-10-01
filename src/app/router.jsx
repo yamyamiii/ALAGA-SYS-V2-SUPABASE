@@ -39,6 +39,9 @@ const AppointmentCalendarPage = lazy(
 const AppointmentQueuePage = lazy(
   () => import("@/features/appointments/AppointmentQueuePage"),
 );
+const HealthEventsPage = lazy(
+  () => import("@/features/health-events/HealthEventsPage"),
+);
 const HealthRecordsPage = lazy(
   () => import("@/features/health-records/HealthRecordsPage"),
 );
@@ -134,6 +137,14 @@ export function AppRouter() {
               element={
                 <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENT_QUEUE}>
                   <AppointmentQueuePage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path={ROUTES.healthEvents}
+              element={
+                <RoleGuard permission={PERMISSIONS.VIEW_APPOINTMENTS}>
+                  <HealthEventsPage />
                 </RoleGuard>
               }
             />

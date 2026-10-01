@@ -15,6 +15,12 @@ const tabs = [
     permission: PERMISSIONS.VIEW_APPOINTMENTS,
   },
   {
+    label: "Health service events",
+    path: ROUTES.healthEvents,
+    icon: CalendarDays,
+    permission: PERMISSIONS.VIEW_APPOINTMENTS,
+  },
+  {
     label: "Calendar",
     path: ROUTES.appointmentCalendar,
     icon: CalendarDays,

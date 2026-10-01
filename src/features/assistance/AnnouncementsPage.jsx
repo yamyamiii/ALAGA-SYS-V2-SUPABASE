@@ -1,6 +1,9 @@
 import { Archive, Megaphone, Pencil, Pin, Plus, Trash2 } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
+import { ROUTES } from "@/config/routes";
+import { useHealthEventAnnouncementLinks } from "@/features/health-events/hooks";
 
 import {
   EmptyState,
@@ -55,6 +58,9 @@ export default function AnnouncementsPage() {
   });
   const search = useDeferredValue(filters.search);
   const query = useAnnouncements({ ...filters, search });
+  const eventLinks = useHealthEventAnnouncementLinks(
+    (query.data?.items ?? []).map((item) => item.id),
+  );
   const save = useAssistanceMutation(assistanceService.saveAnnouncement);
   const archive = useAssistanceMutation(({ id, version }) =>
     assistanceService.archiveAnnouncement(id, version),
@@ -261,6 +267,17 @@ export default function AnnouncementsPage() {
                       </div>
                     ) : null}
                   </dl>
+                  {status === ANNOUNCEMENT_STATUSES.PUBLISHED &&
+                  can(PERMISSIONS.VIEW_APPOINTMENTS) &&
+                  eventLinks.data?.[item.id] ? (
+                    <Button asChild className="mt-4">
+                      <Link
+                        to={`${ROUTES.healthEvents}?event=${eventLinks.data[item.id]}`}
+                      >
+                        View event / Book appointment
+                      </Link>
+                    </Button>
+                  ) : null}
                   {canManage && !item.archived_at ? (
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Button

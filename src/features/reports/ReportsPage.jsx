@@ -36,6 +36,7 @@ import { useReport } from "@/features/reports/hooks";
 import { reportService } from "@/services/reportService";
 import { formatManilaDateTime } from "@/lib/dateTime";
 import { cn } from "@/lib/utils";
+import { HealthEventSummary } from "@/features/health-events/HealthEventSummary";
 
 const iconByCategory = {
   overview: Activity,
@@ -397,6 +398,12 @@ export default function ReportsPage() {
           loading={query.isFetching}
         />
       )}
+      {["overview", "appointments"].includes(category) ? (
+        <HealthEventSummary
+          from={activeFilters.start_date}
+          to={activeFilters.end_date}
+        />
+      ) : null}
       <footer className="print-only hidden border-t pt-3 text-xs">
         Privacy-safe operational report · ALAGA-SYS · Page generated for
         authorized use

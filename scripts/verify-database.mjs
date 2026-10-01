@@ -79,6 +79,7 @@ const expectedMigrations = [
   "20260720010200_realtime_state_consistency.sql",
   "20260720010300_automated_resident_appointments.sql",
   "20260720010400_fix_automated_appointment_availability.sql",
+  "20260720010500_automated_health_service_events.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -213,6 +214,8 @@ const reviewedPendingMigrationHashes = {
     "5320c249a91ac5c2caa59b354ee8f8f335f68d947a63219e19ea756ed4f2f3dd",
   "20260720010400_fix_automated_appointment_availability.sql":
     "4b7170a43008f05a9fac49906655237df81c544f240ede0721ad6652b260dfa1",
+  "20260720010500_automated_health_service_events.sql":
+    "37289b6b915ec0ebdef209da65ef441d6b3abc3d54d2533be90646e66ef41f7b",
 };
 const expectedTables = [
   "account_retirements",
@@ -235,6 +238,10 @@ const expectedTables = [
   "faq_entries",
   "health_center_information",
   "health_encounters",
+  "health_event_bookings",
+  "health_event_history",
+  "health_event_staff",
+  "health_service_events",
   "households",
   "maternal_delivery_outcomes",
   "maternal_postnatal_visits",
@@ -313,7 +320,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly sixty-five expected migrations exist in lexical order",
+  "Exactly sixty-six expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -321,6 +328,65 @@ const migrationEntries = migrationFiles.map((file) => ({
   sql: fs.readFileSync(path.join(migrationsDirectory, file), "utf8"),
 }));
 const allSql = migrationEntries.map(({ sql }) => sql).join("\n");
+const healthEventMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("10500_automated_health_service_events"),
+  )?.sql ?? "";
+const healthEventDeclarations = auditPlpgsqlIntoTargets(healthEventMigration);
+check(
+  healthEventDeclarations.functionCount > 0 &&
+    healthEventDeclarations.undeclared.length === 0,
+  "Event RPC SELECT INTO targets are declared",
+);
+check(
+  /health_event_one_active_booking/i.test(healthEventMigration) &&
+    /v_used >= v_event.target_capacity/i.test(healthEventMigration),
+  "Event capacity and active Resident uniqueness remain database authoritative",
+);
+check(
+  /pg_advisory_xact_lock/i.test(healthEventMigration) &&
+    /for update;/i.test(healthEventMigration),
+  "Event allocation and capacity writes serialize using day and parent-row locks",
+);
+check(
+  /resident.linked_profile_id = auth.uid\(\)/i.test(healthEventMigration) &&
+    /p_event_id uuid, p_request_key uuid, p_join_waitlist boolean/i.test(
+      healthEventMigration,
+    ),
+  "Event booking derives its Resident identity; no client staff/status/queue inputs",
+);
+check(
+  /revoke all on function %s from public, anon, authenticated/i.test(
+    healthEventMigration,
+  ) &&
+    !/grant (?:insert|update|delete|all)[^;]*to authenticated/i.test(
+      healthEventMigration,
+    ),
+  "Event internal helpers and direct table writes are denied to browser roles",
+);
+check(
+  /order by booking.join_order loop/i.test(healthEventMigration) &&
+    /health_event_promote/i.test(healthEventMigration),
+  "Cancellation recovery promotes the eligible FIFO waitlist",
+);
+check(
+  /function public.appointment_assert_slot_available/i.test(
+    healthEventMigration,
+  ) &&
+    /function public.appointment_resident_available_slots/i.test(
+      healthEventMigration,
+    ) &&
+    /function public.resident_appointment_request/i.test(
+      healthEventMigration,
+    ) &&
+    /health_event_staff_reserved/i.test(healthEventMigration),
+  "Ordinary trusted schedules and availability honor event reservations",
+);
+check(
+  /emit_realtime_sync_event\('appointment'/i.test(healthEventMigration) &&
+    !/alter publication/i.test(healthEventMigration),
+  "Event changes reuse minimized realtime invalidation, not participant subscriptions",
+);
 const realtimeStateConsistency =
   migrationEntries.find(({ file }) =>
     file.includes("realtime_state_consistency"),

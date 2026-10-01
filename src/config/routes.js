@@ -10,6 +10,7 @@ export const ROUTES = Object.freeze({
   appointments: "/appointments",
   appointmentCalendar: "/appointments/calendar",
   appointmentQueue: "/appointments/queue",
+  healthEvents: "/appointments/events",
   healthRecords: "/health-records",
   healthRecordEncounters: "/health-records?section=encounters",
   healthRecordVitalSigns: "/health-records?section=vital-signs",
