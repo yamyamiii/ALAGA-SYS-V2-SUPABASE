@@ -89,12 +89,12 @@ describe("ALAGA AI server grounding and navigation domain", () => {
       ],
     });
     expect(response?.message).toContain("Pumunta sa My Appointments");
-    expect(response?.message).toContain("service at preferred schedule");
+    expect(response?.message).toContain("available dates at times");
     expect(response?.actions).toEqual([
       {
         type: "ui_action",
         actionId: "open_appointment_request_form",
-        label: "Request an Appointment",
+        label: "Book an Appointment",
         requiresConfirmation: false,
       },
     ]);
@@ -226,7 +226,7 @@ describe("ALAGA AI server grounding and navigation domain", () => {
         );
         expect(response?.message).toContain("required rejection justification");
         expect(response?.message).toMatch(
-          /same appointment and APT number|parehong appointment at APT number/,
+          /same appointment and APT number|parehong appointment at APT number/i,
         );
         expect(response?.message).not.toMatch(
           /manual start|mark in progress|clinical encounter|operational notes|replacement row/i,
@@ -1352,7 +1352,9 @@ describe("ALAGA AI server grounding and navigation domain", () => {
     const resident = workflowGrounding("resident");
     const admin = workflowGrounding("admin");
 
-    expect(resident.content).toContain("preferred appointment start time");
+    expect(resident.content).toContain(
+      "database-verified available AUTO_SLOT appointment",
+    );
     expect(resident.content).not.toContain("trusted user access");
     expect(admin.content).toContain("trusted user access");
   });

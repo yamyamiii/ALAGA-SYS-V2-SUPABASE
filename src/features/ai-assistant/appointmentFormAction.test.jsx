@@ -120,7 +120,7 @@ async function requestThroughAssistant(user) {
   );
   await user.click(screen.getByRole("button", { name: /send/i }));
   await user.click(
-    await screen.findByRole("button", { name: "Request an Appointment" }),
+    await screen.findByRole("button", { name: "Book an Appointment" }),
   );
 }
 
@@ -189,7 +189,7 @@ describe("AI-assisted resident appointment form action", () => {
     );
     await user.click(screen.getByRole("button", { name: /send/i }));
     const action = await screen.findByRole("button", {
-      name: "Request an Appointment",
+      name: "Book an Appointment",
     });
 
     Object.defineProperty(navigator, "onLine", {

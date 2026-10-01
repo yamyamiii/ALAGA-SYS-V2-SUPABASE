@@ -90,7 +90,7 @@ const ALL_ROLES = [
 
 const UI_ACTION_DEFINITIONS = Object.freeze({
   open_appointment_request_form: {
-    label: "Request an Appointment",
+    label: "Book an Appointment",
     roles: ["resident"] as const,
   },
 });
@@ -304,13 +304,13 @@ const ROLE_WORKFLOW_GUIDANCE: Record<CanonicalRole, string> = Object.freeze({
   admin:
     "Administrators review trusted user access, registry operations, appointment schedules, announcements, inquiries, and aggregate reports through their authorized modules.",
   barangay_health_worker:
-    "Barangay Health Workers manage permitted registry workflows, review incoming appointment requests and the daily queue, respond to inquiries, and view authorized aggregate reports.",
+    "Barangay Health Workers manage permitted registry workflows, appointment exceptions and the daily queue, respond to inquiries, and view authorized aggregate reports. Routine valid Resident AUTO_SLOT bookings are assigned and confirmed automatically.",
   nurse:
     "Nurses use assigned appointments and the daily queue and document authorized consultation-record workflows.",
   midwife:
     "Midwives use assigned appointments and the daily queue and document authorized consultation-record workflows.",
   resident:
-    "Residents may submit a preferred appointment start time for health-center review, view their own permitted information, read announcements and notifications, consult FAQs, and submit inquiries.",
+    "Residents may book a database-verified available AUTO_SLOT appointment that is assigned and confirmed automatically, view their own permitted information, read announcements and notifications, consult FAQs, and submit inquiries. Coordination-required services remain subject to health-center coordination.",
 });
 
 const ROLE_WORKFLOW_GUIDANCE_FILIPINO: Record<CanonicalRole, string> =
@@ -318,13 +318,13 @@ const ROLE_WORKFLOW_GUIDANCE_FILIPINO: Record<CanonicalRole, string> =
     admin:
       "Pinamamahalaan ng Administrator ang trusted user access, registry operations, appointment schedules, announcements, inquiries, at aggregate reports sa mga awtorisadong module.",
     barangay_health_worker:
-      "Pinamamahalaan ng Barangay Health Worker ang pinahihintulutang registry workflows, incoming appointment requests, daily queue, inquiries, at awtorisadong aggregate reports.",
+      "Pinamamahalaan ng Barangay Health Worker ang pinahihintulutang registry workflows, appointment exceptions, daily queue, inquiries, at awtorisadong aggregate reports. Awtomatikong naa-assign at nagiging Confirmed ang routine valid Resident AUTO_SLOT booking.",
     nurse:
       "Ginagamit ng Nurse ang sariling assigned appointments at daily queue at gumagawa ng awtorisadong consultation-record workflows.",
     midwife:
       "Ginagamit ng Midwife ang sariling assigned appointments at daily queue at gumagawa ng awtorisadong consultation-record workflows.",
     resident:
-      "Maaaring magsumite ang Resident ng preferred appointment start time para sa review ng health center, tingnan ang sariling pinahihintulutang impormasyon, magbasa ng announcements at notifications, gumamit ng FAQ, at magsumite ng inquiry.",
+      "Maaaring mag-book ang Resident ng database-verified available AUTO_SLOT appointment na awtomatikong naa-assign at nagiging Confirmed, tingnan ang sariling pinahihintulutang impormasyon, magbasa ng announcements at notifications, gumamit ng FAQ, at magsumite ng inquiry. Kailangan pa rin ang health-center coordination para sa coordination-required services.",
   });
 
 type SafeRecord = Record<string, unknown>;
@@ -3009,8 +3009,8 @@ export function workflowResponseFor(
     const language = detectResponseLanguage(message);
     const instructions =
       language === "english"
-        ? "To confirm a Resident appointment request:\n1. Open Appointments.\n2. Review Incoming resident requests or the pending request.\n3. Open the request details.\n4. Finalize the operational date and time if needed.\n5. Assign an eligible staff member when required.\n6. Confirm the appointment.\n\nIf the request cannot be accepted, use Reject and provide the required rejection justification. After confirmation, the operational flow is Check in, then Complete. Rescheduling keeps the same appointment and APT number. Health Records remain separate and are used only when the service needs clinical documentation."
-        : "Para i-confirm ang Resident appointment request:\n1. Buksan ang Appointments.\n2. I-review ang Incoming resident requests o ang pending request.\n3. Buksan ang request details.\n4. I-finalize ang operational date at time kung kailangan.\n5. Mag-assign ng eligible staff member kapag kinakailangan.\n6. I-confirm ang appointment.\n\nKung hindi maaaring tanggapin ang request, gamitin ang Reject at ilagay ang required rejection justification. Pagkatapos ma-confirm, Check in at Complete ang operational flow. Kapag ni-reschedule, mananatili ang parehong appointment at APT number. Hiwalay ang Health Records at ginagamit lamang kapag kailangan ng clinical documentation para sa serbisyo.";
+        ? "Routine valid Resident AUTO_SLOT bookings are already assigned and Confirmed automatically, so they do not need manual approval. For a retained legacy or exceptional Pending request:\n1. Open Appointments.\n2. Review Exceptional pending requests.\n3. Open the request details.\n4. Finalize the operational date and time if needed.\n5. Assign an eligible staff member when required.\n6. Confirm the appointment.\n\nIf an exceptional request cannot be accepted, use Reject and provide the required rejection justification. Staff continue to handle exceptions, rescheduling, cancellation, walk-ins, and operational management. Rescheduling keeps the same appointment and APT number."
+        : "Awtomatiko nang naa-assign at nagiging Confirmed ang routine valid Resident AUTO_SLOT booking, kaya hindi na kailangan ng manual approval. Para sa retained legacy o exceptional Pending request:\n1. Buksan ang Appointments.\n2. I-review ang Exceptional pending requests.\n3. Buksan ang request details.\n4. I-finalize ang operational date at time kung kailangan.\n5. Mag-assign ng eligible staff member kapag kinakailangan.\n6. I-confirm ang appointment.\n\nKung hindi maaaring tanggapin ang exceptional request, gamitin ang Reject at ilagay ang required rejection justification. Staff pa rin ang humahawak ng exceptions, rescheduling, cancellation, walk-ins, at operational management. Parehong appointment at APT number ang pinananatili kapag ni-reschedule.";
 
     return {
       category: "workflow_appointment_confirmation",
@@ -3021,7 +3021,7 @@ export function workflowResponseFor(
           label: "Workflow Guide",
           title: "Resident appointment request review workflow",
           content:
-            "Admin and Barangay Health Worker review a pending Resident request, finalize its schedule, assign eligible staff when required, and confirm it. Rejection keeps its required justification. Confirmed appointments proceed through check-in and completion, while rescheduling preserves the appointment and APT number.",
+            "Routine AUTO_SLOT Resident bookings are automatically assigned and confirmed. Admin and Barangay Health Worker review only retained legacy or exceptional pending requests and keep exception, rescheduling, cancellation, walk-in, and operational management responsibilities.",
           updatedAt: null,
         },
       ],

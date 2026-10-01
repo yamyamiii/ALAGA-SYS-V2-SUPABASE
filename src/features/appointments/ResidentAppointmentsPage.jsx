@@ -74,10 +74,10 @@ export function ResidentAppointmentsPage({ profile }) {
       <PageHeading
         eyebrow="My healthcare"
         title="My appointments"
-        description="Request a visit and follow its status. Pending means the health center has not confirmed your preferred schedule yet."
+        description="Book an available service slot and follow its status. Standard self-bookings are confirmed automatically after secure availability checks."
         actions={
           <Button type="button" onClick={() => setRequestOpen(true)}>
-            <CalendarPlus /> Request appointment
+            <CalendarPlus /> Book appointment
           </Button>
         }
       />
@@ -87,11 +87,12 @@ export function ResidentAppointmentsPage({ profile }) {
         className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm"
         role="status"
       >
-        <p className="font-semibold">Pending = awaiting confirmation</p>
+        <p className="font-semibold">Routine bookings are automatic</p>
         <p className="mt-1 text-muted-foreground">
-          Your selected date and start time are preferences until health-center
-          staff review the request, finalize the schedule, assign staff, and
-          confirm the appointment.
+          Choose a service, then select only dates and times with current staff
+          capacity. The database assigns eligible staff and confirms a valid
+          booking immediately. Coordination-required services are clearly
+          identified before booking.
         </p>
       </div>
 
@@ -109,8 +110,8 @@ export function ResidentAppointmentsPage({ profile }) {
           ) : items.length === 0 ? (
             <EmptyState
               title="No appointments yet"
-              description="Request your first appointment when you need assistance from the health center."
-              actionLabel="Request appointment"
+              description="Book your first available appointment when you need assistance from the health center."
+              actionLabel="Book appointment"
               onAction={() => setRequestOpen(true)}
             />
           ) : (

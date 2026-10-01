@@ -43,6 +43,27 @@ function mapError(error, fallback) {
       { cause: error },
     );
   }
+  if (/requires health-center coordination/i.test(message)) {
+    return new AppointmentServiceError(
+      "coordination_required",
+      "This service requires coordination with the Barangay Health Center.",
+      { cause: error },
+    );
+  }
+  if (/date is not available for this service/i.test(message)) {
+    return new AppointmentServiceError(
+      "invalid_service_date",
+      "That date is not available for the selected service. Choose one of the offered dates.",
+      { cause: error },
+    );
+  }
+  if (/slot is no longer available|overlaps this slot/i.test(message)) {
+    return new AppointmentServiceError(
+      "slot_unavailable",
+      "That appointment slot is no longer available. Please choose another time.",
+      { cause: error },
+    );
+  }
   if (/only an own pending resident request can be cancelled/i.test(message)) {
     return new AppointmentServiceError(
       "resident_cancellation_unavailable",
@@ -467,6 +488,36 @@ export function createAppointmentService(clientProvider = getSupabaseClient) {
         "Incoming resident appointment requests could not be loaded.",
       );
       return pageResult(data, page, pageSize);
+    },
+
+    async listResidentBookingServices() {
+      return (
+        (await rpc(
+          client(),
+          "appointment_resident_service_catalog",
+          {},
+          "Appointment services could not be loaded.",
+        )) ?? []
+      );
+    },
+
+    async listResidentAvailableSlots({ serviceType, dateFrom, dateTo }) {
+      const slots =
+        (await rpc(
+          client(),
+          "appointment_resident_available_slots",
+          {
+            p_service_type: serviceType,
+            p_date_from: dateFrom,
+            p_date_to: dateTo,
+          },
+          "Available appointment times could not be loaded.",
+        )) ?? [];
+      return slots.map((slot) => ({
+        ...slot,
+        start_time: String(slot.start_time ?? "").slice(0, 5),
+        end_time: String(slot.end_time ?? "").slice(0, 5),
+      }));
     },
 
     async createAppointment(values, requestKey = crypto.randomUUID()) {

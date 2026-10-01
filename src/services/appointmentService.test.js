@@ -308,7 +308,7 @@ describe("appointment service", () => {
         {
           id: appointmentId,
           appointment_number: "APT-2026-000002",
-          status: "pending",
+          status: "confirmed",
           version: 1,
         },
       ],
@@ -328,7 +328,7 @@ describe("appointment service", () => {
       ),
     ).resolves.toMatchObject({
       appointment_number: "APT-2026-000002",
-      status: "pending",
+      status: "confirmed",
     });
 
     expect(client.rpc).toHaveBeenCalledWith("resident_appointment_request", {
@@ -362,7 +362,7 @@ describe("appointment service", () => {
           {
             id: appointmentId,
             appointment_number: "APT-2026-000002",
-            status: "pending",
+            status: "confirmed",
             version: 1,
           },
         ],
@@ -386,6 +386,92 @@ describe("appointment service", () => {
       );
     },
   );
+
+  it("loads Resident-safe booking modes and availability from trusted RPCs", async () => {
+    const client = sequentialRpcClient([
+      {
+        data: [
+          {
+            service_type: "General Consultation",
+            booking_mode: "AUTO_SLOT",
+            slot_duration_minutes: 30,
+          },
+          {
+            service_type: "Postpartum Home Visit",
+            booking_mode: "COORDINATION_REQUIRED",
+            slot_duration_minutes: null,
+          },
+        ],
+        error: null,
+      },
+      {
+        data: [
+          {
+            scheduled_date: "2026-10-01",
+            start_time: "08:00:00",
+            end_time: "08:30:00",
+          },
+        ],
+        error: null,
+      },
+    ]);
+    const service = createAppointmentService(() => client);
+
+    await expect(service.listResidentBookingServices()).resolves.toHaveLength(
+      2,
+    );
+    await expect(
+      service.listResidentAvailableSlots({
+        serviceType: "General Consultation",
+        dateFrom: "2026-10-01",
+        dateTo: "2026-10-31",
+      }),
+    ).resolves.toEqual([
+      {
+        scheduled_date: "2026-10-01",
+        start_time: "08:00",
+        end_time: "08:30",
+      },
+    ]);
+    expect(client.rpc).toHaveBeenNthCalledWith(
+      1,
+      "appointment_resident_service_catalog",
+      {},
+    );
+    expect(client.rpc).toHaveBeenNthCalledWith(
+      2,
+      "appointment_resident_available_slots",
+      {
+        p_service_type: "General Consultation",
+        p_date_from: "2026-10-01",
+        p_date_to: "2026-10-31",
+      },
+    );
+  });
+
+  it("maps an atomic capacity race to an actionable stale-slot error", async () => {
+    const client = rpcClient({
+      data: null,
+      error: {
+        code: "23P01",
+        message:
+          "That appointment slot is no longer available. Please choose another time.",
+      },
+    });
+    const service = createAppointmentService(() => client);
+
+    await expect(
+      service.requestResidentAppointment(
+        {
+          service_type: "General Consultation",
+          scheduled_date: "2026-10-01",
+          start_time: "08:00",
+          reason: "",
+        },
+        requestKey,
+      ),
+    ).rejects.toMatchObject({ code: "slot_unavailable" });
+  });
 
   it.each(["07:30", "08:15", "16:30"])(
     "rejects a manipulated Resident start time of %s before the RPC",

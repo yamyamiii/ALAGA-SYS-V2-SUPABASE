@@ -371,7 +371,7 @@ describe("ALAGA AI centralized system knowledge", () => {
     expect(location?.actions).toEqual([
       expect.objectContaining({ actionId: "open_appointment_request_form" }),
     ]);
-    expect(approval?.message).toMatch(/Pending muna|hindi automatic/i);
+    expect(approval?.message).toMatch(/awtomatikong Confirmed/i);
   });
 
   it.each([
@@ -414,15 +414,19 @@ describe("ALAGA AI centralized system knowledge", () => {
     );
 
     expect(how?.message).toMatch(
-      /My Appointments.*service.*preferred schedule/i,
+      /My Appointments.*service.*available dates at times/i,
     );
     expect(how?.message).not.toMatch(/Administrator|BHW/);
     expect(where?.message).toMatch(/^Sa My Appointments page/i);
     expect(where?.message).not.toMatch(/Pending|Administrator|BHW/i);
-    expect(approval?.message).toMatch(/Hindi.*Pending.*review.*confirm/i);
+    expect(approval?.message).toMatch(/awtomatikong Confirmed/i);
     expect(approval?.message).not.toMatch(/pumunta|buksan/i);
-    expect(next?.message).toMatch(/Pending.*reviews?.*schedule.*confirms?/i);
-    expect(general?.message).toMatch(/Resident.*Pending.*Administrator|BHW/i);
+    expect(next?.message).toMatch(
+      /revalidates.*capacity.*eligible.*Confirmed/i,
+    );
+    expect(general?.message).toMatch(
+      /Resident.*AUTO_SLOT.*available date and time.*confirms.*automatically/i,
+    );
     expect(
       new Set([how, where, approval, next].map((response) => response?.message))
         .size,
@@ -449,7 +453,7 @@ describe("ALAGA AI centralized system knowledge", () => {
       "resident",
     );
 
-    expect(approval?.message).toMatch(/Pending.*review.*confirm/i);
+    expect(approval?.message).toMatch(/awtomatikong Confirmed/i);
     expect(location?.message).toMatch(/^Sa My Appointments page/i);
     expect(location?.actions).toEqual([
       expect.objectContaining({ actionId: "open_appointment_request_form" }),

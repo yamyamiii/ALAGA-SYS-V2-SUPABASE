@@ -1,9 +1,11 @@
 # Appointment scheduling architecture
 
 Phase 4 adds operational appointment scheduling, a daily queue, and a monthly
-calendar. Phase 5.5 adds resident-originated appointment requests that remain
-pending until staff review. It does not add notification delivery, diagnoses,
-prescriptions, or automated triage.
+calendar. Phase 5.5 added the original staff-reviewed Resident request flow.
+The redefense Phase 1 migration replaces the standard Resident path with
+trusted automatic slot booking while retaining Pending for historical and
+exception workflows. It does not add diagnoses, prescriptions, or automated
+triage.
 
 ## Boundaries
 
@@ -19,6 +21,9 @@ prescriptions, or automated triage.
   authority for role or ownership.
 - Resident request RPCs derive ownership from `auth.uid()` and never accept a
   resident, staff, priority, status, or appointment type from the browser.
+- Resident availability responses expose only service booking mode, date,
+  start time, end time, and duration. Staff identities, staffing counts, other
+  Residents, reasons, and clinical data are not exposed.
 
 ## Time model
 
@@ -30,6 +35,48 @@ avoid browser-timezone conversion.
 Walk-ins must use the current Manila date. Other same-day appointments must
 start in the future. The database enforces these rules independently of form
 validation.
+
+The current appointment booking window uses 30-minute slots beginning at
+08:00 through 16:00, inclusive. This is a scheduling rule and must not be
+represented as verified health-center opening or closing hours.
+
+## Automated Resident booking
+
+Old standard flow:
+
+```text
+Resident request -> Pending -> human review -> staff assignment -> Confirmed
+```
+
+New standard `AUTO_SLOT` flow:
+
+```text
+Resident selects a database-available slot
+-> trusted database revalidates the service date, time, Resident, and capacity
+-> system assigns eligible available staff
+-> appointment is inserted as Confirmed
+-> notification and realtime invalidation events propagate
+```
+
+Administrator/BHW intervention is no longer required for routine valid
+self-bookings. Staff retain exception, rescheduling, cancellation, walk-in,
+staff-assisted scheduling, and operational management responsibilities.
+
+`appointment_service_schedules` is the authoritative recurring schedule model.
+It stores an explicit booking mode, active state, ISO weekday, optional
+occurrence within a month, duration, interval, and first/last appointment start
+time. It contains no executable expressions. Current rules are:
+
+- General Consultation: daily `AUTO_SLOT`
+- Buntis / Prenatal Care: Tuesday `AUTO_SLOT`
+- Maternal Care: first Tuesday `AUTO_SLOT`
+- Immunization: first Wednesday `AUTO_SLOT`
+- Family Planning: Thursday `AUTO_SLOT`
+- Postpartum Home Visit: `COORDINATION_REQUIRED`
+
+The Resident service catalog and availability RPCs read this table. A
+coordination-required service never returns an instant-booking slot and the UI
+directs the Resident to Inquiries or the Barangay Health Center.
 
 ## Concurrency and idempotency
 
@@ -53,10 +100,14 @@ index makes retries idempotent. Rescheduling also has a unique
 `rescheduled_from_id`, so one original can have only one replacement.
 
 Resident submissions use the same request-key uniqueness plus advisory locks
-for request-key and duplicate schedule serialization. They force a pending,
-normal-priority, scheduled, unassigned appointment. An unassigned resident
-request is a preferred schedule, not a reserved slot; staff-specific overlap
-protection begins when authorized staff assign a person.
+for request-key, the Resident/date, and each candidate staff/date. The booking
+RPC rejects overlapping Resident appointments, revalidates the recurring
+service date and slot window, and scans active eligible staff in ascending
+selected-day workload order with profile UUID as a stable tie-break. It locks
+and rechecks each candidate using the same staff/date lock as staff scheduling.
+If capacity remains, it inserts one normal-priority, assigned, Confirmed row.
+If capacity was consumed concurrently, it returns a clean slot-unavailable
+conflict and never double-books staff.
 
 The original preferred date/time fields remain on resident-originated
 appointments and are copied through atomic rescheduling.
@@ -97,8 +148,8 @@ RLS-preserving APIs. Check-in, schedule, status, assignment, and completion
 changes therefore reconcile without relying on a polling loop.
 
 Residents receive only `/appointments`, rendered as their own appointment
-cards with request and pending-cancellation actions. Calendar and queue routes
-require separate staff permissions; the queue RPC also rejects residents.
+cards and automated booking dialog. Calendar and queue routes require separate
+staff permissions; the queue RPC also rejects residents.
 
 ## Deployment
 
@@ -121,3 +172,13 @@ provisional duration, the trusted RPC rejects cross-date ranges, and the
 existing schedule validator applies Manila-date and time rules. Staff-created
 and staff-adjusted appointments continue accepting explicit start and end
 times.
+
+Forward-only Migration
+`20260720010300_automated_resident_appointments.sql` adds the authoritative
+service schedule model, Resident-safe service/availability RPCs, centralized
+staff eligibility, fair atomic assignment, automatic confirmation,
+data-minimized audit semantics, and confirmed-insert notifications. Existing
+list, calendar, dashboard, queue, report, and workload reads require no special
+case because the new row is an ordinary assigned Confirmed appointment. The
+`alaga-ai` Edge Function must be redeployed after its verified static workflow
+knowledge is updated; no automatic deployment is performed by this change.

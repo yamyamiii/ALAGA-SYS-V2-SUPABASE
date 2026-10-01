@@ -18,7 +18,7 @@ export const AI_NAVIGATION_TARGETS = Object.freeze({
   },
   open_appointment_request_form: {
     type: "ui_action",
-    label: "Request an Appointment",
+    label: "Book an Appointment",
     route: ROUTES.appointments,
     roles: [USER_ROLES.RESIDENT],
   },

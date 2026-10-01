@@ -59,7 +59,7 @@ describe("ALAGA AI frontend navigation boundary", () => {
     expect(resolveAiUiAction(action, USER_ROLES.RESIDENT)).toEqual({
       type: "ui_action",
       actionId: "open_appointment_request_form",
-      label: "Request an Appointment",
+      label: "Book an Appointment",
       route: ROUTES.appointments,
       requiresConfirmation: false,
     });

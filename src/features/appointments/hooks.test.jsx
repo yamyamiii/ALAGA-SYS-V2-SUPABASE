@@ -10,10 +10,75 @@ import {
   appointmentKeys,
   useAppointmentDashboard,
   useAppointmentMutation,
+  useResidentAppointmentAvailability,
+  useResidentBookingServices,
 } from "@/features/appointments/hooks";
 import { appointmentService } from "@/services/appointmentService";
 
 describe("appointment mutation cache propagation", () => {
+  it("loads the authoritative Resident booking catalog and availability", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const services = [
+      {
+        service_type: "General Consultation",
+        booking_mode: "AUTO_SLOT",
+        slot_duration_minutes: 30,
+      },
+    ];
+    const slots = [
+      {
+        scheduled_date: "2026-10-01",
+        start_time: "08:00",
+        end_time: "08:30",
+      },
+    ];
+    const listServices = vi
+      .spyOn(appointmentService, "listResidentBookingServices")
+      .mockResolvedValue(services);
+    const listSlots = vi
+      .spyOn(appointmentService, "listResidentAvailableSlots")
+      .mockResolvedValue(slots);
+    const wrapper = ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const servicesHook = renderHook(() => useResidentBookingServices(true), {
+      wrapper,
+    });
+    const availabilityHook = renderHook(
+      () =>
+        useResidentAppointmentAvailability(
+          {
+            serviceType: "General Consultation",
+            dateFrom: "2026-10-01",
+            dateTo: "2026-10-31",
+          },
+          true,
+        ),
+      { wrapper },
+    );
+
+    await waitFor(() =>
+      expect(servicesHook.result.current.data).toEqual(services),
+    );
+    await waitFor(() =>
+      expect(availabilityHook.result.current.data).toEqual(slots),
+    );
+    expect(listServices).toHaveBeenCalledOnce();
+    expect(listSlots).toHaveBeenCalledWith({
+      serviceType: "General Consultation",
+      dateFrom: "2026-10-01",
+      dateTo: "2026-10-31",
+    });
+
+    servicesHook.unmount();
+    availabilityHook.unmount();
+    listServices.mockRestore();
+    listSlots.mockRestore();
+  });
+
   it("invalidates every appointment result family after rescheduling", async () => {
     const client = new QueryClient({
       defaultOptions: { mutations: { retry: false } },

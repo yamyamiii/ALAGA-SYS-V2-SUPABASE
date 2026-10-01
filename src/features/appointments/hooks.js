@@ -13,6 +13,12 @@ export const appointmentKeys = Object.freeze({
   history: (residentId, page) => ["appointments", "history", residentId, page],
   dashboard: ["appointments", "dashboard"],
   residentRequests: ["appointments", "resident-requests"],
+  residentServices: ["appointments", "resident-booking-services"],
+  residentAvailability: (parameters) => [
+    "appointments",
+    "resident-availability",
+    parameters,
+  ],
 });
 
 export function invalidateAppointmentQueries(queryClient) {
@@ -107,6 +113,28 @@ export function useIncomingResidentAppointmentRequests(enabled = true) {
     enabled,
     staleTime: 30_000,
     refetchOnWindowFocus: "always",
+  });
+}
+
+export function useResidentBookingServices(enabled = true) {
+  return useQuery({
+    queryKey: appointmentKeys.residentServices,
+    queryFn: () => appointmentService.listResidentBookingServices(),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useResidentAppointmentAvailability(parameters, enabled = true) {
+  return useQuery({
+    queryKey: appointmentKeys.residentAvailability(parameters),
+    queryFn: () => appointmentService.listResidentAvailableSlots(parameters),
+    enabled:
+      enabled &&
+      Boolean(
+        parameters.serviceType && parameters.dateFrom && parameters.dateTo,
+      ),
+    staleTime: 15_000,
   });
 }
 

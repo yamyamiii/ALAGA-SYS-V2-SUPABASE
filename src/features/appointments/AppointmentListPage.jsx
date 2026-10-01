@@ -141,11 +141,12 @@ function StaffAppointmentListPage({ profile }) {
           <CardContent className="space-y-4 p-4 sm:p-6">
             <div>
               <h2 className="font-heading text-lg font-semibold">
-                Incoming resident requests
+                Exceptional pending requests
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Review pending preferred schedules, assign eligible staff, then
-                confirm or reject with a reason.
+                Routine Resident self-bookings are assigned and confirmed
+                automatically. Review only retained legacy or exceptional
+                pending requests here.
               </p>
             </div>
             {incomingQuery.isLoading ? (
@@ -162,7 +163,7 @@ function StaffAppointmentListPage({ profile }) {
               <EmptyState
                 compact
                 title="No pending resident requests"
-                description="New online requests will appear here for review."
+                description="Routine valid self-bookings do not require staff approval."
               />
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

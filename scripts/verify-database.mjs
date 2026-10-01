@@ -77,6 +77,7 @@ const expectedMigrations = [
   "20260720010000_permanent_announcement_delete.sql",
   "20260720010100_allow_retired_resident_relink.sql",
   "20260720010200_realtime_state_consistency.sql",
+  "20260720010300_automated_resident_appointments.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -207,6 +208,8 @@ const reviewedPendingMigrationHashes = {
     "f4805540bf51abedba8b02a46b7e3f8fde3825f4e5599ee4ce39090119df0247",
   "20260720010200_realtime_state_consistency.sql":
     "3f9a6c8734f174cc1999b3f88c3ff6be0f12e7028148adca1e5b86451b291008",
+  "20260720010300_automated_resident_appointments.sql":
+    "5320c249a91ac5c2caa59b354ee8f8f335f68d947a63219e19ea756ed4f2f3dd",
 };
 const expectedTables = [
   "account_retirements",
@@ -214,6 +217,7 @@ const expectedTables = [
   "ai_request_rate_limits",
   "announcements",
   "appointment_request_events",
+  "appointment_service_schedules",
   "appointments",
   "assistance_notifications",
   "audit_logs",
@@ -306,7 +310,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly sixty-three expected migrations exist in lexical order",
+  "Exactly sixty-four expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -408,6 +412,10 @@ const residentRegistrationNotification =
 const bagongpookAppointmentServices =
   migrationEntries.find(({ file }) =>
     file.includes("add_bagongpook_appointment_services"),
+  )?.sql ?? "";
+const automatedResidentAppointments =
+  migrationEntries.find(({ file }) =>
+    file.includes("automated_resident_appointments"),
   )?.sql ?? "";
 
 check(
@@ -872,6 +880,68 @@ check(
       bagongpookAppointmentServices,
     ),
   "The updated appointment service validator remains private",
+);
+const automatedAppointmentDeclarationAudit = auditPlpgsqlIntoTargets(
+  automatedResidentAppointments,
+);
+check(
+  automatedAppointmentDeclarationAudit.functionCount === 7 &&
+    automatedAppointmentDeclarationAudit.undeclared.length === 0,
+  "Every automated-appointment PL/pgSQL SELECT/RETURNING INTO target is declared",
+);
+check(
+  /create table public\.appointment_service_schedules/i.test(
+    automatedResidentAppointments,
+  ) &&
+    /alter table public\.appointment_service_schedules enable row level security/i.test(
+      automatedResidentAppointments,
+    ) &&
+    /revoke all on table public\.appointment_service_schedules[\s\S]*from public, anon, authenticated/i.test(
+      automatedResidentAppointments,
+    ),
+  "Automated appointment schedules are database-authoritative and browser-private",
+);
+check(
+  /'General Consultation', 'AUTO_SLOT'[\s\S]*'Buntis \/ Prenatal Care', 'AUTO_SLOT'[\s\S]*'Maternal Care', 'AUTO_SLOT'[\s\S]*'Immunization', 'AUTO_SLOT'[\s\S]*'Family Planning', 'AUTO_SLOT'[\s\S]*'Postpartum Home Visit', 'COORDINATION_REQUIRED'/i.test(
+    automatedResidentAppointments,
+  ),
+  "Automated appointment schedules contain the six verified service booking modes",
+);
+check(
+  /appointment_resident_available_slots[\s\S]*linked_profile_id = actor_id[\s\S]*appointment_service_date_allowed[\s\S]*appointment_staff_role_eligible/i.test(
+    automatedResidentAppointments,
+  ) &&
+    /returns table \(\s*scheduled_date date,\s*start_time time,\s*end_time time\s*\)/i.test(
+      automatedResidentAppointments,
+    ),
+  "Resident availability derives identity and returns only safe available slot fields",
+);
+check(
+  /resident_appointment_request\(\s*p_service_type text,\s*p_scheduled_date date,\s*p_start_time time,\s*p_reason text,\s*p_request_key uuid\s*\)[\s\S]*appointment\.created_by = actor_id[\s\S]*appointment_service_date_allowed[\s\S]*alaga:resident-appointment-date:[\s\S]*order by \([\s\S]*select count\(\*\)[\s\S]*\), staff\.id[\s\S]*alaga:appointment-slot:[\s\S]*'confirmed'::public\.appointment_status/i.test(
+    automatedResidentAppointments,
+  ),
+  "Resident booking is idempotent, conflict-safe, fairly assigned, and automatically confirmed",
+);
+check(
+  /notify_automated_resident_appointment[\s\S]*appointment_approved[\s\S]*appointment_confirmed[\s\S]*notification_schedule_appointment_reminder/i.test(
+    automatedResidentAppointments,
+  ) &&
+    /appointment\.auto_scheduled[\s\S]*'staff_assignment', 'automatic'[\s\S]*'confirmation', 'automatic'/i.test(
+      automatedResidentAppointments,
+    ),
+  "Automatic bookings emit safe notifications and minimized semantic audit history",
+);
+check(
+  /revoke all on function public\.appointment_staff_role_eligible[\s\S]*from public, anon, authenticated/i.test(
+    automatedResidentAppointments,
+  ) &&
+    /grant execute on function public\.appointment_resident_available_slots[\s\S]*to authenticated, service_role/i.test(
+      automatedResidentAppointments,
+    ) &&
+    !/grant\s+(?:insert|update|delete)[^;]*(?:appointments|appointment_service_schedules)[^;]*authenticated/i.test(
+      automatedResidentAppointments,
+    ),
+  "Automated appointment RPC grants preserve the trusted mutation boundary",
 );
 
 for (const [file, expectedHash] of Object.entries(completedMigrationHashes)) {

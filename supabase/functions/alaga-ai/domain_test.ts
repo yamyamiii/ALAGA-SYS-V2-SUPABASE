@@ -348,12 +348,12 @@ Deno.test("answers the approved appointment request workflow", () => {
   );
   assertEquals(response?.category, "workflow_appointment_request");
   assert(response?.message.includes("Pumunta sa My Appointments"));
-  assert(response?.message.includes("service at preferred schedule"));
+  assert(response?.message.includes("available dates at times"));
   assertEquals(response?.sources[0]?.type, "workflow");
   assertEquals(response?.actions[0], {
     type: "ui_action",
     actionId: "open_appointment_request_form",
-    label: "Request an Appointment",
+    label: "Book an Appointment",
     requiresConfirmation: false,
   });
 });
@@ -397,12 +397,12 @@ Deno.test("returns distinct minimal appointment workflow answers", () => {
     "resident",
   );
 
-  assert(how?.message.includes("service at preferred schedule"));
+  assert(how?.message.includes("available dates at times"));
   assert(!how?.message.match(/Administrator|BHW/));
   assert(where?.message.startsWith("Sa My Appointments page"));
   assert(!where?.message.match(/Pending|Administrator|BHW/));
-  assert(approval?.message.match(/Pending.*review.*confirm/i));
-  assert(next?.message.match(/Pending.*review.*schedule.*confirm/i));
+  assert(approval?.message.match(/automatically Confirmed/i));
+  assert(next?.message.match(/revalidates.*capacity.*eligible.*Confirmed/i));
   assertEquals(
     new Set([how?.message, where?.message, approval?.message, next?.message])
       .size,
@@ -430,7 +430,7 @@ Deno.test("switches appointment facets during bounded follow-ups", () => {
     "resident",
   );
 
-  assert(approval?.message.match(/Pending.*review.*confirm/i));
+  assert(approval?.message.match(/awtomatikong Confirmed/i));
   assert(location?.message.startsWith("Sa My Appointments page"));
   assertEquals(location?.actions[0]?.actionId, "open_appointment_request_form");
 });

@@ -270,53 +270,53 @@ export const SYSTEM_KNOWLEDGE_ENTRIES: readonly SystemKnowledgeEntry[] = [
     ],
     facts: {
       english:
-        "A Resident opens My Appointments, chooses Request Appointment, selects a service and preferred schedule, and submits. The request starts as Pending and is not automatically approved. Administrator or BHW reviews the request, finalizes the operational schedule, assigns eligible staff when required, and confirms it.",
+        "A Resident opens My Appointments, chooses Book Appointment, selects an AUTO_SLOT service, then chooses only a database-verified available date and time. The trusted booking workflow rechecks capacity, assigns eligible available staff, and creates the appointment as Confirmed without routine Administrator approval. Coordination-required services, including Postpartum Home Visit, direct the Resident to the health center instead of promising instant confirmation.",
       filipino:
-        "Binubuksan ng Resident ang My Appointments, pinipili ang Request Appointment, service, at preferred schedule, at sini-submit ang request. Pending muna ito at hindi automatic na approved. Nire-review ng Administrator o BHW ang request, inaayos ang operational schedule, nag-a-assign ng eligible staff kung kailangan, at kino-confirm ito.",
+        "Binubuksan ng Resident ang My Appointments, pinipili ang Book Appointment, pumipili ng AUTO_SLOT service, at pumipili lamang sa database-verified na available date at time. Muling chine-check ng trusted booking workflow ang capacity, awtomatikong nag-a-assign ng eligible available staff, at gumagawa ng Confirmed appointment nang walang routine Administrator approval. Para sa coordination-required services gaya ng Postpartum Home Visit, idirerekta ang Resident sa health center sa halip na mangako ng instant confirmation.",
     },
     answerFacets: {
       how_to_request: {
         english:
-          "Open My Appointments, choose Request Appointment, select a service and preferred schedule, then submit the request.",
+          "Open My Appointments, choose Book Appointment, select a service, then choose one of the available dates and times shown by the system. Review and book; a valid AUTO_SLOT booking is confirmed automatically.",
         filipino:
-          "Pumunta sa My Appointments, piliin ang Request Appointment, pumili ng service at preferred schedule, then submit the request.",
+          "Pumunta sa My Appointments, piliin ang Book Appointment, pumili ng service, at pumili sa available dates at times na ipinapakita ng system. I-review at i-book; awtomatikong Confirmed ang valid AUTO_SLOT booking.",
       },
       where_to_request: {
         english:
-          "Go to the My Appointments page and choose Request Appointment to get started.",
+          "Go to the My Appointments page and choose Book Appointment to get started.",
         filipino:
-          "Sa My Appointments page. Piliin ang Request Appointment para makapagsimula.",
+          "Sa My Appointments page. Piliin ang Book Appointment para makapagsimula.",
       },
       approval_behavior: {
         english:
-          "No. The request starts as Pending and must be reviewed and confirmed by authorized staff before it becomes a confirmed appointment.",
+          "For an AUTO_SLOT service, yes: if the selected slot remains available and booking succeeds, the appointment is automatically Confirmed and does not need routine Admin approval. Coordination-required services are not instantly confirmed.",
         filipino:
-          "Hindi. Pending muna ang request at kailangan itong i-review at i-confirm ng authorized staff bago maging confirmed appointment.",
+          "Para sa AUTO_SLOT service, oo: kapag available pa ang slot at successful ang booking, awtomatikong Confirmed ang appointment at hindi na kailangan ng routine Admin approval. Hindi instant na kino-confirm ang coordination-required services.",
       },
       what_happens_next: {
         english:
-          "The request first becomes Pending. Authorized staff reviews it, adjusts the schedule if needed, and confirms it when accepted.",
+          "The database revalidates the service schedule and capacity, selects eligible available staff, and creates a successful AUTO_SLOT booking as Confirmed. Staff handle exceptions, rescheduling, cancellation, walk-ins, and retained pending workflows.",
         filipino:
-          "Magiging Pending muna ang request. Ire-review ito ng authorized staff, iaayos ang schedule kung kailangan, at iko-confirm kapag accepted.",
+          "Muling vine-validate ng database ang service schedule at capacity, pumipili ng eligible available staff, at ginagawa agad na Confirmed ang successful AUTO_SLOT booking. Staff ang humahawak ng exceptions, rescheduling, cancellation, walk-ins, at retained pending workflows.",
       },
       staff_review: {
         english:
-          "Administrator or BHW reviews the pending request, finalizes the operational schedule, assigns eligible staff when required, and confirms it when accepted.",
+          "Routine valid AUTO_SLOT self-bookings need no Administrator or BHW review. Administrator and BHW retain exception management and may handle legacy or exceptional pending requests, rescheduling, cancellation, walk-ins, and staff-assisted appointments.",
         filipino:
-          "Administrator o BHW ang nagre-review ng pending request, nag-aayos ng operational schedule, nag-a-assign ng eligible staff kung kailangan, at nagko-confirm kapag accepted.",
+          "Hindi na kailangan ng Administrator o BHW review ang routine valid AUTO_SLOT self-booking. Nananatili sa Administrator at BHW ang exception management at paghawak ng legacy o exceptional pending requests, rescheduling, cancellation, walk-ins, at staff-assisted appointments.",
       },
       general_workflow: {
         english:
-          "A Resident opens My Appointments, chooses Request Appointment, selects a service and preferred schedule, and submits. The request starts as Pending and is not automatically approved. Administrator or BHW reviews the request, finalizes the operational schedule, assigns eligible staff when required, and confirms it.",
+          "A Resident opens My Appointments, chooses Book Appointment, selects an AUTO_SLOT service, and chooses a system-available date and time. The trusted database rechecks the slot, assigns eligible available staff, and confirms the appointment automatically. Coordination-required services are arranged with the health center instead.",
         filipino:
-          "Binubuksan ng Resident ang My Appointments, pinipili ang Request Appointment, service, at preferred schedule, at sini-submit ang request. Pending muna ito at hindi automatic na approved. Nire-review ng Administrator o BHW ang request, inaayos ang operational schedule, nag-a-assign ng eligible staff kung kailangan, at kino-confirm ito.",
+          "Binubuksan ng Resident ang My Appointments, pinipili ang Book Appointment, pumipili ng AUTO_SLOT service, at pumipili ng system-available date at time. Muling chine-check ng trusted database ang slot, awtomatikong nag-a-assign ng eligible available staff, at kino-confirm ang appointment. Sa health center inaayos ang coordination-required services.",
       },
     },
     access: {
       english:
-        "Residents manage only their own requests. Administrator and BHW handle incoming-request review; Nurse and Midwife use only their authorized assigned workflow.",
+        "Residents book only for their own linked record and cannot choose staff or status. Administrator and BHW manage exceptions and operations; Nurse and Midwife use only their authorized assigned workflow.",
       filipino:
-        "Sariling requests lamang ang pinamamahalaan ng Resident. Administrator at BHW ang nagre-review ng incoming requests; awtorisadong assigned workflow lamang ang ginagamit ng Nurse at Midwife.",
+        "Para lamang sa sariling linked record makakapag-book ang Resident at hindi siya makakapili ng staff o status. Administrator at BHW ang namamahala ng exceptions at operations; awtorisadong assigned workflow lamang ang ginagamit ng Nurse at Midwife.",
     },
     actionId: "open_appointments",
     actionRoles: ALL_ROLES,
@@ -344,16 +344,16 @@ export const SYSTEM_KNOWLEDGE_ENTRIES: readonly SystemKnowledgeEntry[] = [
     ],
     facts: {
       english:
-        "The visible appointment flow is Pending, Confirmed, Checked in, then Completed. Pending means awaiting health-center review. Confirmed means the center accepted an operational schedule. Checked in records arrival. Completed means the appointment workflow is finished. Cancelled and No-show are terminal outcomes. An internal In consultation state may appear when clinical work is documented, but no manual Start action is required.",
+        "The standard AUTO_SLOT Resident flow starts at Confirmed after database validation and automatic staff assignment, then proceeds to Checked in and Completed. Pending remains for historical or exceptional workflows. Cancelled and No-show are terminal outcomes. An internal In consultation state may appear when clinical work is documented, but no manual Start action is required.",
       filipino:
-        "Ang visible appointment flow ay Pending, Confirmed, Checked in, at Completed. Ang Pending ay naghihintay ng health-center review. Ang Confirmed ay may tinanggap nang operational schedule. Ang Checked in ay tala ng pagdating. Ang Completed ay tapos na ang appointment workflow. Terminal outcomes ang Cancelled at No-show. Maaaring lumitaw ang internal na In consultation kapag may clinical documentation, pero walang kailangang manual Start action.",
+        "Ang standard AUTO_SLOT Resident flow ay nagsisimula sa Confirmed pagkatapos ng database validation at automatic staff assignment, saka Checked in at Completed. Nananatili ang Pending para sa historical o exceptional workflows. Terminal outcomes ang Cancelled at No-show. Maaaring lumitaw ang internal na In consultation kapag may clinical documentation, pero walang kailangang manual Start action.",
     },
     answerFacets: {
       status_meaning: {
         english:
-          "Pending means the request is awaiting health-center review. Confirmed means an operational schedule was accepted, Checked in records arrival, and Completed means the appointment workflow is finished. Cancelled and No-show are terminal outcomes.",
+          "A successful standard Resident AUTO_SLOT booking is immediately Confirmed. Pending identifies a historical or exceptional request awaiting staff handling. Checked in records arrival, Completed means the workflow is finished, and Cancelled and No-show are terminal outcomes.",
         filipino:
-          "Ang Pending ay naghihintay ng health-center review. Ang Confirmed ay may accepted nang operational schedule, ang Checked in ay tala ng pagdating, at ang Completed ay tapos na ang appointment workflow. Terminal outcomes ang Cancelled at No-show.",
+          "Agad na Confirmed ang successful standard Resident AUTO_SLOT booking. Ang Pending ay historical o exceptional request na hinihintay ang staff handling. Ang Checked in ay tala ng pagdating, ang Completed ay tapos na ang workflow, at terminal outcomes ang Cancelled at No-show.",
       },
     },
     actionId: "open_appointments",
