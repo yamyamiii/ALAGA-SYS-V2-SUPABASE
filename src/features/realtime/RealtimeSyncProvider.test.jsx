@@ -73,6 +73,17 @@ function renderProvider(auth, realtime) {
 }
 
 describe("realtime state synchronization", () => {
+  it("refreshes pending registration matches when a registry identity is restored", async () => {
+    const queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    await invalidateRealtimeTopic(queryClient, REALTIME_TOPICS.REGISTRY);
+    expect(invalidate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ["resident-registration-requests"],
+        exact: false,
+      }),
+    );
+  });
   beforeEach(() => vi.clearAllMocks());
 
   it("maps appointment events to the whole appointment query family", async () => {

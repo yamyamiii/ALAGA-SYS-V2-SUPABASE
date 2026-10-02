@@ -80,6 +80,7 @@ const expectedMigrations = [
   "20260720010300_automated_resident_appointments.sql",
   "20260720010400_fix_automated_appointment_availability.sql",
   "20260720010500_automated_health_service_events.sql",
+  "20260720010600_restore_archived_resident_identity.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -216,6 +217,8 @@ const reviewedPendingMigrationHashes = {
     "4b7170a43008f05a9fac49906655237df81c544f240ede0721ad6652b260dfa1",
   "20260720010500_automated_health_service_events.sql":
     "37289b6b915ec0ebdef209da65ef441d6b3abc3d54d2533be90646e66ef41f7b",
+  "20260720010600_restore_archived_resident_identity.sql":
+    "e074de0b7238e64cf216142046c600ae2d424d6467fd24a798f4ddea3f5eb880",
 };
 const expectedTables = [
   "account_retirements",
@@ -320,7 +323,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly sixty-six expected migrations exist in lexical order",
+  "Exactly sixty-seven expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -328,6 +331,36 @@ const migrationEntries = migrationFiles.map((file) => ({
   sql: fs.readFileSync(path.join(migrationsDirectory, file), "utf8"),
 }));
 const allSql = migrationEntries.map(({ sql }) => sql).join("\n");
+const residentRestoreMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("10600_restore_archived_resident_identity"),
+  )?.sql ?? "";
+check(
+  auditPlpgsqlIntoTargets(residentRestoreMigration).undeclared.length === 0 &&
+    /v_actor_id uuid := auth\.uid\(\)/.test(residentRestoreMigration) &&
+    /actor\.role = 'admin'/.test(residentRestoreMigration) &&
+    /actor\.retired_at is null/.test(residentRestoreMigration),
+  "Resident restoration derives and validates the active Administrator caller",
+);
+check(
+  /for share/i.test(residentRestoreMigration) &&
+    /where resident\.id = p_resident_id for update/i.test(
+      residentRestoreMigration,
+    ) &&
+    /v_resident\.updated_at is distinct from p_expected_updated_at/.test(
+      residentRestoreMigration,
+    ) &&
+    /old\.linked_profile_id is not null or new\.linked_profile_id is not null/.test(
+      residentRestoreMigration,
+    ),
+  "Resident restoration locks identity and blocks stale revisions and portal-link conflicts",
+);
+check(
+  !/(?:update|delete from|insert into) public\.(?:profiles|appointments|health_encounters|health_event_bookings|account_retirements)/i.test(
+    residentRestoreMigration,
+  ) && !/grant\s+(?:update|insert|delete|all)/i.test(residentRestoreMigration),
+  "Resident restoration cannot reactivate portal accounts, destroy history or grant direct writes",
+);
 const healthEventMigration =
   migrationEntries.find(({ file }) =>
     file.includes("10500_automated_health_service_events"),

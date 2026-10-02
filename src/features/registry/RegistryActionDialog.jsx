@@ -35,7 +35,9 @@ export function RegistryActionDialog({
           </DialogTitle>
           <DialogDescription>
             {restoring
-              ? "The record will return to current registry lists."
+              ? kind === "resident"
+                ? "Restore this Resident registry record with the same RES number and retained history. This does not restore the old portal account. Return to registration review to approve and link the new account."
+                : "The record will return to current registry lists."
               : "The record will leave normal active lists but remain available to authorized administrators and audit history."}
           </DialogDescription>
         </DialogHeader>

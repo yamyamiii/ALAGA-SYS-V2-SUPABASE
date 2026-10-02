@@ -67,8 +67,8 @@ export default function ResidentRegistryPage() {
   });
   const [accountRecord, setAccountRecord] = useState(null);
   const [action, setAction] = useState({ record: null, restoring: false });
-  const statusMutation = useRegistryMutation(({ id, status }) =>
-    registryService.setResidentStatus(id, status),
+  const statusMutation = useRegistryMutation(({ id, status, updatedAt }) =>
+    registryService.setResidentStatus(id, status, updatedAt),
   );
 
   function update(next) {
@@ -120,6 +120,7 @@ export default function ResidentRegistryPage() {
       await statusMutation.mutateAsync({
         id: action.record.id,
         status: action.restoring ? "active" : "archived",
+        updatedAt: action.record.updated_at,
       });
       toast.success(
         action.restoring ? "Resident restored" : "Resident archived",
@@ -393,6 +394,15 @@ export default function ResidentRegistryPage() {
                           >
                             <Eye />
                           </Button>
+                          {canRestore && item.status === "archived" ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => requestStatusChange(item, true)}
+                            >
+                              Restore Resident
+                            </Button>
+                          ) : null}
                         </td>
                       </tr>
                     ))}
@@ -401,45 +411,58 @@ export default function ResidentRegistryPage() {
               </div>
               <div className="space-y-3 lg:hidden">
                 {items.map((item) => (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
-                    onClick={() => setDetailId(item.id)}
-                    className="w-full rounded-xl border p-4 text-left"
+                    className="w-full space-y-3 rounded-xl border p-4 text-left"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold">
-                          {formatPersonName(item)}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {item.resident_number}
-                        </p>
+                    <button
+                      type="button"
+                      onClick={() => setDetailId(item.id)}
+                      className="w-full rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold">
+                            {formatPersonName(item)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {item.resident_number}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            Registry status
+                          </span>
+                          <StatusBadge
+                            status={RESIDENT_STATUS_LABELS[item.status]}
+                          />
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                          Registry status
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <span>
+                          {item.age_years ?? "—"} years · {SEX_LABELS[item.sex]}
                         </span>
-                        <StatusBadge
-                          status={RESIDENT_STATUS_LABELS[item.status]}
-                        />
+                        <span>{item.purok_name}</span>
+                        <span>{item.household_number || "No household"}</span>
+                        <span>{item.phone_number || "No phone"}</span>
+                        <span className="col-span-2">
+                          Portal account:{" "}
+                          {PORTAL_ACCOUNT_STATUS_LABELS[
+                            item.portal_account_status
+                          ] ?? "No portal account"}
+                        </span>
                       </div>
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                      <span>
-                        {item.age_years ?? "—"} years · {SEX_LABELS[item.sex]}
-                      </span>
-                      <span>{item.purok_name}</span>
-                      <span>{item.household_number || "No household"}</span>
-                      <span>{item.phone_number || "No phone"}</span>
-                      <span className="col-span-2">
-                        Portal account:{" "}
-                        {PORTAL_ACCOUNT_STATUS_LABELS[
-                          item.portal_account_status
-                        ] ?? "No portal account"}
-                      </span>
-                    </div>
-                  </button>
+                    </button>
+                    {canRestore && item.status === "archived" ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => requestStatusChange(item, true)}
+                      >
+                        Restore Resident
+                      </Button>
+                    ) : null}
+                  </div>
                 ))}
               </div>
               <RegistryPagination

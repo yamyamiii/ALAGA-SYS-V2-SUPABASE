@@ -64,6 +64,19 @@ function pick(values, fields) {
 
 function mapError(error, fallback) {
   const message = error?.message ?? "";
+  if (/Resident restoration/i.test(message)) {
+    return new RegistryServiceError(
+      error.code === "42501" ? "permission_denied" : "resident_restore_blocked",
+      /existing portal link/i.test(message)
+        ? "This Resident still has a portal account link. Resolve it through trusted account management before restoring; no account was changed."
+        : /changed|requires an archived/i.test(message)
+          ? "This Resident changed or is no longer archived. Refresh the registry before trying again."
+          : error.code === "42501"
+            ? "Only an active Administrator may restore a Resident."
+            : fallback,
+      { cause: error },
+    );
+  }
   if (/active administrator permission is required/i.test(message)) {
     return new RegistryServiceError(
       "permission_denied",
@@ -834,7 +847,20 @@ export function createRegistryService(clientProvider = getSupabaseClient) {
       return saved;
     },
 
-    setResidentStatus(id, status) {
+    async setResidentStatus(id, status, expectedUpdatedAt = null) {
+      if (status === "active") {
+        const { data, error } = await client().rpc(
+          "registry_restore_resident",
+          {
+            p_resident_id: id,
+            p_expected_updated_at: expectedUpdatedAt,
+          },
+        );
+        if (error || !data?.[0]) {
+          throw mapError(error, "The Resident could not be restored.");
+        }
+        return data[0];
+      }
       return singleResult(
         client()
           .from("residents")

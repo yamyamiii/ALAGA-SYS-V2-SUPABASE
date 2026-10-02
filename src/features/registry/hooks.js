@@ -95,6 +95,11 @@ export function useRegistryMutation(mutationFn) {
   return useMutation({
     mutationFn,
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: registryKeys.all }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: registryKeys.all }),
+        queryClient.invalidateQueries({
+          queryKey: ["resident-registration-requests"],
+        }),
+      ]),
   });
 }

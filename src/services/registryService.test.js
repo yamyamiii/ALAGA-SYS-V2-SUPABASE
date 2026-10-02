@@ -12,6 +12,65 @@ import {
 
 const barangayId = "11111111-1111-4111-8111-111111111111";
 const residentId = "33333333-3333-4333-8333-333333333333";
+
+describe("trusted archived Resident restoration", () => {
+  it("uses only the restore RPC with the selected identity and revision", async () => {
+    const row = {
+      id: residentId,
+      resident_number: "RES-2026-000006",
+      status: "active",
+      archived_at: null,
+    };
+    const rpc = vi.fn().mockResolvedValue({ data: [row], error: null });
+    const from = vi.fn();
+    const service = createRegistryService(() => ({ rpc, from }));
+    expect(
+      await service.setResidentStatus(
+        residentId,
+        "active",
+        "2026-09-01T00:00:00Z",
+      ),
+    ).toEqual(row);
+    expect(rpc).toHaveBeenCalledWith("registry_restore_resident", {
+      p_resident_id: residentId,
+      p_expected_updated_at: "2026-09-01T00:00:00Z",
+    });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "42501",
+      "Resident restoration requires an active Administrator",
+      "permission_denied",
+    ],
+    [
+      "23514",
+      "Resident restoration has an existing portal link",
+      "resident_restore_blocked",
+    ],
+    [
+      "40001",
+      "Resident restoration record changed; refresh and retry",
+      "resident_restore_blocked",
+    ],
+  ])(
+    "fails safely for %s without retrying or overwriting a link",
+    async (code, message, expected) => {
+      const rpc = vi
+        .fn()
+        .mockResolvedValue({ data: null, error: { code, message } });
+      await expect(
+        createRegistryService(() => ({ rpc })).setResidentStatus(
+          residentId,
+          "active",
+          "2026-09-01T00:00:00Z",
+        ),
+      ).rejects.toMatchObject({ code: expected });
+      expect(rpc).toHaveBeenCalledOnce();
+    },
+  );
+});
 const deploymentRows = Array.from({ length: 7 }, (_, index) => ({
   barangay_id: barangayId,
   barangay_name: "Brgy. Bagongpook",

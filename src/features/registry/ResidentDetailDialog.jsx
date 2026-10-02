@@ -299,9 +299,9 @@ export function ResidentDetailDialog({
                       <Archive /> Archive
                     </Button>
                   </>
-                ) : canRestore ? (
+                ) : canRestore && record.status === "archived" ? (
                   <Button type="button" onClick={() => onArchive(record, true)}>
-                    <RotateCcw /> Restore
+                    <RotateCcw /> Restore Resident
                   </Button>
                 ) : null}
               </div>

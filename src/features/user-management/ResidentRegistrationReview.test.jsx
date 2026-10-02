@@ -39,14 +39,114 @@ function renderReview() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={client}>
-      <ResidentRegistrationReview />
-    </QueryClientProvider>,
-  );
+  return {
+    client,
+    ...render(
+      <QueryClientProvider client={client}>
+        <ResidentRegistrationReview />
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 describe("Administrator Resident registration review", () => {
+  it("refreshes an open archived match after registry restoration and links the same identity", async () => {
+    const candidate = {
+      id: "30000000-0000-4000-8000-000000000006",
+      resident_number: "RES-2026-000006",
+      first_name: "Ana",
+      last_name: "Reyes",
+      status: "archived",
+      archived_at: "2026-09-01T00:00:00Z",
+      linked_profile_id: null,
+    };
+    userManagementService.listResidentRegistrations.mockResolvedValue({
+      items: [{ ...registration, possible_matches: [candidate] }],
+      total: 1,
+    });
+    const user = userEvent.setup();
+    const { client } = renderReview();
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    expect(
+      screen.getByRole("radio", { name: /RES-2026-000006/ }),
+    ).toBeDisabled();
+    expect(screen.getByText(/choose Archived only/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Approve and link" }),
+    ).toBeDisabled();
+    userManagementService.listResidentRegistrations.mockResolvedValue({
+      items: [
+        {
+          ...registration,
+          possible_matches: [
+            { ...candidate, status: "active", archived_at: null },
+          ],
+        },
+      ],
+      total: 1,
+    });
+    await client.invalidateQueries({
+      queryKey: ["resident-registration-requests"],
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("radio", { name: /RES-2026-000006/ }),
+      ).toBeEnabled(),
+    );
+    await user.click(screen.getByRole("radio", { name: /RES-2026-000006/ }));
+    await user.click(screen.getByRole("button", { name: "Approve and link" }));
+    await waitFor(() =>
+      expect(
+        userManagementService.approveResidentRegistration,
+      ).toHaveBeenCalledWith(
+        registration.id,
+        registration.version,
+        candidate.id,
+      ),
+    );
+  });
+
+  it("blocks a selected match if a refreshed portal link conflicts", async () => {
+    const candidate = {
+      id: "30000000-0000-4000-8000-000000000006",
+      resident_number: "RES-2026-000006",
+      first_name: "Ana",
+      last_name: "Reyes",
+      status: "active",
+      archived_at: null,
+      linked_profile_id: null,
+    };
+    userManagementService.listResidentRegistrations.mockResolvedValue({
+      items: [{ ...registration, possible_matches: [candidate] }],
+      total: 1,
+    });
+    const user = userEvent.setup();
+    const { client } = renderReview();
+    await user.click(await screen.findByRole("button", { name: "Review" }));
+    await user.click(screen.getByRole("radio", { name: /RES-2026-000006/ }));
+    userManagementService.listResidentRegistrations.mockResolvedValue({
+      items: [
+        {
+          ...registration,
+          possible_matches: [
+            { ...candidate, linked_profile_id: "another-account" },
+          ],
+        },
+      ],
+      total: 1,
+    });
+    await client.invalidateQueries({
+      queryKey: ["resident-registration-requests"],
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Approve and link" }),
+      ).toBeDisabled(),
+    );
+    expect(
+      userManagementService.approveResidentRegistration,
+    ).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     userManagementService.listResidentRegistrations.mockResolvedValue({

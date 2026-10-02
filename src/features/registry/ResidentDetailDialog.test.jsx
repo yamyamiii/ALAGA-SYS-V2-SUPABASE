@@ -44,6 +44,39 @@ function renderDialog(overrides = {}) {
 }
 
 describe("ResidentDetailDialog error state", () => {
+  it.each([true, false])(
+    "offers clear archived identity restoration only when authorized (%s)",
+    (canRestore) => {
+      const record = {
+        id: residentId,
+        resident_number: "RES-2026-000006",
+        first_name: "Ana",
+        last_name: "Reyes",
+        sex: "female",
+        status: "archived",
+        archived_at: "2026-09-01T00:00:00Z",
+        portal_account_status: "inactive",
+      };
+      useResident.mockReturnValue({
+        data: record,
+        isLoading: false,
+        isError: false,
+      });
+      const onArchive = vi.fn();
+      renderDialog({ canManage: true, canRestore, onArchive });
+      if (canRestore) {
+        fireEvent.click(
+          screen.getByRole("button", { name: "Restore Resident" }),
+        );
+        expect(onArchive).toHaveBeenCalledWith(record, true);
+      } else {
+        expect(
+          screen.queryByRole("button", { name: "Restore Resident" }),
+        ).not.toBeInTheDocument();
+      }
+      expect(screen.getByText("RES-2026-000006")).toBeInTheDocument();
+    },
+  );
   beforeEach(() => {
     vi.clearAllMocks();
     useHouseholdMembers.mockReturnValue({

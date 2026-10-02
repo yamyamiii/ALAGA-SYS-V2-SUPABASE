@@ -25,6 +25,7 @@ const TOPIC_QUERY_KEYS = Object.freeze({
   ],
   [REALTIME_TOPICS.REGISTRY]: [
     registryKeys.all,
+    ["resident-registration-requests"],
     appointmentKeys.all,
     reportKeys.all,
     ["managed-users"],

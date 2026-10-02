@@ -38,6 +38,13 @@ function ReviewDialog({ registration, open, onOpenChange, onChanged }) {
   const [busyAction, setBusyAction] = useState(null);
   const [confirmReject, setConfirmReject] = useState(false);
   const matches = registration?.possible_matches ?? [];
+  const selectedMatchEligible = matches.some(
+    (candidate) =>
+      candidate.id === selectedResidentId &&
+      candidate.status === "active" &&
+      !candidate.archived_at &&
+      !candidate.linked_profile_id,
+  );
 
   useEffect(() => {
     setSelectedResidentId("");
@@ -147,7 +154,11 @@ function ReviewDialog({ registration, open, onOpenChange, onChanged }) {
             </div>
             <p className="text-xs leading-5 text-muted-foreground">
               Select the verified matching record. Unavailable or archived
-              records must be resolved through the Resident registry first.
+              records must be resolved through the Resident registry first. For
+              an archived match, open Residents, choose Archived only, and
+              select Restore Resident. This restores the registry identity, not
+              the old login account. Then return here to review and link the new
+              account.
             </p>
             <div className="space-y-2">
               {matches.map((candidate) => {
@@ -238,7 +249,8 @@ function ReviewDialog({ registration, open, onOpenChange, onChanged }) {
             type="button"
             onClick={approve}
             disabled={
-              Boolean(busyAction) || (matches.length > 0 && !selectedResidentId)
+              Boolean(busyAction) ||
+              (matches.length > 0 && !selectedMatchEligible)
             }
           >
             <Check />
@@ -274,7 +286,7 @@ export function ResidentRegistrationReview() {
         queryKey: ["resident-registration-requests"],
       }),
       queryClient.invalidateQueries({ queryKey: ["managed-users"] }),
-      queryClient.invalidateQueries({ queryKey: ["residents"] }),
+      queryClient.invalidateQueries({ queryKey: ["registry"] }),
     ]);
   }
 
@@ -353,7 +365,11 @@ export function ResidentRegistrationReview() {
       </Card>
 
       <ReviewDialog
-        registration={selected}
+        registration={
+          selected
+            ? (registrations.find((item) => item.id === selected.id) ?? null)
+            : null
+        }
         open={Boolean(selected)}
         onOpenChange={(nextOpen) => {
           if (!nextOpen) setSelected(null);
