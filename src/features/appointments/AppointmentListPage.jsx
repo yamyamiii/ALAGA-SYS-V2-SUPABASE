@@ -108,15 +108,15 @@ function StaffAppointmentListPage({ profile }) {
         eyebrow="Scheduling"
         title="Appointments"
         description={
-          profile.role === USER_ROLES.NURSE
+          [USER_ROLES.NURSE, USER_ROLES.MIDWIFE].includes(profile.role)
             ? "Only appointments assigned to your active staff profile are shown. Times are displayed in Asia/Manila."
-            : "Schedule and manage operational health-center visits. Times are displayed in Asia/Manila."
+            : "Routine Resident appointments are self-booked and automatically scheduled. Register unscheduled arrivals as walk-ins; use staff-assisted booking only for Residents who require assistance. Times are displayed in Asia/Manila."
         }
         actions={
           canSchedule ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <Button
-                variant="outline"
+                type="button"
                 onClick={() =>
                   setForm({ open: true, appointment: null, walkIn: true })
                 }
@@ -124,11 +124,13 @@ function StaffAppointmentListPage({ profile }) {
                 <UserRoundPlus /> Register walk-in
               </Button>
               <Button
+                type="button"
+                variant="outline"
                 onClick={() =>
                   setForm({ open: true, appointment: null, walkIn: false })
                 }
               >
-                <CalendarPlus /> Create appointment
+                <CalendarPlus /> Staff-assisted booking
               </Button>
             </div>
           ) : null

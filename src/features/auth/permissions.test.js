@@ -9,6 +9,20 @@ import {
 } from "@/features/auth/permissions";
 
 describe("role permissions", () => {
+  it.each([
+    [USER_ROLES.ADMINISTRATOR, true],
+    [USER_ROLES.BARANGAY_HEALTH_WORKER, true],
+    [USER_ROLES.NURSE, false],
+    [USER_ROLES.MIDWIFE, false],
+    [USER_ROLES.RESIDENT, false],
+  ])(
+    "preserves scheduling and walk-in authority for %s (%s)",
+    (role, allowed) => {
+      expect(hasPermission(role, PERMISSIONS.SCHEDULE_APPOINTMENTS)).toBe(
+        allowed,
+      );
+    },
+  );
   it("gives administrators every centralized permission", () => {
     for (const permission of Object.values(PERMISSIONS)) {
       expect(hasPermission(USER_ROLES.ADMINISTRATOR, permission)).toBe(true);

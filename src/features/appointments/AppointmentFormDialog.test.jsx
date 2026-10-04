@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppointmentFormDialog } from "@/features/appointments/AppointmentFormDialog";
 import { useAppointmentMutation } from "@/features/appointments/hooks";
+import { useAuth } from "@/features/auth/authContext";
 
 const mutateAsync = vi.fn();
 const resetMutation = vi.fn();
@@ -12,10 +13,21 @@ const nurseId = "33333333-3333-4333-8333-333333333333";
 vi.mock("@/features/appointments/hooks", () => ({
   useAppointmentMutation: vi.fn(),
 }));
+vi.mock("@/features/auth/authContext", () => ({ useAuth: vi.fn() }));
 
 vi.mock("@/features/appointments/AppointmentResidentField", () => ({
-  AppointmentResidentField: ({ selected }) => (
-    <p>{selected?.resident_number ?? "Selected resident"}</p>
+  AppointmentResidentField: ({ selected, onChange }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onChange({
+          id: "22222222-2222-4222-8222-222222222222",
+          resident_number: "RES-2026-000001",
+        })
+      }
+    >
+      {selected?.resident_number ?? "Select Resident"}
+    </button>
   ),
 }));
 
@@ -63,6 +75,7 @@ function appointment(overrides = {}) {
 describe("AppointmentFormDialog Resident-request editing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useAuth.mockReturnValue({ profile: { role: "admin" } });
     useAppointmentMutation.mockReturnValue({
       mutateAsync,
       reset: resetMutation,
@@ -73,6 +86,98 @@ describe("AppointmentFormDialog Resident-request editing", () => {
       appointment_number: "APT-2026-000004",
       version: 2,
     });
+  });
+
+  it.each(["admin", "barangay_health_worker"])(
+    "retains safe staff-assisted booking for %s",
+    async (role) => {
+      useAuth.mockReturnValue({ profile: { role } });
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      render(<AppointmentFormDialog open onOpenChange={onOpenChange} />);
+      expect(
+        screen.getByRole("heading", { name: "Staff-assisted booking" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/requires staff assistance/)).toBeInTheDocument();
+      expect(
+        Array.from(
+          screen.getByLabelText("Appointment type").options,
+          (option) => option.value,
+        ),
+      ).toEqual(["scheduled", "follow_up", "home_visit"]);
+      expect(
+        screen.queryByRole("button", { name: "Create appointment" }),
+      ).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Select Resident" }));
+      await user.click(screen.getByRole("button", { name: "Assign Nurse" }));
+      fireEvent.change(screen.getByLabelText("Reason"), {
+        target: { value: "Resident needs in-person booking assistance" },
+      });
+      await user.click(
+        screen.getByRole("button", { name: "Save staff-assisted booking" }),
+      );
+      await waitFor(() =>
+        expect(mutateAsync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            appointment_type: "scheduled",
+            assigned_staff_id: nurseId,
+            start_time: "08:00",
+            end_time: "08:30",
+          }),
+        ),
+      );
+      expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty("status");
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    },
+  );
+
+  it("keeps walk-in registration separate and fixed to the current Manila date", async () => {
+    const user = userEvent.setup();
+    render(<AppointmentFormDialog open walkIn onOpenChange={vi.fn()} />);
+    expect(
+      screen.getByRole("heading", { name: "Register walk-in" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/physically arrived/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Date")).toHaveAttribute("readonly");
+    await user.click(screen.getByRole("button", { name: "Select Resident" }));
+    await user.click(screen.getByRole("button", { name: "Register walk-in" }));
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ appointment_type: "walk_in", reason: "" }),
+      ),
+    );
+  });
+
+  it.each(["nurse", "midwife", "resident", "unknown"])(
+    "prevents %s from mounting the scheduling dialog or mutation",
+    (role) => {
+      useAuth.mockReturnValue({ profile: { role } });
+      render(<AppointmentFormDialog open onOpenChange={vi.fn()} />);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(useAppointmentMutation).not.toHaveBeenCalled();
+      expect(mutateAsync).not.toHaveBeenCalled();
+    },
+  );
+
+  it("still rejects an invalid staff-assisted start time before submission", async () => {
+    const user = userEvent.setup();
+    render(<AppointmentFormDialog open onOpenChange={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Select Resident" }));
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Assisted booking" },
+    });
+    fireEvent.change(screen.getByLabelText("Start time"), {
+      target: { value: "07:30" },
+    });
+    await user.click(
+      screen.getByRole("button", { name: "Save staff-assisted booking" }),
+    );
+    expect(
+      await screen.findByText(
+        "Select a start time from 8:00 AM through 4:00 PM.",
+      ),
+    ).toBeInTheDocument();
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 
   it("assigns a Nurse and saves a Resident request with an empty reason", async () => {

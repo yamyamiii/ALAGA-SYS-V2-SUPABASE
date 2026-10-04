@@ -75,6 +75,9 @@ describe.skipIf(!pgliteModule)(
       ${original.slice(0, original.indexOf("-- Reuse the centralized role/service predicate"))}
       commit;
       ${functionSql(original, "appointment_validate_schedule")}
+      ${functionSql(readMigration("20260720001800_appointment_workflows"), "appointment_create")}
+      revoke all on function public.appointment_create(uuid, public.appointment_type, text, date, time, time, public.appointment_priority, uuid, text, text, uuid) from public, anon;
+      grant execute on function public.appointment_create(uuid, public.appointment_type, text, date, time, time, public.appointment_priority, uuid, text, text, uuid) to authenticated;
       ${functionSql(original, "resident_appointment_request")}
       alter table public.appointments enable row level security;
       revoke all on public.appointments from public, anon, authenticated;
@@ -504,6 +507,123 @@ describe.skipIf(!pgliteModule)(
         code: "23514",
         message: "an appointment reason is required",
       });
+    });
+
+    const createAssisted = (
+      type = "scheduled",
+      date = dateFrom,
+      reason = "Assisted booking",
+      staff = staffId,
+      key = crypto.randomUUID(),
+    ) =>
+      db.query(
+        "select * from public.appointment_create($1,$2,'General Consultation',$3::date,'08:00','08:30','normal',$4,$5,null,$6)",
+        [residentId, type, date, staff, reason, key],
+      );
+
+    it.each(["admin", "barangay_health_worker"])(
+      "preserves trusted staff-assisted booking and idempotency for %s",
+      async (role) => {
+        await addStaff();
+        await db.query("update public.profiles set role=$1 where id=$2", [
+          role,
+          actorId,
+        ]);
+        await db.exec("set role authenticated");
+        const key = crypto.randomUUID();
+        const first = (
+          await createAssisted(
+            "scheduled",
+            dateFrom,
+            "Assisted booking",
+            staffId,
+            key,
+          )
+        ).rows[0];
+        const second = (
+          await createAssisted(
+            "scheduled",
+            dateFrom,
+            "Assisted booking",
+            staffId,
+            key,
+          )
+        ).rows[0];
+        expect(second).toEqual(first);
+        await db.exec("reset role");
+        expect(
+          (
+            await db.query(
+              "select appointment_type, request_source, status, assigned_staff_id from public.appointments where id=$1",
+              [first.id],
+            )
+          ).rows[0],
+        ).toMatchObject({
+          appointment_type: "scheduled",
+          request_source: "staff",
+          status: "pending",
+          assigned_staff_id: staffId,
+        });
+      },
+    );
+
+    it.each(["resident", "nurse", "midwife"])(
+      "denies direct %s calls to staff-assisted creation",
+      async (role) => {
+        await addStaff();
+        await db.query("update public.profiles set role=$1 where id=$2", [
+          role,
+          actorId,
+        ]);
+        await db.exec("set role authenticated");
+        await expect(createAssisted()).rejects.toMatchObject({ code: "42501" });
+        await db.exec("reset role");
+        expect(
+          (
+            await db.query(
+              "select count(*)::integer as total from public.appointments",
+            )
+          ).rows[0].total,
+        ).toBe(0);
+      },
+    );
+
+    it("preserves overlap and eligible-staff validation for assisted booking", async () => {
+      await addStaff();
+      await db.query("update public.profiles set role='admin' where id=$1", [
+        actorId,
+      ]);
+      await busyAppointment(dateFrom, "08:00", "08:30");
+      await expect(createAssisted()).rejects.toThrow(/conflict|overlap/i);
+      await db.query(
+        "update public.profiles set account_status='inactive' where id=$1",
+        [staffId],
+      );
+      await expect(createAssisted()).rejects.toMatchObject({ code: "23514" });
+    });
+
+    it("registers walk-ins only for today's Manila date and retains their distinct type", async () => {
+      await addStaff();
+      await db.query("update public.profiles set role='admin' where id=$1", [
+        actorId,
+      ]);
+      const today = (
+        await db.query(
+          "select (now() at time zone 'Asia/Manila')::date::text as day",
+        )
+      ).rows[0].day;
+      await expect(
+        createAssisted("walk_in", dateFrom, null),
+      ).rejects.toMatchObject({ code: "22007" });
+      const result = (await createAssisted("walk_in", today, null)).rows[0];
+      expect(
+        (
+          await db.query(
+            "select appointment_type from public.appointments where id=$1",
+            [result.id],
+          )
+        ).rows[0].appointment_type,
+      ).toBe("walk_in");
     });
   },
 );

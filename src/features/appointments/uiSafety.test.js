@@ -41,6 +41,25 @@ const aiUiActions = fs.readFileSync(
 );
 
 describe("appointment UI boundaries", () => {
+  it("frames manual scheduling as assistance, not routine Resident creation", () => {
+    const form = fs.readFileSync(
+      "src/features/appointments/AppointmentFormDialog.jsx",
+      "utf8",
+    );
+    expect(pages[0] + form).not.toMatch(/Create appointment/);
+    expect(pages[0]).toMatch(/Staff-assisted booking/);
+    expect(form).toMatch(
+      /hasPermission\(profile\?\.role, PERMISSIONS\.SCHEDULE_APPOINTMENTS\)/,
+    );
+    expect(form).toMatch(
+      /Routine Resident bookings are normally scheduled automatically/,
+    );
+    expect(form).toMatch(
+      /physically arrived without a prior scheduled appointment/,
+    );
+    expect(form).toMatch(/appointmentService\.createAppointment/);
+    expect(form).not.toMatch(/\.from\(|\.rpc\(/);
+  });
   it("presents the staff table as transactional appointment records", () => {
     expect(pages[0]).toMatch(/Appointment reference/);
     expect(pages[0]).toMatch(/Resident/);
