@@ -9,7 +9,8 @@ import {
 } from "@/config/finalScope";
 import { ROUTES } from "@/config/routes";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
-import { PERMISSIONS } from "@/features/auth/permissions";
+import { useAuth } from "@/features/auth/authContext";
+import { PERMISSIONS, USER_ROLES } from "@/features/auth/permissions";
 import { RoleGuard } from "@/features/auth/RoleGuard";
 
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
@@ -48,6 +49,9 @@ const HealthRecordsPage = lazy(
 const HealthRecordDetailPage = lazy(
   () => import("@/features/health-records/HealthRecordDetailPage"),
 );
+const MyHealthHistoryPage = lazy(
+  () => import("@/features/resident-health-history/MyHealthHistoryPage"),
+);
 const ReportsPage = lazy(() => import("@/features/reports/ReportsPage"));
 const AnnouncementsPage = lazy(
   () => import("@/features/assistance/AnnouncementsPage"),
@@ -73,6 +77,17 @@ function RouteFallback() {
         description="Preparing the secure workspace…"
       />
     </div>
+  );
+}
+
+function StaffHealthRecordRoute({ children }) {
+  const { profile } = useAuth();
+  // Preserve trusted legacy notification/document links without mounting the
+  // staff documentation interface for a Resident.
+  return profile?.role === USER_ROLES.RESIDENT ? (
+    <Navigate to={ROUTES.myHealthHistory} replace />
+  ) : (
+    children
   );
 }
 
@@ -149,10 +164,20 @@ export function AppRouter() {
               }
             />
             <Route
+              path={ROUTES.myHealthHistory}
+              element={
+                <RoleGuard roles={[USER_ROLES.RESIDENT]}>
+                  <MyHealthHistoryPage />
+                </RoleGuard>
+              }
+            />
+            <Route
               path={ROUTES.healthRecords}
               element={
                 <RoleGuard permission={PERMISSIONS.VIEW_HEALTH_RECORDS}>
-                  <HealthRecordsPage />
+                  <StaffHealthRecordRoute>
+                    <HealthRecordsPage />
+                  </StaffHealthRecordRoute>
                 </RoleGuard>
               }
             />
@@ -160,7 +185,9 @@ export function AppRouter() {
               path="/health-records/:encounterId"
               element={
                 <RoleGuard permission={PERMISSIONS.VIEW_HEALTH_RECORDS}>
-                  <HealthRecordDetailPage />
+                  <StaffHealthRecordRoute>
+                    <HealthRecordDetailPage />
+                  </StaffHealthRecordRoute>
                 </RoleGuard>
               }
             />

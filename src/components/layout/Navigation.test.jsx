@@ -41,6 +41,7 @@ const expectedByRole = {
   [USER_ROLES.RESIDENT]: [
     "Dashboard",
     "My Appointments",
+    "My Health History",
     "Announcements",
     "Notifications",
   ],

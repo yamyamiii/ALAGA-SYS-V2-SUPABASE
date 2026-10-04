@@ -199,7 +199,7 @@ describe("realtime state synchronization", () => {
       });
     });
 
-    await waitFor(() => expect(view.invalidate).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(view.invalidate).toHaveBeenCalledTimes(3));
     expect(view.invalidate).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: ["appointments"] }),
     );

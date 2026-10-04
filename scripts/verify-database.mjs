@@ -81,6 +81,7 @@ const expectedMigrations = [
   "20260720010400_fix_automated_appointment_availability.sql",
   "20260720010500_automated_health_service_events.sql",
   "20260720010600_restore_archived_resident_identity.sql",
+  "20260720010700_resident_health_history.sql",
 ];
 const completedMigrationHashes = {
   "20260720000100_extensions_and_enums.sql":
@@ -219,6 +220,8 @@ const reviewedPendingMigrationHashes = {
     "37289b6b915ec0ebdef209da65ef441d6b3abc3d54d2533be90646e66ef41f7b",
   "20260720010600_restore_archived_resident_identity.sql":
     "e074de0b7238e64cf216142046c600ae2d424d6467fd24a798f4ddea3f5eb880",
+  "20260720010700_resident_health_history.sql":
+    "f7471bd6a02bb0e343925f8f60659aff9d63aea63c050a8d03d07780f6f486e2",
 };
 const expectedTables = [
   "account_retirements",
@@ -323,7 +326,7 @@ const migrationFiles = fs
 
 check(
   JSON.stringify(migrationFiles) === JSON.stringify(expectedMigrations),
-  "Exactly sixty-seven expected migrations exist in lexical order",
+  "Exactly sixty-eight expected migrations exist in lexical order",
 );
 
 const migrationEntries = migrationFiles.map((file) => ({
@@ -331,6 +334,50 @@ const migrationEntries = migrationFiles.map((file) => ({
   sql: fs.readFileSync(path.join(migrationsDirectory, file), "utf8"),
 }));
 const allSql = migrationEntries.map(({ sql }) => sql).join("\n");
+const residentHistoryMigration =
+  migrationEntries.find(({ file }) =>
+    file.includes("10700_resident_health_history"),
+  )?.sql ?? "";
+check(
+  auditPlpgsqlIntoTargets(residentHistoryMigration).undeclared.length === 0 &&
+    /profile\.id = auth\.uid\(\)/.test(residentHistoryMigration) &&
+    /profile\.role = 'resident'/.test(residentHistoryMigration) &&
+    /profile\.retired_at is null/.test(residentHistoryMigration) &&
+    !/p_resident_id|p_profile_id/.test(residentHistoryMigration),
+  "Resident health history derives active linked identity without browser authority",
+);
+check(
+  /p_status in \('signed', 'amended'\)/.test(residentHistoryMigration) &&
+    /p_signed_at is not null and p_signed_by is not null/.test(
+      residentHistoryMigration,
+    ) &&
+    /p_archived_at is null/.test(residentHistoryMigration) &&
+    /encounter\.id = p_encounter_id and encounter\.resident_id = v_resident_id/.test(
+      residentHistoryMigration,
+    ),
+  "Resident list and detail share a signed-only own-record projection",
+);
+check(
+  /drop policy health_encounters_select_resident_signed/.test(
+    residentHistoryMigration,
+  ) &&
+    !/drop policy health_encounters_select_(?:nurse|midwife)/.test(
+      residentHistoryMigration,
+    ) &&
+    !/grant\s+(?:select|insert|update|delete|all)/i.test(
+      residentHistoryMigration,
+    ) &&
+    !/subjective_notes|objective_notes|diagnosis_text|treatment_notes|amendment_reason|recorded_by|bmi/.test(
+      residentHistoryMigration,
+    ),
+  "Resident raw clinical reads are closed; internal fields and new mutation grants are excluded",
+);
+check(
+  /emit_realtime_sync_event\('health_history', null, v_recipient, null\)/.test(
+    residentHistoryMigration,
+  ) && !/alter publication|replica identity/i.test(residentHistoryMigration),
+  "Finalized health history refresh uses private content-free invalidation, not clinical publication",
+);
 const residentRestoreMigration =
   migrationEntries.find(({ file }) =>
     file.includes("10600_restore_archived_resident_identity"),

@@ -44,6 +44,13 @@ export const navigationItems = [
     roles: [USER_ROLES.ADMINISTRATOR, USER_ROLES.BARANGAY_HEALTH_WORKER],
   },
   {
+    label: "My Health History",
+    path: ROUTES.myHealthHistory,
+    icon: HeartPulse,
+    permission: PERMISSIONS.VIEW_HEALTH_RECORDS,
+    roles: [USER_ROLES.RESIDENT],
+  },
+  {
     label: "Health Records",
     path: ROUTES.healthRecords,
     icon: HeartPulse,
