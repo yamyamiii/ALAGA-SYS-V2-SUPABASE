@@ -21,6 +21,7 @@ import {
 import { ROUTES } from "@/config/routes";
 import { formatManilaDate } from "@/features/appointments/timezone";
 import { useAuth } from "@/features/auth/authContext";
+import { USER_ROLES } from "@/features/auth/permissions";
 import { ENCOUNTER_TYPE_LABELS } from "@/features/health-records/constants";
 import { RegistryPagination } from "@/features/registry/RegistryPagination";
 import {
@@ -160,12 +161,9 @@ function HistoryDetails({ id, onClose, returnFocusRef }) {
 }
 
 export default function MyHealthHistoryPage() {
-  const { profile } = useAuth();
-  if (
-    profile?.role !== "resident" ||
-    profile.account_status !== "active" ||
-    profile.retired_at
-  ) {
+  const { isAuthenticated, profile } = useAuth();
+  // AuthProvider validates account status before exposing its normalized profile.
+  if (!isAuthenticated || profile?.role !== USER_ROLES.RESIDENT) {
     return <Navigate to={ROUTES.accessDenied} replace />;
   }
   return <ResidentHistory />;

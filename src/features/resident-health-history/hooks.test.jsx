@@ -32,7 +32,8 @@ function setup() {
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({
-    profile: { id: "profile-one", role: "resident", account_status: "active" },
+    isAuthenticated: true,
+    profile: { id: "profile-one", role: "resident" },
   });
   residentHealthHistoryService.list.mockResolvedValue({ items: [], total: 0 });
   residentHealthHistoryService.get.mockResolvedValue({
@@ -60,6 +61,44 @@ describe("private Resident health history cache", () => {
       expect(queryClient.getQueryCache().getAll()).toHaveLength(0),
     );
   });
+  it("enables list and detail for the validated normalized Resident profile", async () => {
+    expect(useAuth().profile).not.toHaveProperty("account_status");
+    expect(useAuth().profile).not.toHaveProperty("retired_at");
+    const { wrapper } = setup();
+    const view = renderHook(
+      () => ({
+        list: useResidentHealthHistory(filters),
+        detail: useResidentHealthHistoryEntry(id),
+      }),
+      { wrapper },
+    );
+    await waitFor(() => {
+      expect(view.result.current.list.isSuccess).toBe(true);
+      expect(view.result.current.detail.isSuccess).toBe(true);
+    });
+    expect(residentHealthHistoryService.list).toHaveBeenCalledExactlyOnceWith(
+      filters,
+    );
+    expect(residentHealthHistoryService.get).toHaveBeenCalledExactlyOnceWith(
+      id,
+    );
+  });
+  it.each([null, { id: "profile-one", role: "resident" }])(
+    "does not request history without validated authentication (profile %j)",
+    (profile) => {
+      useAuth.mockReturnValue({ isAuthenticated: false, profile });
+      const { wrapper } = setup();
+      renderHook(
+        () => {
+          useResidentHealthHistory(filters);
+          useResidentHealthHistoryEntry(id);
+        },
+        { wrapper },
+      );
+      expect(residentHealthHistoryService.list).not.toHaveBeenCalled();
+      expect(residentHealthHistoryService.get).not.toHaveBeenCalled();
+    },
+  );
   it("does not reuse another account's data during an account change", async () => {
     const { wrapper } = setup();
     residentHealthHistoryService.list.mockResolvedValueOnce({
@@ -71,10 +110,10 @@ describe("private Resident health history cache", () => {
     });
     await waitFor(() => expect(view.result.current.data.total).toBe(1));
     useAuth.mockReturnValue({
+      isAuthenticated: true,
       profile: {
         id: "profile-two",
         role: "resident",
-        account_status: "active",
       },
     });
     residentHealthHistoryService.list.mockReturnValue(new Promise(() => {}));
@@ -85,7 +124,8 @@ describe("private Resident health history cache", () => {
     "does not send personal-history requests for %s",
     (role) => {
       useAuth.mockReturnValue({
-        profile: { id: "profile-one", role, account_status: "active" },
+        isAuthenticated: true,
+        profile: { id: "profile-one", role },
       });
       const { wrapper } = setup();
       renderHook(

@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "@/features/auth/authContext";
 import { hasPermission } from "@/features/auth/permissions";
 import { AppRouter } from "@/app/router";
+import { Navigation } from "@/components/layout/Navigation";
 import MyHealthHistoryPage from "@/features/resident-health-history/MyHealthHistoryPage";
 import {
   useResidentHealthHistory,
@@ -27,6 +28,9 @@ vi.mock("@/features/health-records/HealthRecordDetailPage", () => ({
 }));
 vi.mock("@/pages/AccessDeniedPage", () => ({
   default: () => <p>Access denied</p>,
+}));
+vi.mock("@/pages/LoginPage", () => ({
+  default: () => <p>Login required</p>,
 }));
 vi.mock("@/features/resident-health-history/hooks", () => ({
   useResidentHealthHistory: vi.fn(),
@@ -72,7 +76,8 @@ function show() {
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({
-    profile: { id: "own-profile", role: "resident", account_status: "active" },
+    isAuthenticated: true,
+    profile: { id: "own-profile", role: "resident" },
   });
   useResidentHealthHistory.mockReturnValue({
     data: { items: [entry], total: 1 },
@@ -196,29 +201,25 @@ describe("My Health History Resident viewer", () => {
   it.each(["admin", "barangay_health_worker", "nurse", "midwife"])(
     "does not mount personal-history hooks for %s",
     (role) => {
-      useAuth.mockReturnValue({ profile: { role, account_status: "active" } });
+      useAuth.mockReturnValue({ isAuthenticated: true, profile: { role } });
       show();
       expect(screen.getByText("Access denied")).toBeInTheDocument();
       expect(useResidentHealthHistory).not.toHaveBeenCalled();
     },
   );
-  it.each(["inactive", "suspended", "invited"])(
-    "denies a %s Resident",
-    (account_status) => {
-      useAuth.mockReturnValue({
-        profile: { role: "resident", account_status },
-      });
-      show();
-      expect(screen.getByText("Access denied")).toBeInTheDocument();
-    },
-  );
+  it.each(["inactive", "suspended", "invited"])("denies a %s Resident", () => {
+    // AuthProvider does not authenticate these accounts or expose a profile.
+    useAuth.mockReturnValue({
+      isAuthenticated: false,
+      profile: null,
+    });
+    show();
+    expect(screen.getByText("Access denied")).toBeInTheDocument();
+  });
   it("does not mount history for retired accounts", () => {
     useAuth.mockReturnValue({
-      profile: {
-        role: "resident",
-        account_status: "active",
-        retired_at: "2026-01-01",
-      },
+      isAuthenticated: false,
+      profile: null,
     });
     show();
     expect(useResidentHealthHistory).not.toHaveBeenCalled();
@@ -273,20 +274,60 @@ describe("My Health History Resident viewer", () => {
 });
 
 describe("actual application health-history route integration", () => {
-  function route(role, path) {
+  function route(
+    role,
+    path,
+    { withNavigation = false, authenticated = true } = {},
+  ) {
     useAuth.mockReturnValue({
-      profile: { id: "own-profile", role, account_status: "active" },
-      status: "authenticated",
-      isAuthenticated: true,
+      profile: authenticated
+        ? Object.freeze({ id: "own-profile", role })
+        : null,
+      status: authenticated ? "authenticated" : "unauthenticated",
+      isAuthenticated: authenticated,
       can: (permission) => hasPermission(role, permission),
       hasRole: (roles) => roles.includes(role),
     });
     return render(
       <MemoryRouter initialEntries={[path]}>
+        {withNavigation ? <Navigation /> : null}
         <AppRouter />
       </MemoryRouter>,
     );
   }
+  it("opens the Resident sidebar destination with the actual normalized profile shape", async () => {
+    route("resident", "/access-denied", { withNavigation: true });
+    const link = screen.getByRole("link", { name: "My Health History" });
+    expect(link).toHaveAttribute("href", "/my-health-history");
+    expect(useAuth().profile).not.toHaveProperty("account_status");
+    expect(useAuth().profile).not.toHaveProperty("retired_at");
+    await userEvent.click(link);
+    expect(
+      await screen.findByRole("heading", { name: "My Health History" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Access denied")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Staff documentation/)).not.toBeInTheDocument();
+  });
+  it("renders a direct Resident URL and a fresh mount after browser refresh", async () => {
+    const view = route("resident", "/my-health-history");
+    expect(
+      await screen.findByRole("heading", { name: "My Health History" }),
+    ).toBeInTheDocument();
+    view.unmount();
+    route("resident", "/my-health-history");
+    expect(
+      await screen.findByRole("heading", { name: "My Health History" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Access denied")).not.toBeInTheDocument();
+  });
+  it.each(["guest", "inactive", "suspended", "retired", "invited"])(
+    "keeps %s accounts behind the existing ProtectedRoute authentication boundary",
+    async () => {
+      route("resident", "/my-health-history", { authenticated: false });
+      expect(await screen.findByText("Login required")).toBeInTheDocument();
+      expect(useResidentHealthHistory).not.toHaveBeenCalled();
+    },
+  );
   it.each(["/health-records", `/health-records/${id}`])(
     "redirects Resident legacy link %s without mounting staff documentation",
     async (path) => {
