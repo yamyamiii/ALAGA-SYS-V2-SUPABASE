@@ -1,49 +1,21 @@
 import { GoogleGenAI } from "npm:@google/genai@2";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 import {
   AiAssistantError,
-  announcementConversationResponseFor,
-  announcementEventResponseFor,
-  boundedResponse,
-  buildProviderInput,
-  buildSystemInstruction,
-  conversationGroundingSourceTypesFor,
   exactOriginCorsHeaders,
-  faqConversationResponseFor,
-  groundedResponseFor,
-  healthCenterConversationResponseFor,
-  humanEscalationResponseFor,
-  isAnnouncementEventQuestion,
   isSupportedRole,
   MAX_BODY_BYTES,
-  navigationResponseFor,
   parseAllowedOrigins,
   parsePositiveInteger,
   PROVIDER_TIMEOUT_MS,
-  productContextResponseFor,
-  residentAppointmentStatusResponseFor,
-  requiresLiveGrounding,
-  safetyResponseFor,
   sanitizeGroundingSources,
-  serviceScheduleResponseFor,
-  simpleConversationResponseFor,
-  isResidentAppointmentStatusIntent,
   sanitizeResidentAppointmentStatusRows,
-  shouldLoadResidentAppointmentStatus,
-  systemKnowledgeGroundingFor,
-  systemKnowledgeResponseFor,
   validateConversationPayload,
-  withSystemKnowledgeGrounding,
-  uncertaintyMessageFor,
-  workflowConversationResponseFor,
-  workflowResponseFor,
-  type AssistantAction,
   type CanonicalRole,
-  type GroundingSource,
 } from "./domain.ts";
+import { respondToConversation } from "./conversation.ts";
 
-type SupabaseClient = ReturnType<typeof createClient>;
 type SafeRecord = Record<string, unknown>;
 
 function firstNamedKey(variableName: string): string | null {
@@ -255,7 +227,23 @@ async function loadApprovedGrounding(
       503,
     );
   }
-  return sanitizeGroundingSources(data);
+  // Interleave source types before the existing global character cap so a
+  // long FAQ list cannot crowd every current announcement out of the snapshot.
+  const groups = ["health_center", "announcement", "faq"].map((type) =>
+    data.filter((row: SafeRecord) => row.source_type === type),
+  );
+  const interleaved = Array.from({ length: 8 }, (_, rank) =>
+    groups.flatMap((rows) => (rows[rank] ? [rows[rank]] : [])),
+  ).flat();
+  return sanitizeGroundingSources(
+    interleaved.map((row) => ({
+      ...row,
+      content:
+        typeof row.content === "string"
+          ? row.content.slice(0, 1500)
+          : row.content,
+    })),
+  );
 }
 
 async function loadResidentAppointmentStatus(
@@ -281,25 +269,8 @@ async function loadResidentAppointmentStatus(
   };
 }
 
-function assistantData(
-  message: string,
-  sources: GroundingSource[] = [],
-  actions: AssistantAction[] = [],
-) {
-  return {
-    message,
-    sources: sources.map(({ type, label, title, updatedAt }) => ({
-      type,
-      label,
-      title,
-      updatedAt,
-    })),
-    actions,
-  };
-}
-
 async function withProviderTimeout<T>(operation: Promise<T>) {
-  let timeoutId: number | undefined;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<never>((_, reject) => {
       timeoutId = setTimeout(
@@ -457,389 +428,82 @@ Deno.serve(async (request) => {
       parsed,
       env.maximumInputCharacters,
     );
-    const finalUserMessage = messages.at(-1)?.content ?? "";
-    const safetyResponse = safetyResponseFor(finalUserMessage);
-    if (safetyResponse) {
-      logRequest(requestId, profile.role, safetyResponse.category, startedAt);
-      return jsonResponse(
-        {
-          data: assistantData(safetyResponse.response),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-
-    const simpleConversationResponse =
-      simpleConversationResponseFor(finalUserMessage);
-    if (simpleConversationResponse) {
-      logRequest(
-        requestId,
-        profile.role,
-        simpleConversationResponse.category,
-        startedAt,
-      );
-      return jsonResponse(
-        {
-          data: assistantData(simpleConversationResponse.response),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-
-    if (shouldLoadResidentAppointmentStatus(messages, profile.role)) {
-      const statusLookup =
-        profile.role === "resident"
-          ? await loadResidentAppointmentStatus(admin, profile.id)
-          : { hasActiveResidentLink: true, appointments: [] };
-      const statusResponse = residentAppointmentStatusResponseFor(
-        finalUserMessage,
-        profile.role,
-        statusLookup.appointments,
-        statusLookup.hasActiveResidentLink,
-        !isResidentAppointmentStatusIntent(finalUserMessage),
-      );
-      if (statusResponse) {
-        logRequest(requestId, profile.role, statusResponse.category, startedAt);
-        return jsonResponse(
-          {
-            data: assistantData(
-              statusResponse.message,
-              statusResponse.sources,
-              statusResponse.actions,
-            ),
-            request_id: requestId,
-          },
-          200,
-          headers,
-        );
-      }
-    }
-
-    const productContextResponse = productContextResponseFor(
-      finalUserMessage,
+    let providerUsed = false;
+    const reply = await respondToConversation(messages, profile.role, {
+      loadPublicInformation: () =>
+        loadApprovedGrounding(admin, profile.id, [
+          "health_center",
+          "announcement",
+          "faq",
+        ]),
+      loadOwnStatus: () => loadResidentAppointmentStatus(admin, profile.id),
+      generate: async (input, instruction) => {
+        providerUsed = true;
+        const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
+        try {
+          const interaction = await withProviderTimeout(
+            ai.interactions.create({
+              model: env.model,
+              input,
+              system_instruction: instruction,
+              response_format: {
+                type: "text",
+                mime_type: "application/json",
+                schema: {
+                  type: "object",
+                  properties: {
+                    message: { type: "string" },
+                    actionIds: {
+                      type: "array",
+                      items: { type: "string" },
+                      maxItems: 6,
+                    },
+                    sourceIndexes: {
+                      type: "array",
+                      items: { type: "integer" },
+                      maxItems: 12,
+                    },
+                    lookup: {
+                      type: "string",
+                      enum: ["none", "own_appointment_status"],
+                    },
+                  },
+                  required: ["message", "actionIds", "sourceIndexes", "lookup"],
+                  additionalProperties: false,
+                },
+              },
+              generation_config: {
+                max_output_tokens: 500,
+                thinking_level: "low",
+              },
+              store: false,
+            }),
+          );
+          return interaction.output_text;
+        } catch (error) {
+          throw mapProviderError(error);
+        }
+      },
+    });
+    // The response never exposes grounding bodies or raw database/provider data.
+    const data = {
+      message: reply.message,
+      sources: reply.sources.map(({ type, label, title, updatedAt }) => ({
+        type,
+        label,
+        title,
+        updatedAt,
+      })),
+      actions: reply.actions,
+      ...(reply.contextMessage ? { contextMessage: reply.contextMessage } : {}),
+    };
+    logRequest(
+      requestId,
       profile.role,
+      providerUsed ? "provider_success" : "safety_response",
+      startedAt,
     );
-    if (productContextResponse) {
-      logRequest(
-        requestId,
-        profile.role,
-        productContextResponse.category,
-        startedAt,
-      );
-      return jsonResponse(
-        {
-          data: assistantData(
-            productContextResponse.message,
-            productContextResponse.sources,
-          ),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-
-    const workflowResponse = workflowResponseFor(
-      finalUserMessage,
-      profile.role,
-    );
-    if (workflowResponse) {
-      logRequest(requestId, profile.role, workflowResponse.category, startedAt);
-      return jsonResponse(
-        {
-          data: assistantData(
-            workflowResponse.message,
-            workflowResponse.sources,
-            workflowResponse.actions,
-          ),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-
-    const navigationResponse = navigationResponseFor(
-      finalUserMessage,
-      profile.role,
-    );
-    if (navigationResponse) {
-      logRequest(
-        requestId,
-        profile.role,
-        navigationResponse.category,
-        startedAt,
-      );
-      return jsonResponse(
-        {
-          data: assistantData(
-            navigationResponse.message,
-            [],
-            navigationResponse.actions,
-          ),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-
-    const workflowConversationResponse = workflowConversationResponseFor(
-      messages,
-      profile.role,
-    );
-    if (workflowConversationResponse) {
-      logRequest(
-        requestId,
-        profile.role,
-        `${workflowConversationResponse.category}_follow_up`,
-        startedAt,
-      );
-      return jsonResponse(
-        {
-          data: assistantData(
-            workflowConversationResponse.message,
-            workflowConversationResponse.sources,
-            workflowConversationResponse.actions,
-          ),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-
-    const systemKnowledgeResponse = systemKnowledgeResponseFor(
-      messages,
-      profile.role,
-    );
-    if (systemKnowledgeResponse) {
-      logRequest(
-        requestId,
-        profile.role,
-        systemKnowledgeResponse.category,
-        startedAt,
-      );
-      return jsonResponse(
-        {
-          data: assistantData(
-            systemKnowledgeResponse.message,
-            systemKnowledgeResponse.sources,
-            systemKnowledgeResponse.actions,
-          ),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-
-    if (!isAnnouncementEventQuestion(finalUserMessage)) {
-      const serviceScheduleResponse =
-        serviceScheduleResponseFor(finalUserMessage);
-      if (serviceScheduleResponse) {
-        logRequest(
-          requestId,
-          profile.role,
-          serviceScheduleResponse.category,
-          startedAt,
-        );
-        return jsonResponse(
-          {
-            data: assistantData(
-              serviceScheduleResponse.message,
-              serviceScheduleResponse.sources,
-            ),
-            request_id: requestId,
-          },
-          200,
-          headers,
-        );
-      }
-    }
-
-    const sourceTypes = conversationGroundingSourceTypesFor(messages);
-    const liveGrounding = sourceTypes.length
-      ? await loadApprovedGrounding(admin, profile.id, sourceTypes)
-      : [];
-
-    if (isAnnouncementEventQuestion(finalUserMessage)) {
-      const eventResponse = announcementEventResponseFor(
-        finalUserMessage,
-        liveGrounding,
-      );
-      if (eventResponse) {
-        logRequest(requestId, profile.role, eventResponse.category, startedAt);
-        return jsonResponse(
-          {
-            data: assistantData(eventResponse.message, eventResponse.sources),
-            request_id: requestId,
-          },
-          200,
-          headers,
-        );
-      }
-    }
-
-    const announcementConversationResponse =
-      announcementConversationResponseFor(messages, liveGrounding);
-    if (announcementConversationResponse) {
-      logRequest(
-        requestId,
-        profile.role,
-        announcementConversationResponse.category,
-        startedAt,
-      );
-      return jsonResponse(
-        {
-          data: assistantData(
-            announcementConversationResponse.message,
-            announcementConversationResponse.sources,
-          ),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-
-    const healthCenterConversationResponse =
-      healthCenterConversationResponseFor(messages, liveGrounding);
-    if (healthCenterConversationResponse) {
-      logRequest(
-        requestId,
-        profile.role,
-        `${healthCenterConversationResponse.category}_follow_up`,
-        startedAt,
-      );
-      return jsonResponse(
-        {
-          data: assistantData(
-            healthCenterConversationResponse.message,
-            healthCenterConversationResponse.sources,
-          ),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-
-    const faqConversationResponse = faqConversationResponseFor(
-      messages,
-      liveGrounding,
-    );
-    if (faqConversationResponse) {
-      logRequest(
-        requestId,
-        profile.role,
-        faqConversationResponse.category,
-        startedAt,
-      );
-      return jsonResponse(
-        {
-          data: assistantData(
-            faqConversationResponse.message,
-            faqConversationResponse.sources,
-          ),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-
-    if (
-      (requiresLiveGrounding(finalUserMessage) || sourceTypes.length > 0) &&
-      liveGrounding.length === 0
-    ) {
-      logRequest(requestId, profile.role, "grounding_empty", startedAt);
-      return jsonResponse(
-        {
-          data: assistantData(
-            uncertaintyMessageFor(finalUserMessage),
-            [],
-            humanEscalationResponseFor(finalUserMessage, profile.role).actions,
-          ),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-    const groundedResponse = groundedResponseFor(
-      finalUserMessage,
-      liveGrounding,
-    );
-    if (groundedResponse) {
-      logRequest(requestId, profile.role, groundedResponse.category, startedAt);
-      return jsonResponse(
-        {
-          data: assistantData(
-            groundedResponse.message,
-            groundedResponse.sources,
-          ),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-    const knowledgeGrounding = systemKnowledgeGroundingFor(
-      messages,
-      profile.role,
-    );
-    if (liveGrounding.length === 0 && knowledgeGrounding.length === 0) {
-      const unsupported = humanEscalationResponseFor(
-        finalUserMessage,
-        profile.role,
-      );
-      logRequest(requestId, profile.role, unsupported.category, startedAt);
-      return jsonResponse(
-        {
-          data: assistantData(unsupported.message, [], unsupported.actions),
-          request_id: requestId,
-        },
-        200,
-        headers,
-      );
-    }
-    const grounding = withSystemKnowledgeGrounding(
-      liveGrounding,
-      messages,
-      profile.role,
-    );
-
-    const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
-    let interaction;
-    try {
-      interaction = await withProviderTimeout(
-        ai.interactions.create({
-          model: env.model,
-          input: buildProviderInput(messages, grounding),
-          system_instruction: buildSystemInstruction(profile.role),
-          generation_config: {
-            max_output_tokens: 500,
-            thinking_level: "low",
-          },
-          store: false,
-        }),
-      );
-    } catch (error) {
-      throw mapProviderError(error);
-    }
-    const message = boundedResponse(interaction.output_text);
-
-    logRequest(requestId, profile.role, "success", startedAt);
-    return jsonResponse(
-      { data: assistantData(message, grounding), request_id: requestId },
-      200,
-      headers,
-    );
+    return jsonResponse({ data, request_id: requestId }, 200, headers);
   } catch (error) {
     const safeError =
       error instanceof AiAssistantError

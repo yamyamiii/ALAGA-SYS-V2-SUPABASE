@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FloatingAiAssistant } from "@/features/ai-assistant/FloatingAiAssistant";
 import { USER_ROLES } from "@/features/auth/permissions";
+import { buildAiPayload } from "@/features/ai-assistant/schemas";
 import {
   AiAssistantServiceError,
   aiAssistantService,
@@ -57,6 +58,43 @@ describe("floating ALAGA AI assistant", () => {
       configurable: true,
       value: true,
     });
+  });
+
+  it("shows a private summary locally but sends only its neutral context marker on follow-up", async () => {
+    const marker =
+      "[Private appointment summary omitted. Request a fresh own-status lookup for follow-ups.]";
+    const send = vi
+      .spyOn(aiAssistantService, "send")
+      .mockResolvedValueOnce({
+        content: "Private visit summary shown only here",
+        sources: [],
+        actions: [],
+        contextMessage: marker,
+      })
+      .mockResolvedValueOnce({
+        content: "Generated follow-up",
+        sources: [],
+        actions: [],
+      });
+    const user = userEvent.setup();
+    renderAssistant();
+    await user.click(
+      screen.getByRole("button", { name: "Open ALAGA AI Assistant" }),
+    );
+    const input = screen.getByLabelText("Message ALAGA AI Assistant");
+    await user.type(input, "Is my visit confirmed?");
+    await user.click(screen.getByRole("button", { name: /send/i }));
+    expect(
+      await screen.findByText("Private visit summary shown only here"),
+    ).toBeInTheDocument();
+    await user.type(input, "What does that mean?");
+    await user.click(screen.getByRole("button", { name: /send/i }));
+    expect(await screen.findByText("Generated follow-up")).toBeInTheDocument();
+    const payload = buildAiPayload(send.mock.calls[1][0]);
+    expect(JSON.stringify(payload)).not.toContain(
+      "Private visit summary shown only here",
+    );
+    expect(payload.messages[1].content).toBe(marker);
   });
 
   it("opens accessibly, focuses the input, and renders role guidance", async () => {

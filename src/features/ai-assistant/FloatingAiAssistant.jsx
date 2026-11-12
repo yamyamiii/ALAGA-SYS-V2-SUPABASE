@@ -51,7 +51,7 @@ export function FloatingAiAssistant({ profile }) {
     mutation.reset();
     setRetryMessages(requestMessages);
     mutation.mutate(requestMessages, {
-      onSuccess: ({ content, sources, actions }) => {
+      onSuccess: ({ content, sources, actions, contextMessage }) => {
         setMessages((current) => [
           ...current,
           {
@@ -60,6 +60,7 @@ export function FloatingAiAssistant({ profile }) {
             content,
             sources,
             actions,
+            ...(contextMessage ? { contextMessage } : {}),
           },
         ]);
         setRetryMessages(null);

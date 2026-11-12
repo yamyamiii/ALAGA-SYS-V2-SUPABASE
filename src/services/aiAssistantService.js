@@ -43,6 +43,10 @@ const SAFE_FUNCTION_ERRORS = Object.freeze({
     message: "The assistant could not complete that request. Please try again.",
     retryable: true,
   },
+  provider_invalid_response: {
+    message: "The assistant could not complete that request. Please try again.",
+    retryable: true,
+  },
   provider_configuration_error: {
     message: "The assistant is temporarily unavailable.",
     retryable: false,

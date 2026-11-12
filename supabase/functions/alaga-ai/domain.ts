@@ -554,6 +554,30 @@ export function navigationActionIdsForRole(role: CanonicalRole) {
     .map(([actionId]) => actionId);
 }
 
+// Gemini may propose symbolic IDs, never URLs, permissions, or mutations.
+// Reconstruct all labels/types on the server instead of trusting model fields.
+export function sanitizeAssistantActionIds(
+  ids: string[],
+  role: CanonicalRole,
+): AssistantAction[] {
+  const navigation = sanitizeNavigationActions(
+    ids.map((actionId) => ({ type: "navigate", actionId })),
+    role,
+  );
+  const ui =
+    role === "resident" && ids.includes("open_appointment_request_form")
+      ? [
+          {
+            type: "ui_action" as const,
+            actionId: "open_appointment_request_form",
+            label: UI_ACTION_DEFINITIONS.open_appointment_request_form.label,
+            requiresConfirmation: true,
+          },
+        ]
+      : [];
+  return [...navigation, ...ui].slice(0, 6);
+}
+
 function navigationLabel(
   definition: NavigationDefinition,
   role: CanonicalRole,
@@ -3420,7 +3444,10 @@ export function buildProviderInput(
   grounding: GroundingSource[] = [],
 ) {
   const transcript = messages
-    .map(({ role, content }) => `${role.toUpperCase()}: ${content}`)
+    .map(
+      ({ role, content }) =>
+        `${role.toUpperCase()}: ${JSON.stringify(content)}`,
+    )
     .join("\n\n");
   const verifiedGrounding = grounding.length
     ? grounding
@@ -3445,7 +3472,7 @@ export function buildProviderInput(
                   .filter(Boolean)
                   .join("\n")
               : "";
-          return `[SOURCE ${index + 1}: ${source.label} — ${source.title}]\n${announcementFields ? `${announcementFields}\n` : ""}${source.content}`;
+          return `[SOURCE ${index + 1}: ${JSON.stringify(source.label)} — ${JSON.stringify(source.title)}]\n${announcementFields ? `${announcementFields}\n` : ""}${JSON.stringify(source.content)}`;
         })
         .join("\n\n")
     : "No verified grounding was available.";
@@ -3462,6 +3489,10 @@ const LIKELY_IDENTIFIER_PATTERN =
   /(?:\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b|\b09\d{9}\b|\b[0-9a-f]{8}-[0-9a-f-]{27,36}\b|\b(?:RES|ENC|APT|MAT|CHD|HH)-\d{4}-\d{6}\b)/i;
 const LIKELY_CLINICAL_DATA_PATTERN =
   /\b(?:patient|resident)\s+(?:name|address)|\b(?:home|street)\s+address|\b(?:blood pressure|bp|heart rate|pulse|temperature|oxygen saturation|spo2)\s*(?::|is|=)?\s*\d|\b(?:diagnosis|assessment|treatment plan|clinical notes?|chief complaint|medical history|allerg(?:y|ies)|last menstrual period|lmp|estimated delivery date|edd|pregnancy details?|laboratory results?|report contents?|document contents?)\s*(?::|is|=)/i;
+// Ordinary free-form chat now reaches Gemini, so protect common personal
+// narratives even when the sender does not use a structured clinical label.
+const PERSONAL_NARRATIVE_PATTERN =
+  /\b(?:my name is|ako si|pangalan ko (?:ay|si))\s+\p{L}|\b(?:i (?:have|feel|am experiencing|was diagnosed)|my (?:child|baby|patient|mother|father) (?:has|is|was)|(?:may|meron) (?:akong|siyang))\b.{0,100}\b(?:fever|headache|pain|rash|cough|vomiting|diabetes|hypertension|pregnant|lagnat|ubo|sakit|pantal|buntis)\b|\bmasakit\b.{0,50}\bko\b/iu;
 
 export function safetyResponseFor(message: string) {
   if (EMERGENCY_PATTERN.test(message)) {
@@ -3492,7 +3523,10 @@ export function safetyResponseFor(message: string) {
         "For privacy, remove email addresses, phone numbers, UUIDs, and ALAGA-SYS record numbers before asking for general guidance. Do not enter clinical details or another person's information in this chat.",
     };
   }
-  if (LIKELY_CLINICAL_DATA_PATTERN.test(message)) {
+  if (
+    LIKELY_CLINICAL_DATA_PATTERN.test(message) ||
+    PERSONAL_NARRATIVE_PATTERN.test(message)
+  ) {
     return {
       category: "data_minimization",
       response:

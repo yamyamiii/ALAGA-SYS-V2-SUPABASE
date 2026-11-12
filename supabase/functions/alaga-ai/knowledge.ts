@@ -322,6 +322,21 @@ export const SYSTEM_KNOWLEDGE_ENTRIES: readonly SystemKnowledgeEntry[] = [
     actionRoles: ALL_ROLES,
   },
   {
+    id: "health-event-booking",
+    topic: "appointment_workflow",
+    title: "Fixed health service events and waitlists",
+    aliases: ["health event booking", "event waitlist"],
+    keywords: ["event", "waitlist", "capacity"],
+    facts: {
+      english:
+        "A published health service event has one fixed date/time window and shared capacity, not a Resident-selectable appointment time slot. Residents open the published event from Announcements and deliberately choose Book or Join waitlist. The trusted workflow confirms a booking and assigns eligible available staff only when capacity permits. Otherwise the Resident may explicitly join the FIFO waitlist; joining does not guarantee confirmation. When capacity becomes available the trusted workflow promotes eligible waitlisted bookings in order. Booking must be within the event booking window. ALAGA AI cannot verify current seats, waitlist position, staff availability, or personal event bookings and never books or joins automatically.",
+      filipino:
+        "May isang fixed date/time window at shared capacity ang published health service event; hindi pumipili ng sariling appointment time slot ang Resident. Buksan ang published event mula sa Announcements at kusang piliin ang Book o Join waitlist. Kino-confirm at ina-assign ng trusted workflow ang eligible available staff kapag may capacity. Kapag puno, maaaring kusang sumali sa FIFO waitlist, pero hindi garantiya ng confirmation ang pagsali. Hindi nagbu-book o sumasali ang ALAGA AI para sa user.",
+    },
+    actionId: "open_announcements",
+    actionRoles: ALL_ROLES,
+  },
+  {
     id: "appointment-lifecycle",
     topic: "appointment_workflow",
     title: "Appointment lifecycle and status meaning",
@@ -484,9 +499,9 @@ export const SYSTEM_KNOWLEDGE_ENTRIES: readonly SystemKnowledgeEntry[] = [
     },
     access: {
       english:
-        "Nurse and Midwife retain authorized clinical-documentation access. BHW sees only the approved minimized metadata. Resident access is limited to the Resident-safe signed-record/document workflow. Administrator masking rules remain authoritative.",
+        "Nurse and Midwife retain authorized clinical-documentation access. BHW sees only the approved minimized metadata. Residents use My Health History for their own finalized signed/amended records and completed-service history, read-only, never the staff documentation interface. This assistant cannot read that health history. Administrator masking rules remain authoritative.",
       filipino:
-        "Nananatili sa Nurse at Midwife ang awtorisadong clinical-documentation access. Approved minimized metadata lamang ang nakikita ng BHW. Resident-safe signed-record/document workflow lamang ang para sa Resident. Authoritative pa rin ang Administrator masking rules.",
+        "Nananatili sa Nurse at Midwife ang awtorisadong clinical-documentation access. Approved minimized metadata lamang ang nakikita ng BHW. Sa My Health History lang makikita ng Resident ang sariling finalized records at completed services, read-only at hindi sa staff interface. Hindi binabasa ng assistant ang health history. Authoritative pa rin ang Administrator masking rules.",
     },
     actionId: "open_health_records",
     actionRoles: ALL_ROLES,
@@ -836,9 +851,9 @@ export const SYSTEM_KNOWLEDGE_ENTRIES: readonly SystemKnowledgeEntry[] = [
     ],
     facts: {
       english:
-        "Barangay Bagongpook service schedules are canonical operational information. Exact service days are formatted by the deterministic schedule handler. A service schedule does not guarantee real-time staff availability, a specific appointment, or unannounced closure information.",
+        "Barangay Bagongpook service schedules are canonical operational information supplied in the structured service catalog. A service schedule does not establish official opening hours or guarantee real-time staff availability, a specific appointment, or unannounced closure information. Standard AUTO_SLOT appointment starts are 08:00 through 16:00 in 30-minute intervals, Asia/Manila, with provisional 30-minute duration; these are booking rules, not clinic opening hours. Actual selectable dates/times come only from the live authenticated booking screen.",
       filipino:
-        "Canonical operational information ang Barangay Bagongpook service schedules. Ang exact service days ay fino-format ng deterministic schedule handler. Hindi garantiya ng service schedule ang real-time staff availability, specific appointment, o unannounced closure information.",
+        "Canonical operational information ang structured Barangay Bagongpook service schedules. Hindi ito official opening hours o garantiya ng availability. Ang standard AUTO_SLOT start times ay 08:00–16:00, bawat 30 minuto, Asia/Manila; ang aktuwal na mapipiling date/time ay mula lamang sa live authenticated booking screen.",
     },
     actionId: "open_health_center",
     actionRoles: ALL_ROLES,

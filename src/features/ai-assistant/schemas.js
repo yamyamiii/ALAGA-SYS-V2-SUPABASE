@@ -51,7 +51,13 @@ export function buildAiPayload(messages) {
   return aiConversationSchema.parse({
     messages: messages
       .filter((message) => !message.local)
-      .map(({ role, content }) => ({ role, content })),
+      .map(({ role, content, contextMessage }) => ({
+        role,
+        content:
+          role === "assistant" && contextMessage === PRIVATE_CONTEXT_MESSAGE
+            ? PRIVATE_CONTEXT_MESSAGE
+            : content,
+      })),
   });
 }
 
@@ -88,11 +94,15 @@ const aiActionSchema = z.discriminatedUnion("type", [
     .strict(),
 ]);
 
+const PRIVATE_CONTEXT_MESSAGE =
+  "[Private appointment summary omitted. Request a fresh own-status lookup for follow-ups.]";
+
 const aiResponseSchema = z
   .object({
     message: z.string().trim().min(1).max(4_000),
     sources: z.array(z.unknown()).max(12).default([]),
     actions: z.array(z.unknown()).max(6).default([]),
+    contextMessage: z.literal(PRIVATE_CONTEXT_MESSAGE).optional(),
   })
   .strict();
 
@@ -102,6 +112,9 @@ export function parseAiResponse(value) {
   const actionIds = new Set();
   return {
     content: response.message,
+    ...(response.contextMessage
+      ? { contextMessage: response.contextMessage }
+      : {}),
     sources: response.sources.flatMap((source) => {
       const parsed = aiSourceSchema.safeParse(source);
       if (!parsed.success) return [];

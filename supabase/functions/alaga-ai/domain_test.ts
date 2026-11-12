@@ -273,7 +273,7 @@ Deno.test(
       { role: "user", content: "Where is the FAQ page?" },
     ]);
     assert(input.includes("UNTRUSTED SESSION TRANSCRIPT"));
-    assert(input.includes("USER: Where is the FAQ page?"));
+    assert(input.includes('USER: "Where is the FAQ page?"'));
     assert(!input.includes("resident_id"));
     assert(!input.includes("chief_complaint"));
   },
@@ -401,7 +401,9 @@ Deno.test("returns distinct minimal appointment workflow answers", () => {
   assert(!how?.message.match(/Administrator|BHW/));
   assert(where?.message.startsWith("Sa My Appointments page"));
   assert(!where?.message.match(/Pending|Administrator|BHW/));
-  assert(approval?.message.match(/automatically Confirmed/i));
+  assert(
+    approval?.message.match(/automatically Confirmed|awtomatikong Confirmed/i),
+  );
   assert(next?.message.match(/revalidates.*capacity.*eligible.*Confirmed/i));
   assertEquals(
     new Set([how?.message, where?.message, approval?.message, next?.message])
@@ -533,7 +535,7 @@ Deno.test(
         assert(response?.message.includes("required rejection justification"));
         assert(
           response?.message.match(
-            /same appointment and APT number|parehong appointment at APT number/,
+            /same appointment and APT number|parehong appointment at APT number/i,
           ),
         );
         assert(
@@ -1017,7 +1019,8 @@ Deno.test("fails closed when requested verified grounding is absent", () => {
 Deno.test("workflow grounding is role specific and read only", () => {
   const resident = workflowGrounding("resident");
   const admin = workflowGrounding("admin");
-  assert(resident.content.includes("preferred appointment start time"));
+  assert(resident.content.includes("AUTO_SLOT"));
+  assert(resident.content.includes("confirmed automatically"));
   assert(!resident.content.includes("trusted user access"));
   assert(admin.content.includes("trusted user access"));
 });

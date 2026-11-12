@@ -3,6 +3,10 @@ import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const index = fs.readFileSync("supabase/functions/alaga-ai/index.ts", "utf8");
+const conversation = fs.readFileSync(
+  "supabase/functions/alaga-ai/conversation.ts",
+  "utf8",
+);
 const domain = fs.readFileSync("supabase/functions/alaga-ai/domain.ts", "utf8");
 const knowledge = fs.readFileSync(
   "supabase/functions/alaga-ai/knowledge.ts",
@@ -148,23 +152,14 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(index).toMatch(/Cache-Control.*no-store/s);
   });
 
-  it("answers simple conversation after safety and before Gemini", () => {
-    const handler = index.slice(index.indexOf("Deno.serve"));
-    const safety = handler.indexOf("safetyResponseFor(finalUserMessage)");
-    const simple = handler.indexOf(
-      "simpleConversationResponseFor(finalUserMessage)",
+  it("uses Gemini for ordinary conversation after deterministic safety", () => {
+    expect(
+      conversation.indexOf("safetyResponseFor(finalMessage)"),
+    ).toBeLessThan(conversation.indexOf("dependencies.generate("));
+    expect(index).toContain("respondToConversation(messages, profile.role");
+    expect(index).not.toMatch(
+      /simpleConversationResponseFor|systemKnowledgeResponseFor|workflowResponseFor|groundedResponseFor/,
     );
-    const grounding = handler.indexOf(
-      "conversationGroundingSourceTypesFor(messages)",
-    );
-    const gemini = handler.indexOf("new GoogleGenAI");
-
-    expect(safety).toBeGreaterThan(-1);
-    expect(simple).toBeGreaterThan(safety);
-    expect(simple).toBeLessThan(grounding);
-    expect(simple).toBeLessThan(gemini);
-    expect(domain).toMatch(/SIMPLE_ENGLISH_GREETING/);
-    expect(domain).toMatch(/SIMPLE_FILIPINO_CAPABILITY/);
   });
 
   it("logs only minimized operational fields", () => {
@@ -210,7 +205,7 @@ describe("ALAGA AI Edge Function security boundary", () => {
 
   it("loads grounding only through the narrow service-role RPC", () => {
     expect(index).toMatch(/admin\.rpc\("ai_grounding_context"/);
-    expect(index).toMatch(/sanitizeGroundingSources\(data\)/);
+    expect(index).toMatch(/sanitizeGroundingSources\(\s*interleaved/);
     expect(groundingMigration).toMatch(
       /grant execute on function public\.ai_grounding_context\(uuid, text\[\], integer\)[\s\S]*to service_role/i,
     );
@@ -240,27 +235,19 @@ describe("ALAGA AI Edge Function security boundary", () => {
     );
   });
 
-  it("answers Resident own-status after safety and before Gemini without provider context", () => {
-    const handler = index.slice(index.indexOf("Deno.serve"));
-    const safety = handler.indexOf("safetyResponseFor(finalUserMessage)");
-    const statusIntent = handler.indexOf(
-      "isResidentAppointmentStatusIntent(finalUserMessage)",
+  it("keeps private lookup results outside Gemini and derives scope from the authenticated profile", () => {
+    expect(index).toContain('admin.rpc("ai_resident_appointment_status"');
+    expect(index).toContain("loadResidentAppointmentStatus(admin, profile.id)");
+    expect(conversation).toContain('role === "resident"');
+    expect(conversation).toContain("dependencies.loadOwnStatus()");
+    expect(conversation.indexOf("dependencies.generate(")).toBeLessThan(
+      conversation.indexOf("dependencies.loadOwnStatus()"),
     );
-    const statusRpc = index.indexOf(
-      'admin.rpc("ai_resident_appointment_status"',
-    );
-    const provider = handler.indexOf("new GoogleGenAI");
-
-    expect(statusRpc).toBeGreaterThan(-1);
-    expect(statusIntent).toBeGreaterThan(safety);
-    expect(statusIntent).toBeLessThan(provider);
-    expect(index).toMatch(/profile\.role === "resident"/);
-    expect(index).toMatch(/sanitizeResidentAppointmentStatusRows\(data\)/);
-    expect(index).not.toMatch(
+    expect(conversation).toContain("contextMessage:");
+    expect(index).toContain("sanitizeResidentAppointmentStatusRows(data)");
+    expect(conversation).not.toMatch(
       /buildProviderInput\([^)]*(?:statusLookup|appointments)/,
     );
-    expect(domain).toMatch(/RESIDENT_APPOINTMENT_STATUS_PATTERNS/);
-    expect(domain).toMatch(/appointment_status_role_unavailable/);
   });
 
   it("keeps the Resident status RPC service-only, ownership-bound, and minimal", () => {
@@ -293,118 +280,62 @@ describe("ALAGA AI Edge Function security boundary", () => {
     );
   });
 
-  it("sanitizes symbolic navigation outside the model", () => {
-    expect(domain).toMatch(/NAVIGATION_DEFINITIONS/);
-    expect(domain).toMatch(/sanitizeNavigationActions/);
-    expect(domain).toMatch(/navigationResponseFor/);
-    expect(domain).toMatch(/navigation_unauthorized/);
-    expect(domain).toMatch(/navigation_rejected/);
+  it("sanitizes proposed symbolic navigation outside the model", () => {
+    expect(domain).toContain("sanitizeAssistantActionIds");
+    expect(domain).toContain("sanitizeNavigationActions");
+    expect(conversation).toContain(
+      "sanitizeAssistantActionIds(proposal.actionIds, role)",
+    );
     expect(domain).not.toMatch(/route:\s*["'`]\//);
-    expect(index).toMatch(/navigationResponseFor\(/);
-    expect(index.indexOf("const navigationResponse")).toBeGreaterThan(-1);
-    expect(index.indexOf("const navigationResponse")).toBeLessThan(
-      index.indexOf("const ai = new GoogleGenAI"),
-    );
+    expect(conversation).not.toMatch(/eval\(|new Function/);
   });
 
-  it("answers approved workflows before live grounding or Gemini", () => {
-    expect(domain).toMatch(/workflowResponseFor/);
-    expect(index).toMatch(
-      /workflowResponseFor\(\s*finalUserMessage,\s*profile\.role,\s*\)/,
-    );
-    expect(index.indexOf("const workflowResponse")).toBeGreaterThan(-1);
-    expect(index.indexOf("const workflowResponse")).toBeLessThan(
-      index.indexOf("const sourceTypes"),
-    );
-    expect(index.indexOf("const workflowResponse")).toBeLessThan(
-      index.indexOf("const navigationResponse"),
-    );
-    expect(index.indexOf("const workflowResponse")).toBeLessThan(
-      index.indexOf("const ai = new GoogleGenAI"),
-    );
+  it("supplies workflow facts to Gemini instead of returning canned workflow answers", () => {
+    expect(conversation).toContain("SYSTEM_KNOWLEDGE_ENTRIES.map");
+    expect(conversation).toContain("entry.facts.english");
+    expect(index).not.toContain("workflowResponseFor(");
+    expect(conversation).toContain("primary conversational reasoning engine");
   });
 
-  it("answers the static Bagongpook service schedule before live data or Gemini", () => {
-    const handler = index.slice(index.indexOf("Deno.serve"));
-    const scheduleResponse = handler.indexOf("serviceScheduleResponseFor(");
-    const sourceTypes = handler.indexOf(
-      "conversationGroundingSourceTypesFor(messages)",
-    );
-    const gemini = handler.indexOf("new GoogleGenAI");
-    const scheduleCatalog = knowledge.slice(
-      knowledge.indexOf("BAGONGPOOK_HEALTH_SERVICE_SCHEDULE"),
-      knowledge.indexOf("const ALL_ROLES"),
-    );
-
-    expect(scheduleResponse).toBeGreaterThan(-1);
-    expect(scheduleResponse).toBeLessThan(sourceTypes);
-    expect(scheduleResponse).toBeLessThan(gemini);
-    expect(scheduleCatalog).toContain('id: "immunization"');
-    expect(scheduleCatalog).toContain("first Wednesday of every month");
-    expect(scheduleCatalog).not.toMatch(/\b\d{1,2}:\d{2}\b/);
-    expect(index).not.toMatch(/\.from\("appointments"\)/);
+  it("supplies canonical service data without inventing opening hours", () => {
+    expect(conversation).toContain("BAGONGPOOK_HEALTH_SERVICE_SCHEDULE.map");
+    expect(conversation).toContain("Never infer official opening hours");
+    expect(knowledge).toContain("first Wednesday of every month");
+    expect(index).not.toContain("serviceScheduleResponseFor(");
   });
 
-  it("answers temporary event questions from approved announcement grounding before the canonical schedule or Gemini", () => {
-    const handler = index.slice(index.indexOf("Deno.serve"));
-    const eventIntent = handler.indexOf(
-      "isAnnouncementEventQuestion(finalUserMessage)",
+  it("uses current approved announcement data for event questions, not invented event capacity", () => {
+    expect(index).toContain("loadApprovedGrounding(admin, profile.id");
+    expect(conversation).toContain(
+      "Date.parse(source.publishAt) <= now.getTime()",
     );
-    const scheduleGuard = handler.indexOf(
-      "if (!isAnnouncementEventQuestion(finalUserMessage))",
+    expect(conversation).toContain(
+      "Date.parse(source.expiresAt) > now.getTime()",
     );
-    const eventResponse = handler.indexOf("announcementEventResponseFor(");
-    const scheduleResponse = handler.indexOf("serviceScheduleResponseFor(");
-    const gemini = handler.indexOf("new GoogleGenAI");
-
-    expect(eventIntent).toBeGreaterThan(-1);
-    expect(scheduleGuard).toBeGreaterThan(-1);
-    expect(eventResponse).toBeGreaterThan(eventIntent);
-    expect(eventResponse).toBeLessThan(gemini);
-    expect(scheduleResponse).toBeGreaterThan(scheduleGuard);
-    expect(index).toMatch(
-      /conversationGroundingSourceTypesFor\(messages\)[\s\S]*loadApprovedGrounding\(admin, profile\.id, sourceTypes\)[\s\S]*announcementEventResponseFor/i,
+    expect(conversation).toContain(
+      "event capacity, and waitlist position are NOT supplied",
     );
     expect(index).not.toMatch(/\.from\("announcements"\)/);
   });
 
-  it("resolves request-local conversation context after safety and explicit navigation", () => {
-    const handler = index.slice(index.indexOf("Deno.serve"));
-    const safety = handler.indexOf("safetyResponseFor(finalUserMessage)");
-    const navigation = handler.indexOf("navigationResponseFor(");
-    const contextSources = handler.indexOf(
-      "conversationGroundingSourceTypesFor(messages)",
+  it("passes bounded request-local history to Gemini while omitting sensitive history", () => {
+    expect(index).toContain("validateConversationPayload(");
+    expect(conversation).toContain("providerConversation(messages, role)");
+    expect(conversation).toContain("safetyResponseFor(message.content)");
+    expect(conversation).toContain(
+      "Earlier private or safety-sensitive content omitted.",
     );
-    const announcementContext = handler.indexOf(
-      "announcementConversationResponseFor(messages, liveGrounding)",
-    );
-    const provider = handler.indexOf("new GoogleGenAI");
-
-    expect(safety).toBeGreaterThan(-1);
-    expect(navigation).toBeGreaterThan(safety);
-    expect(contextSources).toBeGreaterThan(navigation);
-    expect(announcementContext).toBeGreaterThan(contextSources);
-    expect(announcementContext).toBeLessThan(provider);
-    expect(domain).toMatch(/resolveAppointmentWorkflowFacet/);
-    expect(domain).toMatch(/resolveConversationTopic\(messages\)/);
-    expect(domain).toMatch(
-      /\.filter\(\(message\) => message\.role === "user"\)/,
-    );
-    expect(domain).not.toMatch(/localStorage|sessionStorage|indexedDB/i);
+    expect(conversation).not.toMatch(/localStorage|sessionStorage|indexedDB/i);
   });
 
-  it("uses centralized system knowledge and a bounded hybrid resolver", () => {
-    expect(knowledge).toMatch(/SYSTEM_KNOWLEDGE_ENTRIES/);
-    expect(knowledge).toMatch(/Resident registration workflow/);
-    expect(knowledge).toMatch(/Appointment lifecycle and status meaning/);
-    expect(knowledge).toMatch(/Health Records and encounters/);
-    expect(knowledge).toMatch(/ALAGA AI purpose and limits/);
-    expect(domain).toMatch(/resolveConversationTopic/);
-    expect(domain).toMatch(/slice\(-4\)/);
-    expect(domain).toMatch(/systemKnowledgeResponseFor/);
-    expect(domain).toMatch(/systemKnowledgeGroundingFor/);
-    expect(index).toMatch(/shouldLoadResidentAppointmentStatus\(messages/);
-    expect(index).toMatch(/withSystemKnowledgeGrounding/);
+  it("uses the centralized knowledge catalog without requiring an ordinary keyword match", () => {
+    expect(knowledge).toContain("SYSTEM_KNOWLEDGE_ENTRIES");
+    expect(knowledge).toContain("Fixed health service events and waitlists");
+    expect(conversation).toContain("content.length > 20_000");
+    expect(conversation).not.toMatch(
+      /systemKnowledgeResponseFor|resolveConversationTopic/,
+    );
+    expect(conversation).toContain('lookup === "own_appointment_status"');
   });
 
   it("keeps static knowledge free of private records and mutations", () => {
@@ -431,17 +362,16 @@ describe("ALAGA AI Edge Function security boundary", () => {
     expect(index).not.toMatch(/tools:/);
   });
 
-  it("keeps conversational grounding fields approved and strips them from browser responses", () => {
-    expect(domain).toMatch(/publishAt\?: string \| null/);
-    expect(domain).toMatch(/expiresAt\?: string \| null/);
-    expect(domain).toMatch(/Published: \$\{source\.publishAt\}/);
-    expect(domain).toMatch(/Expires: \$\{source\.expiresAt\}/);
-    const assistantData = index.slice(
-      index.indexOf("function assistantData"),
-      index.indexOf("async function withProviderTimeout"),
+  it("keeps publication/event/expiry context approved and strips raw grounding from browser responses", () => {
+    expect(domain).toContain("publishAt?: string | null");
+    expect(domain).toContain("Expires:");
+    const projection = index.slice(
+      index.indexOf("const data = {"),
+      index.indexOf("return jsonResponse({ data,"),
     );
-    expect(assistantData).not.toMatch(
-      /content|publishAt|eventStartAt|eventEndAt|expiresAt/,
+    expect(projection).toContain("type, label, title, updatedAt");
+    expect(projection).not.toMatch(
+      /publishAt|eventStartAt|eventEndAt|expiresAt|content/,
     );
     expect(conversationalAnnouncementMigration).not.toMatch(
       /grant execute[^;]*to (?:anon|authenticated)/i,
@@ -459,31 +389,31 @@ describe("ALAGA AI Edge Function security boundary", () => {
     );
   });
 
-  it("keeps UI actions deterministic and outside Gemini output", () => {
-    expect(domain).toMatch(/UI_ACTION_DEFINITIONS/);
-    expect(domain).toMatch(/type: "ui_action"/);
-    expect(domain).toMatch(/open_appointment_request_form/);
-    expect(index.indexOf("const workflowResponse")).toBeLessThan(
-      index.indexOf("const ai = new GoogleGenAI"),
+  it("treats model action IDs as proposals and never executes an appointment mutation", () => {
+    expect(domain).toContain("UI_ACTION_DEFINITIONS");
+    expect(domain).toContain('type: "ui_action"');
+    expect(domain).toContain("sanitizeAssistantActionIds");
+    expect(conversation).toContain(
+      "sanitizeAssistantActionIds(proposal.actionIds, role)",
     );
-    expect(domain).not.toMatch(/route:\s*["'`]\/appointments/);
+    expect(index).not.toMatch(
+      /rpc\("(?:resident_appointment_request|resident_appointment_cancel|appointment_transition|health_event_book)"/,
+    );
   });
 
-  it("returns structured metadata without returning grounding content", () => {
-    const assistantData = index.slice(
-      index.indexOf("function assistantData"),
-      index.indexOf("async function withProviderTimeout"),
+  it("returns only message, safe source metadata, validated actions and a neutral private-history marker", () => {
+    const projection = index.slice(
+      index.indexOf("const data = {"),
+      index.indexOf("return jsonResponse({ data,"),
     );
-    expect(assistantData).toMatch(/message/);
-    expect(assistantData).toMatch(/sources:/);
-    expect(assistantData).toMatch(/actions/);
-    expect(assistantData).toMatch(/type, label, title, updatedAt/);
-    expect(assistantData).not.toMatch(/content/);
-    expect(index).toMatch(/uncertaintyMessageFor\(finalUserMessage\)/);
+    expect(projection).toContain("reply.message");
+    expect(projection).toContain("reply.actions");
+    expect(projection).toContain("contextMessage");
+    expect(projection).not.toMatch(/content:|reply\.sources\s*[,}]/);
   });
 
   it("preserves Phase 9A safety and no-content logging", () => {
-    expect(index).toMatch(/safetyResponseFor\(finalUserMessage\)/);
+    expect(conversation).toMatch(/safetyResponseFor\(finalMessage\)/);
     expect(index).toMatch(/store: false/);
     expect(domain).toMatch(/Never diagnose/);
     expect(frontend).not.toMatch(

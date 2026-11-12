@@ -1,190 +1,177 @@
 # ALAGA AI Assistant architecture
 
-ALAGA AI is a grounded conversational assistant for ALAGA-SYS. It can explain
-verified system workflows and permitted information conversationally, while
-actual authorization remains enforced independently and professional healthcare
-judgment remains outside the AI's role. It does not give Gemini a database
-connection, route control, mutation tool, or access to resident and clinical
-data.
+ALAGA AI uses Gemini as the primary natural-language reasoning and response
+engine for ordinary conversation. It is a read-only assistant, not a clinician,
+a database agent, or an autonomous appointment operator.
 
-## Request path
+## Production response pipeline
 
-```text
-Authenticated AppShell
-  -> in-memory FloatingAiAssistant
-  -> aiAssistantService
-  -> authenticated alaga-ai Edge Function
-  -> exact-origin CORS, getUser, active profile, canonical role
-  -> strict payload and deterministic medical/security checks
-  -> explicit symbolic navigation/actions
-  -> bounded recent-turn topic resolution
-  -> Resident-own appointment-status topic
-     -> service-role ai_resident_appointment_status RPC
-     -> bounded deterministic answer; never sent to Gemini
-  -> centralized verified static system-knowledge retrieval
-  -> service-role ai_grounding_context RPC
-     -> active FAQ, health-center, and announcement text only
-  -> server sanitization and character/source limits
-  -> deterministic exact facts when matched
-  -> Gemini Interactions API for grounded language composition, with store=false
-  -> { message, sources, actions }
-  -> frontend schema and role/action allowlist
-  -> fixed local route, after user confirmation when ambiguous
-```
+Previously, most requests returned before Gemini: greetings, product questions,
+workflows, navigation, static knowledge, service schedules, announcement events,
+and several contextual handlers each selected scripted text. Only the remaining
+grounded questions reached the provider.
 
-Pages and visual components never call Gemini or query grounding tables. The
-browser knows no Gemini key, service-role key, system instruction, database
-rate-limit table, or provider response object.
+The current entrypoint is:
 
-## Hybrid conversational architecture
+1. Validate exact-origin CORS; handle OPTIONS before authentication/configuration.
+2. Verify the Auth user, active profile and canonical role. Consume the existing
+   atomic per-profile hourly rate limit.
+3. Validate the alternating, bounded conversation payload. Reject browser identity,
+   role, tool arguments, URLs-as-actions, and unsupported request fields.
+4. Run deterministic emergency, clinical-decision, privacy and injection checks.
+   Blocked requests do not retrieve grounding or call Gemini.
+5. Read the existing approved public grounding RPC and add the centralized static
+   product/service knowledge. No ordinary keyword match is required.
+6. Redact safety-sensitive history; send the bounded, separately labeled
+   reference facts and untrusted transcript to Gemini Interactions with
+   `store: false`, a server-configured model, structured JSON output, a
+   20-second timeout and a 500-output-token limit.
+7. Validate Gemini's proposed message, symbolic action IDs, source indexes and
+   optional no-argument own-status read. Unknown tools/fields fail closed.
+8. If an own-status read is requested, authenticate its scope outside the model,
+   invoke the existing narrowly scoped RPC, and render the minimized result
+   deterministically. Its private rows are never sent to Gemini.
+9. Otherwise return Gemini's bounded conversational answer with validated actions
+   and source metadata only. Reject unsupported contacts, URLs/record numbers,
+   mutation-success claims, and recognized unsafe clinical output.
+10. The frontend revalidates the response and action role allowlist, renders plain
+    React text, and waits for deliberate user activation.
 
-The request boundary follows six layers: safety and authorization, explicit
-navigation/actions, security-sensitive structured lookups, bounded topic
-resolution, approved knowledge retrieval, and grounded natural-language
-composition. Deterministic handlers remain authoritative for medical/security
-refusals, navigation IDs, a Resident's own appointment summary, dates, times,
-status, public contact fields, current announcements, and canonical service
-schedules. Gemini may interpret or phrase safe language only after the server
-has selected the approved facts; it never chooses a role, database scope,
-record, route, or permission.
+`conversation.ts` owns orchestration and the model response contract.
+`index.ts` owns authentication, privileged client creation, approved RPC access,
+provider IO, rate limiting, CORS, minimized logging and safe errors.
+`domain.ts` retains shared safety/validation and compatibility-tested legacy
+resolvers, but ordinary scripted response resolvers are no longer called by
+the production entrypoint. There is no provider API key in the browser.
 
-`knowledge.ts` is the centralized static product-knowledge catalog. It covers
-the product, roles, registration, appointments, Registry, Health Records,
-announcements, notifications, inquiries, FAQ, reports, User Management,
-account lifecycle, printable outputs, navigation, ALAGA AI, and the authority
-of the Barangay Bagongpook service schedule. The catalog contains behavior and
-access descriptions only, never copied private database content.
+## Verified facts and bounded context
 
-The request-local resolver examines only the most recent validated user turns
-and recognizes the approved topic set. It supports English, conversational
-Filipino, Taglish, common informal spellings, and short pronoun follow-ups.
-An explicit new topic replaces prior context. Conversation history remains
-in-memory only and is never permanent AI memory.
+`knowledge.ts` centralizes verified role/workflow facts, including Resident
+registration, automatic appointments, fixed health events/FIFO waitlists,
+notifications, inquiries, Reports, Registry, Health Records, User Management,
+account lifecycle, navigation, and Bagongpook service schedules.
 
-## Approved grounding
+Gemini receives the same bounded catalog for ordinary questions, including
+paraphrases and short yes/no follow-ups. It reasons over conversation history
+rather than selecting a prewritten answer by regex. It should answer the
+current question concisely in English, Filipino or Taglish, switch topics when
+asked, and ask a clarification when context is insufficient. Agreeing to an
+explanation never authorizes booking/cancellation. Non-ALAGA-SYS questions receive
+a conversational scope-aware response rather than invented local facts.
 
-Migration 30 adds `ai_grounding_context`, a service-role-only, read-only RPC;
-Migration 58 safely replaces it to include approved public contact fields.
-It may return only bounded fields from:
+Static catalog JSON is capped at 20,000 characters. Public grounding retains the
+6,000-character and 12-source limits; the combined packet has at most 12 sources.
+Public rows are interleaved across health-center, announcement and FAQ types
+before truncation (at most 1,500 content characters per public row), so a long FAQ
+list cannot crowd all announcements out. These are bounded snapshots, not a
+complete search result. Source cards indicate supplied supporting records, not
+independently verified sentence-level citations.
 
-- non-archived FAQ entries;
-- health-center name, address, public contact number/email, public emergency
-  contacts, hours, and services; and
-- non-archived announcements inside their publish and expiry window.
+## Read tools and trusted boundaries
 
-The Edge Function adds selected role-specific entries from the centralized
-static knowledge catalog. It never supplies profile IDs, resident or household data, staff names,
-appointments, appointment reasons, encounters, vital signs,
-diagnoses, allergies, pregnancy/child records, reports, inquiries, audit logs,
-authors, or clinical narratives. Grounding is loaded live for each eligible
-request, sanitized again at the Edge boundary, capped by source count and total
-characters, and placed in a section separate from the untrusted transcript.
+- `ai_grounding_context`: existing service-role-only, read-only RPC. The actor
+  is always the profile established from the verified session. Approved public
+  health-center fields, non-archived FAQ entries and currently published,
+  unexpired, non-archived announcements only. No private clinical/report rows.
+- `ai_resident_appointment_status`: existing service-role-only RPC. Requires
+  an active linked Resident and returns at most five minimized own-appointment
+  rows: service, status, current date/start time and schedule-changed boolean.
+  No IDs, numbers, names, staff identities, reasons, notes or clinical data.
+  Gemini can propose only the tool name, never a Resident/profile ID or filters.
+  Staff roles cannot use it for arbitrary record searches.
+- Symbolic navigation/form actions: model suggestions only. The server constructs
+  canonical types/labels from allowlisted IDs and role. The frontend repeats
+  authorization and maps IDs to fixed routes. Opening an empty booking form
+  does not book anything. All operational writes remain in existing,
+  user-confirmed forms and trusted appointment/event RPCs.
 
-Operating-hours, service-list, and current-announcement questions are answered
-directly from the sanitized live values without calling Gemini. This prevents
-the model from paraphrasing or inventing these high-confidence operational
-facts. English, Filipino, and common Taglish intents share this path. FAQ and
-workflow questions continue through the bounded provider path when no
-deterministic response applies.
+The existing Resident availability/catalog RPCs and health-event list/booking
+RPCs are auth.uid()-scoped application boundaries, not generic service-role AI
+tools. They are deliberately not invoked with a privileged identity on behalf
+of a user. Live slots, staff availability, event seats, waitlist position and
+personal event bookings are not provided to Gemini. The assistant directs
+users to the authorized booking/event screen to verify them.
 
-Source authority stays distinct: static system knowledge describes product
-behavior; canonical operational information describes the maintained service
-schedule; live public information comes only from approved announcement,
-health-center, and FAQ grounding; and personal authorized information is only
-the deterministic Resident-own appointment summary. Arbitrary Resident,
-clinical, staff, report-row, audit, and internal-ID data is prohibited.
+No migration or new database grant is needed. Applied migrations through 107,
+RLS, appointment automation, notifications and realtime behavior are unchanged.
 
-Grounding rows are data, never instructions. Gemini is instructed to ignore
-commands embedded in source text and to say that verified information is
-unavailable when the supplied sources do not establish an answer. Source
-cards identify the approved record used for the answer and may show its Manila
-updated date. They are source-level provenance, not sentence-level or quoted
-citations. Source content and database identifiers are not returned to the
-browser.
+## Appointment, event and announcement semantics
 
-## Resident own-appointment status
+Valid AUTO_SLOT self-bookings are automatically assigned and Confirmed after
+trusted capacity/schedule checks; routine Admin approval is not required.
+Postpartum Home Visit requires health-center coordination. Staff retain
+exception/legacy-pending handling, walk-ins, rescheduling and cancellation.
+Rescheduling preserves the appointment row and APT number.
 
-Migration 58 adds `ai_resident_appointment_status`, a service-role-only,
-read-only RPC. It independently requires one active Resident record linked to
-the active Resident profile supplied by the authenticated Edge Function. The
-query is limited to five non-archived current appointments, or the most recent
-non-archived history when none is current. It returns only status, service,
-current date, current start time, and a boolean indicating whether staff changed
-the original preferred schedule.
+Fixed health events have a common date/time window, published booking window
+and capacity. Residents deliberately Book or Join waitlist. Joining the FIFO
+waitlist is not a confirmed seat; the trusted workflow promotes eligible
+bookings when capacity becomes available. The assistant never claims a seat.
 
-The Edge Function sanitizes those fields and generates the answer before
-Gemini. It returns no IDs, names, reasons, notes, assigned staff, clinical data,
-or audit data. Staff roles cannot use this path as a record-search interface,
-and another person's appointment request is refused before lookup.
+Canonical schedules: General Consultation on regular service days/every day;
+Buntis/Prenatal on Tuesday; Maternal Care on the first Tuesday; Immunization on
+the first Wednesday; Family Planning on Thursday; postpartum coordinated home
+visit after childbirth. These do not establish clinic opening/closing hours.
+The 08:00–16:00 appointment-start window is a booking rule, not official hours.
 
-## Safe navigation
+Announcements are revalidated against the server time and ordered by
+`publish_at DESC`, not edit time. Publication, event start/end and expiration
+are kept distinct. Future/expired announcements do not enter the current
+packet. A still-current announcement may describe an already-ended event;
+publication is not evidence of live booking capacity. Dates are explained in
+Asia/Manila. Official contacts/hours must be present in approved public facts;
+missing values must not be invented.
 
-Navigation is deterministic and runs before Gemini. The server maps supported
-phrases to symbolic action IDs, checks each ID against the canonical role, and
-never accepts or emits a raw route or URL. Unknown, unauthorized, or URL-like
-requests are rejected. Ambiguous requests return confirmation-required action
-choices rather than navigating immediately.
+## Privacy, safety and session handling
 
-The frontend validates the structured response, discards malformed actions,
-rechecks the action against its own role allowlist, and maps it to a fixed local
-route. Gemini cannot create a new route, URL, action ID, or permission. See
-[AI navigation](../workflows/AI_NAVIGATION.md).
+Emergency guidance, medical/security refusals, authentication, role checks,
+rate limits, tool validation and private-summary rendering stay deterministic.
+Clinical diagnosis, prescribing/dosage advice, interpretation of personal
+measurements and arbitrary private-record retrieval remain prohibited.
+The provider has no database credentials, SQL tool or mutation tool.
 
-The final-scope registry includes appointment requests, Appointments,
-Appointment Calendar, Daily Queue, Residents for Administrator/BHW, basic
-Health Records, Announcements, basic Reports for Administrator/BHW, and
-Administrator-only User Management. FAQ, health-center information, and
-inquiries remain safe secondary assistance destinations. Maternal/child,
-household, referral, audit, backup, settings, and advanced-report actions are
-not registered on either side of the boundary.
+Transcript/source content is untrusted data. Content is JSON-escaped within
+labeled sections and the system instruction is separately supplied. Historical
+messages matching safety/privacy checks are omitted. Ordinary assistant text
+can never prove that a tool was run or grant permissions.
 
-## Stateless conversation
+Private summaries are displayed locally but carry a fixed neutral
+`contextMessage`. The frontend preserves that marker and sends it instead of
+the private answer on later turns. The server also redacts recognized historical
+private replies. This marker is only a privacy aid, never authorization.
+Raw free-text cannot be perfectly classified; the UI warns against entering
+personal information and recognized identifiers/clinical narratives are blocked.
 
-Messages remain only in React memory. Role-aware starters submit ordinary
-bounded user messages. The client sends a bounded alternating
-text transcript on each request. No interaction ID is accepted or returned,
-and provider requests use `store: false`.
+Conversation and drafts remain in React memory only, never localStorage,
+sessionStorage, IndexedDB, URLs or database chat tables. Clear/New conversation,
+logout, account invalidation, profile changes and full refresh clear session
+state. Closing the panel retains only the current in-memory draft.
 
-Clear and New conversation require confirmation. Conversation state is cleared
-by either confirmed action, component unmount on logout
-or account invalidation, a full reload, and profile/role changes. Closing the
-panel preserves the draft only for the current authenticated page session. No
-application code writes chat or grounding content to localStorage,
-sessionStorage, IndexedDB, URLs, PostgreSQL, logs, or analytics.
+Logs contain request ID, canonical role, category, latency and timestamp, not
+prompts, answers, record contents, tokens or keys. Browser errors use safe known
+copy and retain validated CORS headers. Provider failures, timeouts, malformed
+JSON and unsupported output fail safely, without a false success or automatic
+email/booking retry. Existing synchronous UI submission guards remain intact.
 
-## Role context
+## Verification and production UAT
 
-Only the canonical database role and approved high-level module descriptions
-are used. Administrator, BHW, Nurse, Midwife, and Resident each receive a
-separate server navigation allowlist. Frontend role values are never sent or
-trusted.
+Unit tests mock the provider to verify routing, context packets, tool isolation,
+role/action filtering, errors and privacy. They do not prove real Gemini answer
+quality. The actual Edge entrypoint is executed with external Auth/database/
+provider IO replaced in handler tests. Deno checks the real SDK types; domain
+tests and existing database-safety/integration tests preserve trusted boundaries.
 
-## Reliability and limits
+Before production acceptance, deploy the Edge and frontend together, then use
+test accounts for real multi-turn English/Tagalog/Taglish conversations. Verify
+greetings and short replies, auto-confirmation versus exceptional pending
+requests, service days versus missing official hours, event booking/waitlists,
+current announcement date distinctions, role-specific actions, own-status
+privacy on later turns, and provider/rate-limit recovery. Confirm through
+content-free function logs that ordinary requests reach the provider.
 
-- JWT verification remains enabled at the gateway and `getUser()` validates
-  the token again.
-- Active profile and canonical role are established before grounding or model
-  access.
-- The existing atomic fixed-UTC-hour per-profile rate limit remains in place.
-- Input, transcript, grounding, provider output, and response arrays are
-  bounded.
-- Provider calls retain the Phase 9A timeout and error normalization.
-- Responses are rendered as plain React text; no HTML is executed.
-- A synchronous client guard prevents duplicate in-flight submissions.
-- Provider errors are mapped from known codes to local privacy-safe copy; raw
-  server, provider, and database messages are never displayed.
-- Copy response uses the browser clipboard and does not persist the message.
-- Navigation is disabled while offline and never performs a mutation.
-
-## Deliberately absent
-
-There is no unrestricted resident/appointment/clinical/report grounding,
-semantic search over protected data, SQL execution, report generation,
-appointment mutation, record mutation, external knowledge retrieval, clinical
-decision support, diagnosis, prescription/dosage guidance, or autonomous
-action. The sole private-data exception is the deterministic minimal
-Resident-own appointment-status summary described above.
-
-Maternal and Child Care navigation, Referral Management, advanced reports, and
-hidden administrator infrastructure are preserved as inactive future
-extensions and excluded from the approved final thesis scope.
+Generative answers may still be inaccurate despite grounding and output checks.
+Do not describe mocked tests as live Gemini UAT. More ordinary requests now call
+Gemini, increasing provider usage/latency while the existing request limit
+remains unchanged. The 500-token response budget can cause a safe malformed-output
+error on an overly long response. No online search or unrestricted operational/
+clinical access has been added.
