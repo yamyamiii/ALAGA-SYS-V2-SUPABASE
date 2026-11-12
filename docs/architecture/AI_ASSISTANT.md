@@ -160,16 +160,21 @@ email/booking retry. Existing synchronous UI submission guards remain intact.
 The Edge request has a 70-second abort budget including Auth, profile, rate-limit,
 grounding and generation work. Generation has its own 50-second abort deadline;
 the SDK receives that signal and timeout explicitly. SDK retries and automatic
-continuation are disabled: one generation attempt per deliberate chat request,
-with manual user retry after a safe error rather than speculative duplicate
-billable calls. The browser has an 80-second deadline and aborts its invocation.
+continuation are disabled. Only explicit upstream 503 rejections are eligible for
+one application-controlled retry, after a 500–750 ms jittered exponential backoff
+step. Both attempts share the original deadline and AbortSignal. Backoff plus
+at least one second must fit the remaining budget; cancellation interrupts it.
+Other statuses, network errors, timeouts, validation and mutations are not retried.
+There is still one conversation reply, not a rerun of trusted database operations.
+The browser has an 80-second deadline and aborts its invocation.
 The previous 20-second Promise race did not cancel upstream generation, and the
 previous browser deadline was 25 seconds. Increasing the budget accommodates
 slower responses but does not prove why a production model was slow.
 
 Operational logs additionally record auth/profile/rate/grounding/provider timings,
-validated model identifier, upstream status category, timeout category and zero
-retry count. No prompts, responses or secret values are recorded. Secret names
+validated model identifier, upstream status category, timeout category and actual
+retry count (zero or one). Recovery preserves last_transient_status=503.
+No prompts, responses or secret values are recorded. Secret names
 can be checked with the read-only CLI; a secret-name/digest listing cannot verify
 the configured model value or its accessibility. Model identity/access and real
 latency require production UAT after deployment. HTTP 401/403/404 are configuration

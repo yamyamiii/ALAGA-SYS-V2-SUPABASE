@@ -367,6 +367,54 @@ function mapProviderError(error: unknown) {
   );
 }
 
+// Retry only an explicit upstream overload rejection, never an ambiguous
+// timeout/network failure. This runs solely inside the read-only generation
+// callback and its existing shared provider/request abort boundary.
+async function recoverTransient503<T>(
+  operation: () => Promise<T>,
+  signal: AbortSignal,
+  deadline: number,
+  diagnostics: SafeRecord,
+): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    signal.throwIfAborted();
+    if (attempt > 0) diagnostics.retry_count = attempt;
+    try {
+      const result = await operation();
+      diagnostics.upstream_status = "success";
+      return result;
+    } catch (error) {
+      const status =
+        typeof error === "object" && error !== null && "status" in error
+          ? error.status
+          : null;
+      if (
+        status !== 503 ||
+        attempt >= 1 ||
+        signal.aborted ||
+        (error instanceof Error && /timeout|abort/i.test(error.name))
+      )
+        throw error;
+      const delay = 500 * 2 ** attempt + Math.floor(Math.random() * 251);
+      if (deadline - performance.now() < delay + 1_000) throw error;
+      diagnostics.upstream_status = 503;
+      diagnostics.last_transient_status = 503;
+      await new Promise<void>((resolve, reject) => {
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(signal.reason);
+        };
+        const timer = setTimeout(() => {
+          signal.removeEventListener("abort", onAbort);
+          resolve();
+        }, delay);
+        signal.addEventListener("abort", onAbort, { once: true });
+        if (signal.aborted) onAbort();
+      });
+    }
+  }
+}
+
 function logRequest(
   requestId: string,
   role: CanonicalRole | null,
@@ -525,54 +573,66 @@ Deno.serve(async (request) => {
         try {
           const interaction = await withProviderTimeout(
             (signal) =>
-              ai.interactions.create(
-                {
-                  model: env.model,
-                  input,
-                  system_instruction: instruction,
-                  response_format: {
-                    type: "text",
-                    mime_type: "application/json",
-                    schema: {
-                      type: "object",
-                      properties: {
-                        message: { type: "string" },
-                        actionIds: {
-                          type: "array",
-                          items: { type: "string" },
-                          maxItems: 6,
-                        },
-                        sourceIndexes: {
-                          type: "array",
-                          items: { type: "integer" },
-                          maxItems: 12,
-                        },
-                        lookup: {
-                          type: "string",
-                          enum: ["none", "own_appointment_status"],
+              recoverTransient503(
+                () =>
+                  ai.interactions.create(
+                    {
+                      model: env.model,
+                      input,
+                      system_instruction: instruction,
+                      response_format: {
+                        type: "text",
+                        mime_type: "application/json",
+                        schema: {
+                          type: "object",
+                          properties: {
+                            message: { type: "string" },
+                            actionIds: {
+                              type: "array",
+                              items: { type: "string" },
+                              maxItems: 6,
+                            },
+                            sourceIndexes: {
+                              type: "array",
+                              items: { type: "integer" },
+                              maxItems: 12,
+                            },
+                            lookup: {
+                              type: "string",
+                              enum: ["none", "own_appointment_status"],
+                            },
+                          },
+                          required: [
+                            "message",
+                            "actionIds",
+                            "sourceIndexes",
+                            "lookup",
+                          ],
+                          additionalProperties: false,
                         },
                       },
-                      required: [
-                        "message",
-                        "actionIds",
-                        "sourceIndexes",
-                        "lookup",
-                      ],
-                      additionalProperties: false,
+                      generation_config: {
+                        max_output_tokens: 500,
+                        thinking_level: "low",
+                      },
+                      store: false,
+                      automatic_continuation: false,
                     },
-                  },
-                  generation_config: {
-                    max_output_tokens: 500,
-                    thinking_level: "low",
-                  },
-                  store: false,
-                  automatic_continuation: false,
-                },
-                {
-                  signal,
-                  timeout_ms: PROVIDER_TIMEOUT_MS,
-                  retries: { strategy: "attempt-count-backoff", maxRetries: 0 },
-                },
+                    {
+                      signal,
+                      timeout_ms: PROVIDER_TIMEOUT_MS,
+                      retries: {
+                        strategy: "attempt-count-backoff",
+                        maxRetries: 0,
+                      },
+                    },
+                  ),
+                signal,
+                Math.min(
+                  providerStart + PROVIDER_TIMEOUT_MS,
+                  startedAt + REQUEST_BUDGET_MS,
+                ),
+                diagnostics,
               ),
             controller.signal,
           );
@@ -582,13 +642,14 @@ Deno.serve(async (request) => {
             typeof error === "object" && error !== null && "status" in error
               ? Number(error.status)
               : 0;
-          diagnostics.upstream_status = [
-            401, 403, 404, 429, 500, 502, 503, 504,
-          ].includes(status)
-            ? status
-            : status >= 500 && status <= 599
-              ? "5xx"
-              : "none";
+          if (status)
+            diagnostics.upstream_status = [
+              401, 403, 404, 429, 500, 502, 503, 504,
+            ].includes(status)
+              ? status
+              : status >= 500 && status <= 599
+                ? "5xx"
+                : "none";
           throw mapProviderError(error);
         } finally {
           diagnostics.provider_ms = Math.max(

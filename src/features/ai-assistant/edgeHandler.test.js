@@ -233,6 +233,7 @@ describe("actual alaga-ai Edge request boundary", () => {
       generate.mockRejectedValue({ status, message: "RAW PROVIDER SECRET" });
       const response = await handler(request());
       expect(response.status).toBe(status === 400 ? 502 : 503);
+      expect(generate).toHaveBeenCalledTimes(status === 503 ? 2 : 1);
       expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
         "https://alaga-sys.vercel.app",
       );
@@ -241,6 +242,88 @@ describe("actual alaga-ai Edge request boundary", () => {
       );
     },
   );
+  it("recovers one 503 without duplicate responses or trusted operations", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const { handler, generate, rpc } = setup();
+    const success = await generate();
+    generate
+      .mockClear()
+      .mockRejectedValueOnce({ status: 503 })
+      .mockResolvedValueOnce(success);
+    const pending = handler(request("Hi"));
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(400);
+    expect(generate).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(400);
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.message).toBe("Generated reply");
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[0][1].signal).toBe(
+      generate.mock.calls[1][1].signal,
+    );
+    expect(generate.mock.calls[1][1].retries.maxRetries).toBe(0);
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual([
+      "consume_ai_request_rate_limit",
+      "ai_grounding_context",
+    ]);
+    expect(console.log).toHaveBeenLastCalledWith(
+      "alaga-ai request",
+      expect.objectContaining({
+        retry_count: 1,
+        upstream_status: "success",
+        last_transient_status: 503,
+      }),
+    );
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("cancels pending backoff without starting another attempt", async () => {
+    vi.useFakeTimers();
+    const { handler, generate } = setup();
+    generate.mockRejectedValue({ status: 503 });
+    const controller = new AbortController();
+    const pending = handler(
+      new Request(request(), { signal: controller.signal }),
+    );
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
+    controller.abort();
+    expect((await (await pending).json()).error.code).toBe("request_timeout");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(generate).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("does not retry a late 503 with insufficient shared budget", async () => {
+    vi.useFakeTimers();
+    const { handler, generate } = setup();
+    generate.mockImplementation(
+      () =>
+        new Promise((_, reject) =>
+          setTimeout(() => reject({ status: 503 }), 49_500),
+        ),
+    );
+    const pending = handler(request());
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(49_501);
+    expect((await pending).status).toBe(503);
+    expect(generate).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("does not reset the 50-second deadline for a retry", async () => {
+    vi.useFakeTimers();
+    const { handler, generate } = setup();
+    generate
+      .mockRejectedValueOnce({ status: 503 })
+      .mockReturnValueOnce(new Promise(() => {}));
+    const pending = handler(request());
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(50_001);
+    expect((await (await pending).json()).error.code).toBe("provider_timeout");
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[1][1].signal.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it("enforces the provider timeout with a safe error and cleared timer", async () => {
     vi.useFakeTimers();
     const { handler, generate } = setup();
