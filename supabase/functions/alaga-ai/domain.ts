@@ -76,7 +76,7 @@ export const MAX_CONVERSATION_TURNS = 10;
 export const MAX_MESSAGE_CHARACTERS = 2_000;
 export const MAX_BODY_BYTES = 32_768;
 export const MAX_RESPONSE_CHARACTERS = 4_000;
-export const PROVIDER_TIMEOUT_MS = 20_000;
+export const PROVIDER_TIMEOUT_MS = 50_000;
 export const MAX_GROUNDING_CHARACTERS = 6_000;
 export const MAX_GROUNDING_SOURCES = 12;
 

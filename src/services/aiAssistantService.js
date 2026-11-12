@@ -6,7 +6,7 @@ import {
 } from "@/features/ai-assistant/schemas";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
-const REQUEST_TIMEOUT_MS = 25_000;
+const REQUEST_TIMEOUT_MS = 80_000;
 const FALLBACK_MESSAGE =
   "The AI assistant could not complete that request. Please try again.";
 const SAFE_FUNCTION_ERRORS = Object.freeze({
@@ -33,6 +33,10 @@ const SAFE_FUNCTION_ERRORS = Object.freeze({
   },
   provider_timeout: {
     message: "The assistant took too long to respond. Please try again.",
+    retryable: true,
+  },
+  request_timeout: {
+    message: "The assistant request timed out. Please try again.",
     retryable: true,
   },
   provider_unavailable: {
@@ -139,22 +143,25 @@ export function createAiAssistantService(clientProvider = getSupabaseClient) {
       }
 
       let timeoutId;
+      const controller = new AbortController();
       try {
         const timeout = new Promise((_, reject) => {
-          timeoutId = window.setTimeout(
-            () =>
-              reject(
-                new AiAssistantServiceError(
-                  "timeout",
-                  "The assistant took too long to respond. Please try again.",
-                  { retryable: true },
-                ),
+          timeoutId = window.setTimeout(() => {
+            controller.abort();
+            reject(
+              new AiAssistantServiceError(
+                "timeout",
+                "The assistant took too long to respond. Please try again.",
+                { retryable: true },
               ),
-            REQUEST_TIMEOUT_MS,
-          );
+            );
+          }, REQUEST_TIMEOUT_MS);
         });
         const result = await Promise.race([
-          clientProvider().functions.invoke("alaga-ai", { body: payload }),
+          clientProvider().functions.invoke("alaga-ai", {
+            body: payload,
+            signal: controller.signal,
+          }),
           timeout,
         ]);
         if (result.error) throw await mapFunctionError(result.error);

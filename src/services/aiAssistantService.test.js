@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   AiAssistantServiceError,
@@ -12,6 +12,50 @@ function client(result) {
 }
 
 describe("AI assistant service", () => {
+  afterEach(() => vi.useRealTimers());
+  it("allows a 30-second successful response without duplicate invocation", async () => {
+    vi.useFakeTimers();
+    const supabase = client({});
+    supabase.functions.invoke.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                data: { data: { message: "Generated answer" } },
+                error: null,
+              }),
+            30_000,
+          ),
+        ),
+    );
+    const pending = createAiAssistantService(() => supabase).send([
+      { role: "user", content: "Kumusta" },
+    ]);
+    await vi.advanceTimersByTimeAsync(30_001);
+    expect((await pending).content).toBe("Generated answer");
+    expect(supabase.functions.invoke).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("aborts the HTTP invocation at the outer 80-second deadline", async () => {
+    vi.useFakeTimers();
+    const supabase = client({});
+    supabase.functions.invoke.mockReturnValue(new Promise(() => {}));
+    const pending = createAiAssistantService(() => supabase).send([
+      { role: "user", content: "Hello" },
+    ]);
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: "timeout",
+      retryable: true,
+    });
+    await vi.advanceTimersByTimeAsync(80_001);
+    await rejected;
+    expect(supabase.functions.invoke.mock.calls[0][1].signal.aborted).toBe(
+      true,
+    );
+    expect(supabase.functions.invoke).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
   beforeEach(() => {
     vi.stubGlobal("navigator", { onLine: true });
   });
@@ -34,6 +78,7 @@ describe("AI assistant service", () => {
     });
     expect(supabase.functions.invoke).toHaveBeenCalledWith("alaga-ai", {
       body: { messages: [{ role: "user", content: "Where is FAQ?" }] },
+      signal: expect.any(AbortSignal),
     });
   });
 

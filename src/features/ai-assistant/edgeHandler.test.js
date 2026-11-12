@@ -226,7 +226,7 @@ describe("actual alaga-ai Edge request boundary", () => {
     );
     expect(generate).toHaveBeenCalledOnce();
   });
-  it.each([429, 500, 401, 400])(
+  it.each([429, 500, 503, 401, 403, 404, 400])(
     "maps provider %s without leaking error details, retaining CORS",
     async (status) => {
       const { handler, generate } = setup();
@@ -247,10 +247,65 @@ describe("actual alaga-ai Edge request boundary", () => {
     generate.mockReturnValue(new Promise(() => {}));
     const pending = handler(request());
     await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
-    await vi.advanceTimersByTimeAsync(20_001);
+    await vi.advanceTimersByTimeAsync(50_001);
     const response = await pending;
     expect(response.status).toBe(504);
     expect((await response.json()).error.code).toBe("provider_timeout");
+    expect(generate.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(generate.mock.calls[0][1].retries.maxRetries).toBe(0);
+    expect(generate).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
+  });
+  it("allows a slow successful generation beyond the former 20-second cutoff", async () => {
+    vi.useFakeTimers();
+    const { handler, generate } = setup();
+    generate.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                output_text: JSON.stringify({
+                  message: "Real mocked generation completed",
+                  actionIds: [],
+                  sourceIndexes: [],
+                  lookup: "none",
+                }),
+              }),
+            30_000,
+          ),
+        ),
+    );
+    const pending = handler(request("Kumusta po"));
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(30_001);
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.message).toBe(
+      "Real mocked generation completed",
+    );
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("caps the overall request even when generation starts late", async () => {
+    vi.useFakeTimers();
+    const { handler, generate, rpc } = setup();
+    const original = rpc.getMockImplementation();
+    rpc.mockImplementation((name, args) =>
+      name === "ai_grounding_context"
+        ? new Promise((resolve) =>
+            setTimeout(() => resolve({ data: [], error: null }), 30_000),
+          )
+        : original(name, args),
+    );
+    generate.mockReturnValue(new Promise(() => {}));
+    const pending = handler(request("Hello"));
+    await vi.advanceTimersByTimeAsync(30_100);
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(40_000);
+    const response = await pending;
+    expect(response.status).toBe(504);
+    expect((await response.json()).error.code).toBe("request_timeout");
+    expect(generate.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(generate).toHaveBeenCalledOnce();
   });
 });

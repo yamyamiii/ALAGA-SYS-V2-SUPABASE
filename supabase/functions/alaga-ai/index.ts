@@ -17,6 +17,7 @@ import {
 import { respondToConversation } from "./conversation.ts";
 
 type SafeRecord = Record<string, unknown>;
+const REQUEST_BUDGET_MS = 70_000;
 
 function firstNamedKey(variableName: string): string | null {
   const raw = Deno.env.get(variableName);
@@ -110,6 +111,7 @@ async function authenticatedCaller(
   request: Request,
   url: string,
   publishableKey: string,
+  requestFetch: typeof fetch,
 ) {
   const authorization = request.headers.get("authorization") ?? "";
   const match = authorization.match(/^Bearer\s+(.+)$/i);
@@ -127,7 +129,10 @@ async function authenticatedCaller(
       persistSession: false,
       detectSessionInUrl: false,
     },
-    global: { headers: { Authorization: `Bearer ${match[1]}` } },
+    global: {
+      headers: { Authorization: `Bearer ${match[1]}` },
+      fetch: requestFetch,
+    },
   });
   const { data, error } = await userClient.auth.getUser(match[1]);
   if (error || !data.user) {
@@ -269,34 +274,78 @@ async function loadResidentAppointmentStatus(
   };
 }
 
-async function withProviderTimeout<T>(operation: Promise<T>) {
+async function withProviderTimeout<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  parent: AbortSignal,
+) {
+  const controller = new AbortController();
+  const signal = AbortSignal.any([controller.signal, parent]);
+  const cleanup = new AbortController();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
-        () =>
-          reject(
-            new AiAssistantError(
-              "provider_timeout",
-              "The assistant took too long to respond. Please try again.",
-              504,
-            ),
+      timeoutId = setTimeout(() => {
+        controller.abort();
+        reject(
+          new AiAssistantError(
+            "provider_timeout",
+            "The assistant took too long to respond. Please try again.",
+            504,
           ),
-        PROVIDER_TIMEOUT_MS,
-      );
+        );
+      }, PROVIDER_TIMEOUT_MS);
     });
-    return await Promise.race([operation, timeout]);
+    const cancelled = new Promise<never>((_, reject) => {
+      const abort = () =>
+        reject(
+          new AiAssistantError(
+            controller.signal.aborted ? "provider_timeout" : "request_timeout",
+            "The assistant took too long to respond. Please try again.",
+            504,
+          ),
+        );
+      if (signal.aborted) abort();
+      else
+        signal.addEventListener("abort", abort, {
+          once: true,
+          signal: cleanup.signal,
+        });
+    });
+    try {
+      return await Promise.race([operation(signal), timeout, cancelled]);
+    } catch (error) {
+      if (controller.signal.aborted)
+        throw new AiAssistantError(
+          "provider_timeout",
+          "The assistant took too long to respond. Please try again.",
+          504,
+        );
+      throw error;
+    }
   } finally {
+    cleanup.abort();
     if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
 }
 
 function mapProviderError(error: unknown) {
   if (error instanceof AiAssistantError) return error;
+  if (error instanceof Error && /timeout/i.test(error.name))
+    return new AiAssistantError(
+      "provider_timeout",
+      "The assistant took too long to respond. Please try again.",
+      504,
+    );
   const status =
     typeof error === "object" && error !== null && "status" in error
       ? Number((error as { status?: unknown }).status)
       : 0;
+  if (status === 408)
+    return new AiAssistantError(
+      "provider_timeout",
+      "The assistant took too long to respond. Please try again.",
+      504,
+    );
   if (status === 429 || status >= 500) {
     return new AiAssistantError(
       "provider_unavailable",
@@ -304,7 +353,7 @@ function mapProviderError(error: unknown) {
       503,
     );
   }
-  if (status === 401 || status === 403) {
+  if (status === 401 || status === 403 || status === 404) {
     return new AiAssistantError(
       "provider_configuration_error",
       "The assistant is temporarily unavailable. Contact an administrator if this continues.",
@@ -323,6 +372,7 @@ function logRequest(
   role: CanonicalRole | null,
   category: string,
   startedAt: number,
+  diagnostics: SafeRecord = {},
 ) {
   console.log("alaga-ai request", {
     request_id: requestId,
@@ -330,6 +380,7 @@ function logRequest(
     category,
     latency_ms: Math.max(0, Math.round(performance.now() - startedAt)),
     timestamp: new Date().toISOString(),
+    ...diagnostics,
   });
 }
 
@@ -340,6 +391,28 @@ Deno.serve(async (request) => {
   let actorProfileId: string | null = null;
   let role: CanonicalRole | null = null;
   let failureCategory = "internal_error";
+  const diagnostics: SafeRecord = { retry_count: 0 };
+  const controller = new AbortController();
+  const onDisconnect = () => controller.abort();
+  request.signal.addEventListener("abort", onDisconnect, { once: true });
+  if (request.signal.aborted) controller.abort();
+  const deadline = setTimeout(() => controller.abort(), REQUEST_BUDGET_MS);
+  const requestFetch: typeof fetch = (input, init) =>
+    fetch(input, {
+      ...init,
+      signal: AbortSignal.any([
+        controller.signal,
+        ...(init?.signal ? [init.signal] : []),
+      ]),
+    });
+  async function measure<T>(phase: string, operation: () => Promise<T>) {
+    const start = performance.now();
+    try {
+      return await operation();
+    } finally {
+      diagnostics[phase] = Math.max(0, Math.round(performance.now() - start));
+    }
+  }
 
   try {
     const allowedOrigins = configuredAllowedOrigins();
@@ -377,25 +450,24 @@ Deno.serve(async (request) => {
       );
     }
 
-    actorProfileId = await authenticatedCaller(
-      request,
-      env.url,
-      env.publishableKey,
+    actorProfileId = await measure("auth_ms", () =>
+      authenticatedCaller(request, env.url, env.publishableKey, requestFetch),
     );
     const admin = createClient(env.url, env.secretKey, {
+      global: { fetch: requestFetch },
       auth: {
         autoRefreshToken: false,
         persistSession: false,
         detectSessionInUrl: false,
       },
     });
-    const profile = await activeProfile(admin, actorProfileId);
+    const profile = await measure("profile_ms", () =>
+      activeProfile(admin, actorProfileId!),
+    );
     role = profile.role;
 
-    const rateLimit = await consumeRateLimit(
-      admin,
-      profile.id,
-      env.maximumRequestsPerHour,
+    const rateLimit = await measure("rate_limit_ms", () =>
+      consumeRateLimit(admin, profile.id, env.maximumRequestsPerHour),
     );
     headers["X-RateLimit-Remaining"] = String(rateLimit.remaining);
     if (!rateLimit.allowed) {
@@ -431,57 +503,98 @@ Deno.serve(async (request) => {
     let providerUsed = false;
     const reply = await respondToConversation(messages, profile.role, {
       loadPublicInformation: () =>
-        loadApprovedGrounding(admin, profile.id, [
-          "health_center",
-          "announcement",
-          "faq",
-        ]),
-      loadOwnStatus: () => loadResidentAppointmentStatus(admin, profile.id),
+        measure("grounding_ms", () =>
+          loadApprovedGrounding(admin, profile.id, [
+            "health_center",
+            "announcement",
+            "faq",
+          ]),
+        ),
+      loadOwnStatus: () =>
+        measure("own_status_ms", () =>
+          loadResidentAppointmentStatus(admin, profile.id),
+        ),
       generate: async (input, instruction) => {
         providerUsed = true;
+        diagnostics.model = /^gemini-[a-z0-9._-]{1,90}$/i.test(env.model)
+          ? env.model
+          : "configured_model";
+        diagnostics.timeout_ms = PROVIDER_TIMEOUT_MS;
+        const providerStart = performance.now();
         const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
         try {
           const interaction = await withProviderTimeout(
-            ai.interactions.create({
-              model: env.model,
-              input,
-              system_instruction: instruction,
-              response_format: {
-                type: "text",
-                mime_type: "application/json",
-                schema: {
-                  type: "object",
-                  properties: {
-                    message: { type: "string" },
-                    actionIds: {
-                      type: "array",
-                      items: { type: "string" },
-                      maxItems: 6,
-                    },
-                    sourceIndexes: {
-                      type: "array",
-                      items: { type: "integer" },
-                      maxItems: 12,
-                    },
-                    lookup: {
-                      type: "string",
-                      enum: ["none", "own_appointment_status"],
+            (signal) =>
+              ai.interactions.create(
+                {
+                  model: env.model,
+                  input,
+                  system_instruction: instruction,
+                  response_format: {
+                    type: "text",
+                    mime_type: "application/json",
+                    schema: {
+                      type: "object",
+                      properties: {
+                        message: { type: "string" },
+                        actionIds: {
+                          type: "array",
+                          items: { type: "string" },
+                          maxItems: 6,
+                        },
+                        sourceIndexes: {
+                          type: "array",
+                          items: { type: "integer" },
+                          maxItems: 12,
+                        },
+                        lookup: {
+                          type: "string",
+                          enum: ["none", "own_appointment_status"],
+                        },
+                      },
+                      required: [
+                        "message",
+                        "actionIds",
+                        "sourceIndexes",
+                        "lookup",
+                      ],
+                      additionalProperties: false,
                     },
                   },
-                  required: ["message", "actionIds", "sourceIndexes", "lookup"],
-                  additionalProperties: false,
+                  generation_config: {
+                    max_output_tokens: 500,
+                    thinking_level: "low",
+                  },
+                  store: false,
+                  automatic_continuation: false,
                 },
-              },
-              generation_config: {
-                max_output_tokens: 500,
-                thinking_level: "low",
-              },
-              store: false,
-            }),
+                {
+                  signal,
+                  timeout_ms: PROVIDER_TIMEOUT_MS,
+                  retries: { strategy: "attempt-count-backoff", maxRetries: 0 },
+                },
+              ),
+            controller.signal,
           );
           return interaction.output_text;
         } catch (error) {
+          const status =
+            typeof error === "object" && error !== null && "status" in error
+              ? Number(error.status)
+              : 0;
+          diagnostics.upstream_status = [
+            401, 403, 404, 429, 500, 502, 503, 504,
+          ].includes(status)
+            ? status
+            : status >= 500 && status <= 599
+              ? "5xx"
+              : "none";
           throw mapProviderError(error);
+        } finally {
+          diagnostics.provider_ms = Math.max(
+            0,
+            Math.round(performance.now() - providerStart),
+          );
         }
       },
     });
@@ -502,11 +615,17 @@ Deno.serve(async (request) => {
       profile.role,
       providerUsed ? "provider_success" : "safety_response",
       startedAt,
+      diagnostics,
     );
     return jsonResponse({ data, request_id: requestId }, 200, headers);
   } catch (error) {
-    const safeError =
-      error instanceof AiAssistantError
+    const safeError = controller.signal.aborted
+      ? new AiAssistantError(
+          "request_timeout",
+          "The assistant request timed out. Please try again.",
+          504,
+        )
+      : error instanceof AiAssistantError
         ? error
         : new AiAssistantError(
             "internal_error",
@@ -514,7 +633,13 @@ Deno.serve(async (request) => {
             500,
           );
     failureCategory = safeError.code;
-    logRequest(requestId, role, failureCategory, startedAt);
+    diagnostics.timeout_category =
+      safeError.code === "provider_timeout"
+        ? "provider_deadline"
+        : controller.signal.aborted
+          ? "request_budget_or_disconnect"
+          : "none";
+    logRequest(requestId, role, failureCategory, startedAt, diagnostics);
     return jsonResponse(
       {
         error: { code: safeError.code, message: safeError.message },
@@ -523,5 +648,8 @@ Deno.serve(async (request) => {
       safeError.status,
       headers,
     );
+  } finally {
+    clearTimeout(deadline);
+    request.signal.removeEventListener("abort", onDisconnect);
   }
 });

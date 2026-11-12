@@ -25,7 +25,7 @@ The current entrypoint is:
 6. Redact safety-sensitive history; send the bounded, separately labeled
    reference facts and untrusted transcript to Gemini Interactions with
    `store: false`, a server-configured model, structured JSON output, a
-   20-second timeout and a 500-output-token limit.
+   50-second provider timeout and a 500-output-token limit.
 7. Validate Gemini's proposed message, symbolic action IDs, source indexes and
    optional no-argument own-status read. Unknown tools/fields fail closed.
 8. If an own-status read is requested, authenticate its scope outside the model,
@@ -154,6 +154,26 @@ JSON and unsupported output fail safely, without a false success or automatic
 email/booking retry. Existing synchronous UI submission guards remain intact.
 
 ## Verification and production UAT
+
+### Request deadlines and timeout diagnosis
+
+The Edge request has a 70-second abort budget including Auth, profile, rate-limit,
+grounding and generation work. Generation has its own 50-second abort deadline;
+the SDK receives that signal and timeout explicitly. SDK retries and automatic
+continuation are disabled: one generation attempt per deliberate chat request,
+with manual user retry after a safe error rather than speculative duplicate
+billable calls. The browser has an 80-second deadline and aborts its invocation.
+The previous 20-second Promise race did not cancel upstream generation, and the
+previous browser deadline was 25 seconds. Increasing the budget accommodates
+slower responses but does not prove why a production model was slow.
+
+Operational logs additionally record auth/profile/rate/grounding/provider timings,
+validated model identifier, upstream status category, timeout category and zero
+retry count. No prompts, responses or secret values are recorded. Secret names
+can be checked with the read-only CLI; a secret-name/digest listing cannot verify
+the configured model value or its accessibility. Model identity/access and real
+latency require production UAT after deployment. HTTP 401/403/404 are configuration
+errors, 429/5xx are upstream unavailability, and application aborts are deadlines.
 
 Unit tests mock the provider to verify routing, context packets, tool isolation,
 role/action filtering, errors and privacy. They do not prove real Gemini answer
