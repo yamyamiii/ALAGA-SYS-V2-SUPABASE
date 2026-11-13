@@ -5,6 +5,8 @@ import {
   respondToConversation,
 } from "../../../supabase/functions/alaga-ai/conversation.ts";
 import { buildAiPayload, parseAiResponse } from "./schemas";
+import { getAppointmentActions } from "@/features/appointments/permissions";
+import { SYSTEM_KNOWLEDGE_ENTRIES } from "../../../supabase/functions/alaga-ai/knowledge.ts";
 
 const now = new Date("2026-11-12T00:00:00Z");
 function setup(proposal = {}) {
@@ -28,6 +30,110 @@ const user = (content) => ({ role: "user", content });
 const assistant = (content) => ({ role: "assistant", content });
 
 describe("provider-first ALAGA AI conversation", () => {
+  it.each([
+    "How do I reschedule my confirmed appointment?",
+    "Paano ko mapapalitan ang schedule ng confirmed appointment?",
+    "Pwede bang i-reschedule yung booking ko?",
+  ])(
+    "grounds Resident rescheduling in authorized requests without scripted interception: %s",
+    async (question) => {
+      const dependencies = setup({
+        message: "Generated explanation from Gemini",
+        actionIds: ["open_inquiries"],
+      });
+      const reply = await respondToConversation(
+        [user(question)],
+        "resident",
+        dependencies,
+        now,
+      );
+      expect(dependencies.generate).toHaveBeenCalledOnce();
+      expect(reply.message).toBe("Generated explanation from Gemini");
+      const [input, instruction] = dependencies.generate.mock.calls[0];
+      expect(input).toContain(
+        "Residents cannot directly reschedule confirmed appointments",
+      );
+      expect(input).toContain("contacting the Barangay Health Center");
+      expect(input).toContain(
+        "sending an inquiry does not itself change or confirm a new schedule",
+      );
+      expect(input).toContain(
+        "existing appointment and appointment number remain the same",
+      );
+      expect(input).not.toContain(
+        "Rescheduling updates the same appointment row",
+      );
+      expect(instruction).toContain(
+        "Never invent a Resident self-reschedule button",
+      );
+      expect(instruction).toContain("or ask them to paste an APT number here");
+      expect(reply.actions.map((action) => action.actionId)).toEqual([
+        "open_inquiries",
+      ]);
+      expect(dependencies.loadOwnStatus).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["resident", "admin", "barangay_health_worker", "nurse", "midwife"])(
+    "keeps rescheduling facts aligned with the actual %s appointment permissions",
+    (role) => {
+      const actions = getAppointmentActions(
+        role,
+        {
+          status: "confirmed",
+          request_source: "resident",
+          assigned_staff_id: "staff",
+          service_type: "Maternal Care",
+        },
+        "staff",
+      );
+      expect(actions.includes("reschedule")).toBe(
+        ["admin", "barangay_health_worker"].includes(role),
+      );
+      const change = SYSTEM_KNOWLEDGE_ENTRIES.find(
+        (entry) => entry.id === "appointment-change",
+      );
+      expect(change.facts.english).toContain("Only Administrator and BHW");
+      expect(change.facts.filipino).toContain("Administrator at BHW lamang");
+      expect(change.answerFacets.reschedule.english).toContain(
+        "Residents cannot directly reschedule",
+      );
+      expect(change.answerFacets.reschedule.filipino).toContain(
+        "Hindi direktang mare-reschedule ng Resident",
+      );
+      expect(change.facts.english).toContain(
+        "no replacement appointment is created",
+      );
+    },
+  );
+  it("retains natural-language confirmation and ordered automatic event promotion guidance", async () => {
+    const dependencies = setup();
+    await respondToConversation(
+      [
+        user("Paano ang booking?"),
+        assistant("What would you like to know?"),
+        user("Automatic ba at paano kapag waiting list?"),
+      ],
+      "resident",
+      dependencies,
+      now,
+    );
+    const instruction = dependencies.generate.mock.calls[0][1];
+    expect(instruction).toContain(
+      "plain everyday English, Filipino or Taglish",
+    );
+    expect(instruction).toContain(
+      "instead of AUTO_SLOT, database rows, RPCs or FIFO jargon",
+    );
+    expect(instruction).toContain(
+      "confirmed automatically with suitable staff",
+    );
+    expect(instruction).toContain(
+      "promoted automatically in order only when a place and suitable staff are available",
+    );
+    expect(instruction).toContain(
+      "joining the waiting list is not confirmation",
+    );
+  });
   it.each([
     "Hi",
     "Kumusta po",
@@ -92,7 +198,9 @@ describe("provider-first ALAGA AI conversation", () => {
     expect(facts).toContain("every day");
     expect(facts).toContain("Confirmed without routine Administrator approval");
     expect(facts).toContain("FIFO waitlist");
-    expect(facts).toContain("same appointment row and APT number");
+    expect(facts).toContain(
+      "existing appointment and appointment number remain the same",
+    );
     expect(facts).toContain("My Health History");
     expect(facts.length).toBeLessThanOrEqual(20_000);
   });
