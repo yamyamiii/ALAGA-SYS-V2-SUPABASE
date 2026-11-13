@@ -7,6 +7,10 @@ import {
 import { buildAiPayload, parseAiResponse } from "./schemas";
 import { getAppointmentActions } from "@/features/appointments/permissions";
 import { SYSTEM_KNOWLEDGE_ENTRIES } from "../../../supabase/functions/alaga-ai/knowledge.ts";
+import {
+  isResidentAppointmentStatusIntent,
+  resolveAppointmentLookupScope,
+} from "../../../supabase/functions/alaga-ai/domain.ts";
 
 const now = new Date("2026-11-12T00:00:00Z");
 function setup(proposal = {}) {
@@ -30,6 +34,159 @@ const user = (content) => ({ role: "user", content });
 const assistant = (content) => ({ role: "assistant", content });
 
 describe("provider-first ALAGA AI conversation", () => {
+  const cancelledHistory = {
+    status: "cancelled",
+    serviceType: "General Consultation",
+    scheduledDate: "2026-01-01",
+    startTime: "08:00:00",
+    scheduleChanged: false,
+  };
+  it.each([
+    "Automatic bang confirmed ang regular appointment ko?",
+    "Automatic ba ang confirmation ng regular appointments?",
+    "Are my regular online bookings automatically confirmed?",
+    "Automatic ba ang booking ko?",
+  ])(
+    "never lets history or Gemini override the general booking policy: %s",
+    async (question) => {
+      expect(isResidentAppointmentStatusIntent(question)).toBe(false);
+      const dependencies = setup({
+        message: "Generated policy explanation",
+        lookup: "own_appointment_status",
+      });
+      dependencies.loadOwnStatus.mockResolvedValue({
+        hasActiveResidentLink: true,
+        appointments: [cancelledHistory],
+      });
+      const reply = await respondToConversation(
+        [user(question)],
+        "resident",
+        dependencies,
+        now,
+      );
+      expect(reply.message).toBe("Generated policy explanation");
+      expect(dependencies.loadOwnStatus).not.toHaveBeenCalled();
+      expect(dependencies.generate.mock.calls[0][1]).toContain(
+        "Server appointment question scope: workflow",
+      );
+      expect(reply.contextMessage).toBeUndefined();
+    },
+  );
+  it.each([
+    ["Confirmed na ba yung booking ko?", "confirmed"],
+    ["Ano na ang status ng appointment ko?", "pending"],
+    ["Is my regular appointment already confirmed?", "confirmed"],
+    ["Bakit Cancelled ang appointment ko?", "cancelled"],
+  ])(
+    "keeps explicit own-status retrieval protected: %s",
+    async (question, status) => {
+      const dependencies = setup();
+      dependencies.loadOwnStatus.mockResolvedValue({
+        hasActiveResidentLink: true,
+        appointments: [{ ...cancelledHistory, status }],
+      });
+      const reply = await respondToConversation(
+        [user(question)],
+        "resident",
+        dependencies,
+        now,
+      );
+      expect(dependencies.loadOwnStatus).toHaveBeenCalledExactlyOnceWith();
+      expect(reply.contextMessage).toContain(
+        "Private appointment summary omitted",
+      );
+      expect(JSON.stringify(dependencies.generate.mock.calls)).not.toContain(
+        "2026-01-01",
+      );
+      if (status === "cancelled")
+        expect(reply.message).toContain(
+          "Walang dahilan ng cancellation sa summary",
+        );
+    },
+  );
+  it.each([
+    ["Automatic ba ang regular bookings?", "Confirmed na?", "workflow"],
+    [
+      "Are regular appointments automatically confirmed?",
+      "Confirmed?",
+      "workflow",
+    ],
+    ["Ano na ang status ng appointment ko?", "Confirmed na?", "personal"],
+    ["Is my booking pending?", "Pending pa ba?", "personal"],
+  ])(
+    "uses bounded user context for %s then %s",
+    async (first, followUp, scope) => {
+      const messages = [
+        user(first),
+        assistant("Previous answer"),
+        user(followUp),
+      ];
+      expect(resolveAppointmentLookupScope(messages)).toBe(scope);
+      const dependencies = setup({
+        message: "Generated clarification or policy",
+        lookup: "own_appointment_status",
+      });
+      await respondToConversation(messages, "resident", dependencies, now);
+      expect(dependencies.loadOwnStatus).toHaveBeenCalledTimes(
+        scope === "personal" ? 1 : 0,
+      );
+    },
+  );
+  it("asks for clarification without a private query when short status intent is ambiguous", async () => {
+    const dependencies = setup({
+      message: "Do you mean the general rule or your actual booking?",
+      lookup: "own_appointment_status",
+    });
+    const reply = await respondToConversation(
+      [user("Confirmed na?")],
+      "resident",
+      dependencies,
+      now,
+    );
+    expect(reply.message).toContain("general rule or your actual booking");
+    expect(dependencies.loadOwnStatus).not.toHaveBeenCalled();
+    expect(dependencies.generate.mock.calls[0][1]).toContain(
+      "ask one brief natural clarification",
+    );
+    expect(
+      resolveAppointmentLookupScope([
+        user("Is my appointment confirmed?"),
+        assistant("Private summary"),
+        user("Tell me about notifications"),
+        assistant("Notifications help"),
+        user("Confirmed?"),
+      ]),
+    ).toBe("ambiguous");
+  });
+  it("does not allow a model to manufacture a personal lookup from a greeting", async () => {
+    const dependencies = setup({
+      lookup: "own_appointment_status",
+      message: "Hello",
+    });
+    await respondToConversation([user("Hi")], "resident", dependencies, now);
+    expect(dependencies.loadOwnStatus).not.toHaveBeenCalled();
+  });
+  it("keeps a historical cancelled summary out of a later policy answer and out of Gemini", async () => {
+    const dependencies = setup({
+      message: "Generated automatic-confirmation policy",
+      lookup: "own_appointment_status",
+    });
+    const reply = await respondToConversation(
+      [
+        user("Ano na ang status ng appointment ko?"),
+        assistant("Your General Consultation was Cancelled on 2026-01-01."),
+        user("Automatic bang confirmed ang regular appointment ko?"),
+      ],
+      "resident",
+      dependencies,
+      now,
+    );
+    expect(reply.message).toBe("Generated automatic-confirmation policy");
+    expect(dependencies.loadOwnStatus).not.toHaveBeenCalled();
+    expect(dependencies.generate.mock.calls[0][0]).not.toContain(
+      "Cancelled on 2026-01-01",
+    );
+  });
   it.each([
     "How do I reschedule my confirmed appointment?",
     "Paano ko mapapalitan ang schedule ng confirmed appointment?",

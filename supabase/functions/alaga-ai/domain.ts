@@ -3093,6 +3093,7 @@ const RESIDENT_APPOINTMENT_STATUSES = new Set<
 ]);
 
 export function isResidentAppointmentStatusIntent(message: string) {
+  if (isAppointmentPolicyQuestion(message)) return false;
   if (
     RESIDENT_APPOINTMENT_STATUS_PATTERNS.some((pattern) =>
       pattern.test(message),
@@ -3113,10 +3114,83 @@ export function isResidentAppointmentStatusIntent(message: string) {
     /\b(?:appointment|booking|request|schedule)\b/.test(normalized);
   return (
     hasOwnReference &&
-    /\b(?:status|update|approve|approved|confirm|confirmed|pending|when|kailan|time|oras|change|changed|nangyari|service|serbisyo)\b/.test(
+    /\b(?:status|update|approve|approved|confirm|confirmed|pending|cancelled|canceled|when|kailan|time|oras|change|changed|nangyari|service|serbisyo)\b/.test(
       normalized,
     )
   );
+}
+
+// Capability/policy is not a record query, even when phrased with "my"/"ko".
+// These scope checks never select response text or authorize database access.
+export function isAppointmentPolicyQuestion(message: string) {
+  const text = normalizeConversationalText(message);
+  if (
+    !/\b(?:appointments?|bookings?|confirmation|confirmed|approval)\b/.test(
+      text,
+    )
+  )
+    return false;
+  return (
+    /\b(?:automatic(?:ally)?|awtomatik(?:o|ong)?|always|normally|generally|policy|in general)\b/.test(
+      text,
+    ) &&
+    !/\b(?:already|na ba|status|latest|current|has my|was my|did my)\b/.test(
+      text,
+    )
+  );
+}
+
+export type AppointmentLookupScope =
+  "workflow" | "personal" | "candidate" | "ambiguous" | "other";
+
+export function resolveAppointmentLookupScope(
+  messages: ConversationMessage[],
+): AppointmentLookupScope {
+  function direct(message: string): AppointmentLookupScope {
+    if (isAppointmentPolicyQuestion(message)) return "workflow";
+    const text = normalizeConversationalText(message);
+    const own = /\b(?:my|mine|ko|akin)\b/.test(text);
+    const subject =
+      /\b(?:appointments?|bookings?|request|schedule|visit)\b/.test(text);
+    // Explicit instance questions precede broad legacy facets such as "ano na"
+    // (next steps) and "cancelled" (cancellation workflow).
+    if (
+      own &&
+      subject &&
+      (RESIDENT_APPOINTMENT_STATUS_PATTERNS.some((pattern) =>
+        pattern.test(message),
+      ) ||
+        /\bstatus\b/.test(text) ||
+        (/\b(?:why|bakit)\b/.test(text) &&
+          /\b(?:confirmed|pending|cancelled|canceled)\b/.test(text)))
+    )
+      return "personal";
+    if (resolveAppointmentWorkflowFacet(message)) return "workflow";
+    if (own && subject)
+      return isResidentAppointmentStatusIntent(message)
+        ? "personal"
+        : "candidate";
+    const short = text.split(" ").length <= 7;
+    if (
+      short &&
+      (isResidentAppointmentStatusIntent(message) ||
+        /\b(?:confirmed|pending|cancelled|canceled|mine|akin)\b/.test(text))
+    )
+      return "ambiguous";
+    return "other";
+  }
+  const turns = messages.filter((message) => message.role === "user").slice(-4);
+  const scope = direct(turns.at(-1)?.content ?? "");
+  if (scope !== "ambiguous") return scope;
+  // Only prior user turns establish scope, not client-supplied assistant claims.
+  for (const previous of turns.slice(0, -1).reverse()) {
+    const prior = direct(previous.content);
+    if (prior === "ambiguous") continue;
+    if (prior === "workflow") return "workflow";
+    if (prior === "personal" || prior === "candidate") return "personal";
+    break; // An unrelated new topic ends the old appointment context.
+  }
+  return "ambiguous";
 }
 
 export function sanitizeResidentAppointmentStatusRows(
@@ -3349,8 +3423,8 @@ export function residentAppointmentStatusResponseFor(
   } else if (appointment.status === "cancelled") {
     statusExplanation =
       language === "english"
-        ? "This appointment is no longer active."
-        : "Hindi na active ang appointment na ito.";
+        ? "This appointment is no longer active. Cancellation reasons are not included in this summary. Contact the Barangay Health Center if you need an explanation."
+        : "Hindi na active ang appointment na ito. Walang dahilan ng cancellation sa summary na ito. Makipag-ugnayan sa Barangay Health Center para sa paliwanag.";
   } else if (appointment.status === "no_show") {
     statusExplanation =
       language === "english"
