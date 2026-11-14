@@ -33,7 +33,7 @@ const worker = fs.readFileSync(
 );
 const executableDomain = transform(
   domain.replace(
-    'from "npm:fflate@0.8.2"',
+    'from "npm:fflate@0.8.3"',
     `from "${import.meta.resolve("fflate")}"`,
   ),
   { loader: "ts", format: "esm", target: "es2022" },

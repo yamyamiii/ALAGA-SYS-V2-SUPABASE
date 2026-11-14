@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 import {
   constantTimeEqual,
@@ -19,8 +19,6 @@ import {
   createSmsAdapter,
   type DeliveryResult,
 } from "./providers.ts";
-
-type SupabaseClient = ReturnType<typeof createClient>;
 
 const SECURITY_HEADERS = {
   "Cache-Control": "no-store",

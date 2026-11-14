@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 import { auditFailure } from "./audit.ts";
 import {
@@ -21,7 +21,6 @@ import {
   DatabaseActionError,
 } from "./databaseDiagnostics.ts";
 
-type SupabaseClient = ReturnType<typeof createClient>;
 type SafeRecord = Record<string, unknown>;
 
 const MAX_BODY_BYTES = 32_768;

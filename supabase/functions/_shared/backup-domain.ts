@@ -1,4 +1,4 @@
-import { unzipSync, zipSync } from "npm:fflate@0.8.2";
+import { unzipSync, zipSync } from "npm:fflate@0.8.3";
 
 export const BACKUP_VERSION = "1.0";
 export const APPLICATION_VERSION = "0.1.0";
@@ -91,7 +91,11 @@ export function backupFilename(date = new Date()): string {
 }
 
 export async function sha256(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  // Copy only this view into an owned ArrayBuffer, including sliced/shared
+  // inputs. Web Crypto requires BufferSource, not an ArrayBufferLike backing.
+  const input = new Uint8Array(bytes.byteLength);
+  input.set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", input.buffer);
   return [...new Uint8Array(digest)]
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");
